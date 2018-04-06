@@ -97,6 +97,17 @@
 
 class TFdSet;
 
+static const int kStringLength = 255;
+
+struct StackTraceHelper_t {
+   char  fShellExec[kStringLength];
+   char  fPidString[kStringLength];
+   char  fPidNum[kStringLength];
+   int   fParentToChild[2];
+   int   fChildToParent[2];
+   std::unique_ptr<std::thread> fHelperThread;
+};
+
 #if defined(HAVE_DLADDR) && !defined(R__MACOSX)
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -222,23 +233,7 @@ static int SignalSafeErrWrite(const char *text) {
 
 //---- helper -----------------------------------------------------------------
 
-static const int kStringLength = 255;
-
-static struct StackTraceHelper_t {
-   char  fShellExec[kStringLength];
-   char  fPidString[kStringLength];
-   char  fPidNum[kStringLength];
-   int   fParentToChild[2];
-   int   fChildToParent[2];
-   std::unique_ptr<std::thread> fHelperThread;
-} gStackTraceHelper = {       // the order of the signals should be identical
-   { },
-   { },
-   { },
-   {-1,-1},
-   {-1,-1},
-   nullptr
-};
+static StackTraceHelper_t gStackTraceHelper;
 
 static char * const kStackArgv[] = {gStackTraceHelper.fShellExec, gStackTraceHelper.fPidString, gStackTraceHelper.fPidNum, nullptr};
 
@@ -272,6 +267,13 @@ void TUnixSignalManager::Init()
 
    fSignals    = new TFdSet;
 
+   //--- initialize pipe-related data structer here, macosx does not recognize their values if they were inialized after UnixSignal functions
+   gStackTraceHelper.fParentToChild[0] = -1;
+   gStackTraceHelper.fParentToChild[1] = -1;
+   gStackTraceHelper.fChildToParent[0] = -1;
+   gStackTraceHelper.fChildToParent[1] = -1;
+   gStackTraceHelper.fHelperThread = nullptr;
+
    //--- install default handlers
    UnixSignal(kSigChild,                 SigHandler);
    UnixSignal(kSigBus,                   SigHandler);
@@ -290,21 +292,24 @@ void TUnixSignalManager::Init()
    }
 
 #ifdef ROOTETCDIR
+#if defined(R__MACOSX)
+   if(snprintf(gStackTraceHelper.fPidString, kStringLength-1, "%s/lldb-backtrace.sh", ROOTETCDIR) >= kStringLength) {
+#else
    if(snprintf(gStackTraceHelper.fPidString, kStringLength-1, "%s/gdb-backtrace.sh", ROOTETCDIR) >= kStringLength) {
+#endif
       SignalSafeErrWrite("Unable to pre-allocate executable information");
       return;
    }
 #else
+#if defined(R__MACOSX)
+   if(snprintf(gStackTraceHelper.fPidString, kStringLength-1, "%s/etc/lldb-backtrace.sh", gSystem->Getenv("ROOTSYS")) >= kStringLength) {
+#else
    if(snprintf(gStackTraceHelper.fPidString, kStringLength-1, "%s/etc/gdb-backtrace.sh", gSystem->Getenv("ROOTSYS")) >= kStringLength) {
+#endif
       SignalSafeErrWrite("Unable to pre-allocate executable information");
       return;
    }
 #endif
-
-   gStackTraceHelper.fParentToChild[0] = -1;
-   gStackTraceHelper.fParentToChild[1] = -1;
-   gStackTraceHelper.fChildToParent[0] = -1;
-   gStackTraceHelper.fChildToParent[1] = -1;
 
    StackTraceHelperInit();
 }
