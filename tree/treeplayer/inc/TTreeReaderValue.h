@@ -66,6 +66,10 @@ Base class of TTreeReaderValue.
       typedef Bool_t (ROOT::Detail::TBranchProxy::*BranchProxyRead_t)();
       template <BranchProxyRead_t Func>
       ROOT::Internal::TTreeReaderValueBase::EReadStatus ProxyReadTemplate();
+template <BranchProxyRead_t Func>
+      ROOT::Internal::TTreeReaderValueBase::EReadStatus ProxyReadWithPriorSuccess();
+template <BranchProxyRead_t Func>
+      ROOT::Internal::TTreeReaderValueBase::EReadStatus ProxyReadWithPriorFailure();
 
       Bool_t IsValid() const { return fProxy && 0 == (int)fSetupStatus && 0 == (int)fReadStatus; }
       ESetupStatus GetSetupStatus() const { return fSetupStatus; }

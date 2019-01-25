@@ -142,10 +142,38 @@ ROOT::Internal::TTreeReaderValueBase::EReadStatus ROOT::Internal::TTreeReaderVal
 {
    if ((fProxy->*Func)()) {
       fReadStatus = kReadSuccess;
+      fProxyReadFunc = &TTreeReaderValueBase::ProxyReadWithPriorSuccess<Func>;
+      return kReadSuccess;
    } else {
       fReadStatus = kReadError;
+      fProxyReadFunc = &TTreeReaderValueBase::ProxyReadWithPriorFailure<Func>;
+      return kReadError;
    }
-   return fReadStatus;
+}
+
+template <ROOT::Internal::TTreeReaderValueBase::BranchProxyRead_t Func>
+ROOT::Internal::TTreeReaderValueBase::EReadStatus ROOT::Internal::TTreeReaderValueBase::ProxyReadWithPriorSuccess()
+{
+   if ((fProxy->*Func)()) {
+      // fReadStatus = kReadSuccess;
+      return kReadSuccess;
+   } else {
+      fReadStatus = kReadError;
+      fProxyReadFunc = &TTreeReaderValueBase::ProxyReadWithPriorFailure<Func>;
+      return kReadError;
+   }
+}
+
+template <ROOT::Internal::TTreeReaderValueBase::BranchProxyRead_t Func>
+ROOT::Internal::TTreeReaderValueBase::EReadStatus ROOT::Internal::TTreeReaderValueBase::ProxyReadWithPriorFailure()
+{
+   if ((fProxy->*Func)()) {
+      fReadStatus = kReadSuccess;
+      fProxyReadFunc = &TTreeReaderValueBase::ProxyReadWithPriorSuccess<Func>;
+      return kReadSuccess;
+   } else {
+      return kReadError;
+   }
 }
 
 ROOT::Internal::TTreeReaderValueBase::EReadStatus
