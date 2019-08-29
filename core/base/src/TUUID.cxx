@@ -409,7 +409,12 @@ void TUUID::GetSystemTime(uuid_time_t *timestamp)
 ////////////////////////////////////////////////////////////////////////////////
 /// Get node identifier. Try first to get network address, if no
 /// network interface try random info based on some machine parameters.
-
+#include <stdio.h>      
+#include <sys/types.h>
+#include <ifaddrs.h>
+#include <netinet/in.h> 
+#include <string.h> 
+#include <arpa/inet.h>
 void TUUID::GetNodeIdentifier()
 {
    static UInt_t adr = 0;
@@ -418,10 +423,52 @@ void TUUID::GetNodeIdentifier()
 #ifndef R__WIN32
       if (!adr) {
          TInetAddress addr = gSystem->GetHostByName(gSystem->HostName());
+
+         struct ifaddrs *ifAddrStruct = nullptr;
+         struct ifaddrs *ifa = nullptr;
+         void *tmpAddrPtr = nullptr;
+
+         if (getifaddrs(&ifAddrStruct) != 0) {
+            adr = 1;
+         } else {
+            for (ifa = ifAddrStruct; ifa != NULL; ifa = ifa->ifa_next) {
+               if (!ifa->ifa_addr) {
+                  continue;
+               }
+               if (ifa->ifa_addr->sa_family != AF_INET) { // check only IP4
+                  continue;
+               }
+               if (strncmp(ifa->ifa_name,"lo",2) == 0) { // skip loop back.
+                  continue;
+               }
+               UInt_t arp = ntohl(((struct sockaddr_in *)ifa->ifa_addr)->sin_addr.s_addr);
+
+               if (ifa->ifa_addr->sa_family == AF_INET) { // check it is IP4
+                  // is a valid IP4 Address
+                  tmpAddrPtr = &((struct sockaddr_in *)ifa->ifa_addr)->sin_addr;
+                  char addressBuffer[INET_ADDRSTRLEN];
+                  inet_ntop(AF_INET, tmpAddrPtr, addressBuffer, INET_ADDRSTRLEN);
+            //UInt_t arp = ntohl(((struct sockaddr_in *)ifa->ifa_addr)->sin_addr.s_addr);
+           printf("%s IP4 Address %s : 0x%x 0x%x\n", ifa->ifa_name, addressBuffer, *(uint32_t*)tmpAddrPtr, arp); 
+
+               } else if (ifa->ifa_addr->sa_family == AF_INET6) { // check it is IP6
+                  // is a valid IP6 Address
+                  tmpAddrPtr = &((struct sockaddr_in6 *)ifa->ifa_addr)->sin6_addr;
+                  char addressBuffer[INET6_ADDRSTRLEN];
+                  inet_ntop(AF_INET6, tmpAddrPtr, addressBuffer, INET6_ADDRSTRLEN);
+             printf("%s IP6 Address %s\n", ifa->ifa_name, addressBuffer); 
+               }
+            }
+         }
+
+         if (ifAddrStruct != nullptr)
+            freeifaddrs(ifAddrStruct);
+
          if (addr.IsValid())
             adr = addr.GetAddress();
          else
             adr = 1;  // illegal address
+         printf("Hostname lead to %x\n", adr);
       }
 #else
       // this way to get the machine's IP address is needed because
