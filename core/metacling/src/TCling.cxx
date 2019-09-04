@@ -6512,7 +6512,6 @@ void TCling::UpdateClassInfoWithDecl(const void* vTD)
          // Ignore declaration within a function.
          return;
       }
-      clang::QualType type( td->getTypeForDecl(), 0 );
 
       auto declName=ND->getNameAsString();
       if (!TClass::HasNoInfoOrEmuOrFwdDeclaredDecl(declName.c_str())){
@@ -6520,6 +6519,7 @@ void TCling::UpdateClassInfoWithDecl(const void* vTD)
          return;
       }
 
+      clang::QualType type( td->getTypeForDecl(), 0 );
       ROOT::TMetaUtils::GetNormalizedName(name, type, *fInterpreter, *fNormalizedCtxt);
    } else {
       name = ND->getNameAsString();
