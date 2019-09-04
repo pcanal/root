@@ -6557,14 +6557,28 @@ void TCling::UpdateClassInfoWithDecl(const void* vTD)
          // yes, this is almost a waste of time, but we do need to lookup
          // the 'type' corresponding to the TClass anyway in order to
          // preserve the opaque typedefs (Double32_t)
+         //cl->fClassInfo = (ClassInfo_t *)new TClingClassInfo(fInterpreter, ND); // cl->GetName());
          cl->fClassInfo = (ClassInfo_t *)new TClingClassInfo(fInterpreter, cl->GetName());
          // We now need to update the state and bits.
-         if (cl->fState != TClass::kHasTClassInit) {
-            // if (!cl->fClassInfo->IsValid()) cl->fState = TClass::kForwardDeclared; else
-            cl->fState = TClass::kInterpreted;
-            cl->ResetBit(TClass::kIsEmulation);
+
+         if (!((TClingClassInfo *)cl->fClassInfo)->IsValid()) {
+            fprintf(stderr,"ERROR could not find %s stemming from %s vs %s\n",
+                    cl->GetName(), ND->getQualifiedNameAsString().c_str(), ND->getNameAsString().c_str());
+            cl->fClassInfo = (ClassInfo_t *)new TClingClassInfo(fInterpreter, cl->GetName());
+         } 
+
+         if (true) {
+         // if (((TClingClassInfo *)cl->fClassInfo)->IsValid()) {
+            if (cl->fState != TClass::kHasTClassInit) {
+               // if (!cl->fClassInfo->IsValid()) cl->fState = TClass::kForwardDeclared; else
+               cl->fState = TClass::kInterpreted;
+               cl->ResetBit(TClass::kIsEmulation);
+            }
+            TClass::AddClassToDeclIdMap(((TClingClassInfo*)(cl->fClassInfo))->GetDeclId(), cl);
+         } else {
+            delete ((TClingClassInfo *)cl->fClassInfo);
+            cl->fClassInfo = nullptr;
          }
-         TClass::AddClassToDeclIdMap(((TClingClassInfo*)(cl->fClassInfo))->GetDeclId(), cl);
       }
    }
 }
