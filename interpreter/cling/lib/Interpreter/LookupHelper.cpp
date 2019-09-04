@@ -39,6 +39,7 @@ namespace cling {
     LookupHelper& m_LH;
     llvm::SaveAndRestore<bool> SaveIsRecursivelyRunning;
     ParserStateRAII ResetParserState;
+    clang::Preprocessor::CleanupAndRestoreCacheRAII fCleanupRAII;
     void prepareForParsing(llvm::StringRef code, llvm::StringRef bufferName,
                            LookupHelper::DiagSetting diagOnOff);
   public:
@@ -46,6 +47,7 @@ namespace cling {
                      llvm::StringRef bufferName,
                      LookupHelper::DiagSetting diagOnOff)
         : m_LH(LH), SaveIsRecursivelyRunning(LH.IsRecursivelyRunning),
+          fCleanupRAII(LH.m_Parser.get()->getPreprocessor()),
           ResetParserState(*LH.m_Parser.get(),
                            !LH.IsRecursivelyRunning /*skipToEOF*/) {
       LH.IsRecursivelyRunning = true;
