@@ -509,6 +509,8 @@ Bool_t TFileMerger::MergeRecursive(TDirectory *target, TList *sourcelist, Int_t 
                     key->GetName(), key->GetTitle());
                continue;
             }
+            if (cl->IsTObject())
+               obj->ResetBit(kMustCleanup);
             if (cl->IsTObject() && cl != obj->IsA()) {
                Error("MergeRecursive", "TKey and object retrieve disagree on type (%s vs %s).  Continuing with %s.",
                     key->GetClassName(), obj->IsA()->GetName(), obj->IsA()->GetName());
@@ -783,6 +785,7 @@ Bool_t TFileMerger::MergeRecursive(TDirectory *target, TList *sourcelist, Int_t 
       // to call SaveSelf explicilty.
       target->SaveSelf(kTRUE);
    }
+
    return status;
 }
 
