@@ -141,8 +141,7 @@ protected:
    enum EStatusBits {
       kIsOwner   = BIT(14),
       // BIT(15) is used by TClonesArray and TMap
-      kUseRWLock = BIT(16),
-      kDedupDelete = BIT(17)   // When deleting the content, check for duplicate before deleting.
+      kUseRWLock = BIT(16)
    };
 
    TString   fName;               //name of the collection
@@ -184,7 +183,6 @@ public:
    virtual Int_t      GrowBy(Int_t delta) const;
    ULong_t            Hash() const { return fName.Hash(); }
    Bool_t             IsArgNull(const char *where, const TObject *obj) const;
-   Bool_t             IsDedupDelete() { return TestBit(kDedupDelete); } const;
    virtual Bool_t     IsEmpty() const { return GetSize() <= 0; }
    virtual Bool_t     IsFolder() const { return kTRUE; }
    Bool_t             IsOwner() const { return TestBit(kIsOwner); }
