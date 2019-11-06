@@ -469,7 +469,7 @@ void TList::Clear(Option_t *option)
 void TList::Delete(Option_t *option)
 {
    std::unordered_set<TObject*> todelete;
-   Bool_t dedup = option ? (!strcmp(option, "dedup") ? kTRUE : kFALSE) : kFALSE;
+   Bool_t dedup = TestBit(kDedupDelete) || (option ? (!strcmp(option, "dedup") ? kTRUE : kFALSE) : kFALSE);
 
    {
       R__COLLECTION_WRITE_LOCKGUARD(ROOT::gCoreMutex);
@@ -564,8 +564,11 @@ void TList::Delete(Option_t *option)
       Changed();
    }
    if (dedup)
-      for(auto obj : todelete)
+      for(auto obj : todelete) {
+         if (dedup && dynamic_cast<TCollection*>(obj))
+            obj->SetBit(kDedupDelete);
          TCollection::GarbageCollect(obj);
+      }
 }
 
 #if 0

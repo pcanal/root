@@ -368,7 +368,7 @@ void TObjArray::Delete(Option_t * opt)
    // so we keep this comment here.
 
    std::unordered_set<TObject*> todelete;
-   Bool_t dedup = opt ? (!strcmp(opt, "dedup") ? kTRUE : kFALSE) : kFALSE;
+   Bool_t dedup =  TestBit(kDedupDelete) || (opt ? (!strcmp(opt, "dedup") ? kTRUE : kFALSE) : kFALSE);
    //auto orig = GetEntries();
    {
       R__COLLECTION_WRITE_LOCKGUARD(ROOT::gCoreMutex);

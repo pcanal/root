@@ -626,6 +626,7 @@ Bool_t TFileMerger::MergeRecursive(TDirectory *target, TList *sourcelist, Int_t 
                                  Error("MergeRecursive", "calling Merge() on '%s' with the corresponding object in '%s'",
                                        key->GetName(), nextsource->GetName());
                               }
+                              inputs.SetBit(TCollection::kDedupDelete);
                               inputs.Delete();
                            }
                         }
@@ -637,6 +638,7 @@ Bool_t TFileMerger::MergeRecursive(TDirectory *target, TList *sourcelist, Int_t 
                      ROOT::MergeFunc_t func = cl->GetMerge();
                      func(obj, &inputs, &info);
                      info.fIsFirst = kFALSE;
+                     inputs.SetBit(TCollection::kDedupDelete);
                      inputs.Delete();
                   }
                }
@@ -697,6 +699,7 @@ Bool_t TFileMerger::MergeRecursive(TDirectory *target, TList *sourcelist, Int_t 
                                  Error("MergeRecursive", "calling Merge() on '%s' with the corresponding object in '%s'",
                                        obj->GetName(), nextsource->GetName());
                               }
+                              listH.SetBit(TCollection::kDedupDelete);
                               listH.Delete();
                            }
                         }
@@ -707,6 +710,7 @@ Bool_t TFileMerger::MergeRecursive(TDirectory *target, TList *sourcelist, Int_t 
                         Int_t error = 0;
                         obj->Execute("Merge", listHargs.Data(), &error);
                         info.fIsFirst = kFALSE;
+                        listH.SetBit(TCollection::kDedupDelete);
                         listH.Delete();
                      }
                   }
