@@ -50,6 +50,8 @@ namespace cling {
 
     // Suppress some unfixable warnings.
     // TODO: Find proper fix for these issues
+    Out() << "#pragma clang diagnostic push\n";
+    Out() << "#pragma clang diagnostic ignored \"-Wkeyword-compat\"" << "\n";
     Out() << "#pragma clang diagnostic ignored \"-Wkeyword-compat\"" << "\n";
     Out() << "#pragma clang diagnostic ignored \"-Wignored-attributes\"" <<"\n";
     Out() << "#pragma clang diagnostic ignored \"-Wreturn-type-c-linkage\"" <<"\n";
@@ -108,6 +110,8 @@ namespace cling {
         Out() << "#undef " << m << "\n";
       }
     }
+
+    Out() << "#pragma clang diagnostic pop\n";
   }
 
   void ForwardDeclPrinter::Visit(clang::QualType QT) {
