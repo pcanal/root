@@ -227,7 +227,7 @@ else()
 
   if(PYTHONLIBS_FOUND)
     if(NOT "${PYTHONLIBS_VERSION_STRING}" MATCHES "${PYTHON_VERSION_STRING}")
-      message(FATAL_ERROR "Version mismatch between Python interpreter (${PYTHON_VERSION_STRING})"
+      message("Version mismatch between Python interpreter (${PYTHON_VERSION_STRING})"
       " and libraries (${PYTHONLIBS_VERSION_STRING}).\nROOT cannot work with this configuration. "
       "Please specify only PYTHON_EXECUTABLE to CMake with an absolute path to ensure matching versions are found.")
     endif()
