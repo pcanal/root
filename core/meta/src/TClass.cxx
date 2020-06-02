@@ -2206,15 +2206,6 @@ Bool_t TClass::CanSplitBaseAllow()
       return kTRUE;
    }
 
-   // Currently (at least of std::vector) the StreamerInfo code
-   // that handle the base class of a split derived class does
-   // not respect the fact that the base class has a custom
-   // Streamer.
-   if (GetStreamer() != nullptr || fStreamerFunc != nullptr) {
-      fCanSplit = 2;
-      return kFALSE;
-   }
-
    if (this == TRef::Class()) { fCanSplit = 2; return kFALSE; }
    if (this == TRefArray::Class()) { fCanSplit = 2; return kFALSE; }
    if (this == TArray::Class()) { fCanSplit = 2; return kFALSE; }
