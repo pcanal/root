@@ -1133,40 +1133,6 @@ TObjArray* TChain::GetListOfLeaves()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Return maximum of column with name columname.
-
-Double_t TChain::GetMaximum(const char* columname)
-{
-   Double_t theMax = -DBL_MAX;
-   for (Int_t file = 0; file < fNtrees; file++) {
-      Long64_t first = fTreeOffset[file];
-      LoadTree(first);
-      Double_t curmax = fTree->GetMaximum(columname);
-      if (curmax > theMax) {
-         theMax = curmax;
-      }
-   }
-   return theMax;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// Return minimum of column with name columname.
-
-Double_t TChain::GetMinimum(const char* columname)
-{
-   Double_t theMin = DBL_MAX;
-   for (Int_t file = 0; file < fNtrees; file++) {
-      Long64_t first = fTreeOffset[file];
-      LoadTree(first);
-      Double_t curmin = fTree->GetMinimum(columname);
-      if (curmin < theMin) {
-         theMin = curmin;
-      }
-   }
-   return theMin;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// Return the number of branches of the current tree.
 ///
 /// Warning: May set the current tree!

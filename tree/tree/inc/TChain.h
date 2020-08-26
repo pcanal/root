@@ -107,8 +107,6 @@ public:
    TObjArray        *GetListOfFiles() const {return fFiles;}
    virtual TObjArray *GetListOfLeaves();
    virtual const char *GetAlias(const char *aliasName) const;
-   virtual Double_t  GetMaximum(const char *columname);
-   virtual Double_t  GetMinimum(const char *columname);
    virtual Int_t     GetNbranches();
    virtual Long64_t  GetReadEntry() const;
    TList            *GetStatus() const { return fStatus; }

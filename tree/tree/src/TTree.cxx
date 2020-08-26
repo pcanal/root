@@ -6126,30 +6126,77 @@ TLeaf* TTree::GetLeaf(const char *name)
 /// if the Tree has an associated TEventList or TEntryList, the maximum
 /// is computed for the entries in this list.
 
+namespace {
+struct TGetMinMaxNotifier : public TObject {
+   TLeaf   *fLeaf = nullptr;
+   TBranch *fBranch = nullptr;
+
+   TTree * const fChain = nullptr;
+   const char * const fColumnName = nullptr;
+
+   TObject  *fPrevious      = nullptr;
+   Long64_t  fPreviousEntry = 0;
+
+   TGetMinMaxNotifier() = default;
+
+   TGetMinMaxNotifier(TTree *chain, const char *columnname) :
+      fChain(chain), fColumnName(columnname)
+   {
+      TGetMinMaxNotifier::Notify();
+      if (fChain) {
+         fPrevious = fChain->GetNotify();
+         fChain->SetNotify(this);
+         fPreviousEntry = fChain->GetReadEntry();
+      }
+   }
+
+   ~TGetMinMaxNotifier() {
+      if (fChain) {
+         fChain->LoadTree(fPreviousEntry);
+         if (fPrevious) {
+            fChain->SetNotify(fPrevious);
+            fPrevious->Notify();
+         } else {
+            fChain->SetNotify(nullptr);
+         }
+      }
+   }
+
+   Bool_t Notify() override {
+      fLeaf = fChain ? fChain->GetLeaf(fColumnName) : nullptr;
+      fBranch = fLeaf ? fLeaf->GetBranch() : nullptr;
+      return (fLeaf && fBranch);
+   }
+   ClassDefInlineOverride(TGetMinMaxNotifier, 0);
+};
+}
+
 Double_t TTree::GetMaximum(const char* columname)
 {
-   TLeaf* leaf = this->GetLeaf(columname);
-   if (!leaf) {
-      return 0;
+   TGetMinMaxNotifier data(this, columname);
+
+   if (!data.fLeaf) {
+      return 0.0;
    }
 
    // create cache if wanted
    if (fCacheDoAutoInit)
       SetCacheSizeAux();
 
-   TBranch* branch = leaf->GetBranch();
    Double_t cmax = -DBL_MAX;
    for (Long64_t i = 0; i < fEntries; ++i) {
       Long64_t entryNumber = this->GetEntryNumber(i);
       if (entryNumber < 0) break;
-      branch->GetEntry(entryNumber);
-      for (Int_t j = 0; j < leaf->GetLen(); ++j) {
-         Double_t val = leaf->GetValue(j);
+      Long64_t localEntry = this->LoadTree(entryNumber);
+      data.fBranch->GetEntry(localEntry);
+      for (Int_t j = 0; j < data.fLeaf->GetLen(); ++j) {
+         Double_t val = data.fLeaf->GetValue(j);
          if (val > cmax) {
             cmax = val;
          }
       }
    }
+
    return cmax;
 }
 
@@ -6168,28 +6215,30 @@ Long64_t TTree::GetMaxTreeSize()
 
 Double_t TTree::GetMinimum(const char* columname)
 {
-   TLeaf* leaf = this->GetLeaf(columname);
-   if (!leaf) {
-      return 0;
+   TGetMinMaxNotifier data(this, columname);
+
+   if (!data.fLeaf) {
+      return 0.0;
    }
 
    // create cache if wanted
    if (fCacheDoAutoInit)
       SetCacheSizeAux();
 
-   TBranch* branch = leaf->GetBranch();
    Double_t cmin = DBL_MAX;
    for (Long64_t i = 0; i < fEntries; ++i) {
       Long64_t entryNumber = this->GetEntryNumber(i);
       if (entryNumber < 0) break;
-      branch->GetEntry(entryNumber);
-      for (Int_t j = 0;j < leaf->GetLen(); ++j) {
-         Double_t val = leaf->GetValue(j);
+      Long64_t localEntry = this->LoadTree(entryNumber);
+      data.fBranch->GetEntry(localEntry);
+      for (Int_t j = 0; j < data.fLeaf->GetLen(); ++j) {
+         Double_t val = data.fLeaf->GetValue(j);
          if (val < cmin) {
             cmin = val;
          }
       }
    }
+
    return cmin;
 }
 
