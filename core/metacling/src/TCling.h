@@ -165,7 +165,13 @@ private: // Data Members
       operator bool() const { return (bool)fState; }
    };
 
-   std::vector<MutexStateAndRecurseCount> fInitialMutex{1};
+   struct MutexStateAndRecurseCountDelta {
+      MutexStateAndRecurseCount                    fInitialState;
+      std::unique_ptr<ROOT::TVirtualRWMutex::StateDelta> fDelta;
+   };
+
+   // ROOT::TVirtualRWMutex::StateAndRecurseCount fInitialMutex;
+   MutexStateAndRecurseCount fInitialMutex;
 
    DeclId_t GetDeclId(const llvm::GlobalValue *gv) const;
 
