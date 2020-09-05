@@ -10,7 +10,7 @@
 
    #include "gtest/gtest.h"
 
-   int i =  gInterpreter->Declare("int f(int n) { int x = 0; for (auto i = 0u; i < n; ++i) ++x; return x; }");
+   static auto gDeclarator =  gInterpreter->Declare("int f(int n) { int x = 0; for (auto i = 0u; i < n; ++i) ++x; return x; }");
 
    constexpr bool gDebugOrder = false;
 
