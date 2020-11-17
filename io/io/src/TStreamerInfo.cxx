@@ -5625,7 +5625,7 @@ static TStreamerElement* R__CreateEmulatedElement(const char *dmName, const std:
 // provoke the creation of the corresponding TClass.  This relies on the dictionary for
 // std::pair<const int, int> to already exist (or the interpreter information being available)
 // as it is used as a template.
-TVirtualStreamerInfo *TStreamerInfo::GenerateInfoForPair(const std::string &firstname, const std::string &secondname)
+TVirtualStreamerInfo *TStreamerInfo::GenerateInfoForPair(const std::string &firstname, const std::string &secondname, size_t hint_pair_offset, size_t hint_pair_size)
 {
    // Generate a TStreamerInfo for a std::pair<fname,sname>
    // This TStreamerInfo is then used as if it was read from a file to generate
@@ -5650,6 +5650,8 @@ TVirtualStreamerInfo *TStreamerInfo::GenerateInfoForPair(const std::string &firs
       delete i;
       return 0;
    }
+   if (hint_pair_offset)
+      size = hint_pair_offset;
    TStreamerElement *second = R__CreateEmulatedElement("second", secondname, size);
    if (second) {
       i->GetElements()->Add( second );
@@ -5663,10 +5665,12 @@ TVirtualStreamerInfo *TStreamerInfo::GenerateInfoForPair(const std::string &firs
    i->BuildCheck(nullptr, kFALSE); // Skipping the loading part (it would leads to infinite recursion on this very routine)
    gErrorIgnoreLevel = oldlevel;
    i->BuildOld();
+   if (hint_pair_size)
+      i->GetClass()->SetClassSize(hint_pair_size);
    return i;
 }
 
-TVirtualStreamerInfo *TStreamerInfo::GenerateInfoForPair(const std::string &pairclassname)
+TVirtualStreamerInfo *TStreamerInfo::GenerateInfoForPair(const std::string &pairclassname, size_t hint_pair_offset, size_t hint_pair_size)
 {
    const static int pairlen = strlen("pair<");
    if (pairclassname.compare(0, pairlen, "pair<") != 0) {
@@ -5682,5 +5686,5 @@ TVirtualStreamerInfo *TStreamerInfo::GenerateInfoForPair(const std::string &pair
       return nullptr;
    }
 
-   return GenerateInfoForPair(inside[1], inside[2]);
+   return GenerateInfoForPair(inside[1], inside[2], hint_pair_offset, hint_pair_size);
 }

@@ -28,7 +28,7 @@
 #define MESSAGE(which,text)
 
 // See TEmulatedCollectionProxy.cxx
-extern TStreamerInfo *R__GenerateTClassForPair(const std::string &f, const std::string &s);
+extern TStreamerInfo *R__GenerateTClassForPair(const std::string &f, const std::string &s, size_t hint_pair_offset, size_t hint_pair_size);
 
 /**
 \class TGenVectorProxy
@@ -884,9 +884,24 @@ TGenCollectionProxy *TGenCollectionProxy::InitializeEx(Bool_t silent)
 
                {
                   TInterpreter::SuspendAutoParsing autoParseRaii(gCling);
-                  if (0==TClass::GetClass(nam.c_str())) {
+                  if (0==TClass::GetClass(nam.c_str(), true, false, fValOffset, fValDiff)) {
                      // We need to emulate the pair
-                     R__GenerateTClassForPair(inside[1],inside[2]);
+                     R__GenerateTClassForPair(inside[1],inside[2], fValOffset, fValDiff);
+                  } else {
+                     TClass *paircl = TClass::GetClass(nam.c_str());
+                     if (paircl->GetClassSize() != fValDiff) {
+                        if (paircl->GetState() >= TClass::kInterpreted)      
+			   Fatal("InitializeEx", "The %s for %s reports a class size that is inconsistent with the one registered through the CollectionProxy for %s:  %d vs %d\n",
+                                 paircl->IsLoaded() ? "dictionary" : "interpreter information for", nam.c_str(), cl->GetName(), (int)paircl->GetClassSize(), (int)fValDiff);
+                        else {
+                           gROOT->GetListOfClasses()->Remove(paircl);
+                           TClass *newpaircl = TClass::GetClass(nam.c_str(), true, false, fValOffset, fValDiff);
+			   if (newpaircl == paircl || newpaircl->GetClassSize() != fValDiff)
+                              Fatal("InitializeEx", "The TClass creation for %s did not get the right size: %d instead of%d\n", nam.c_str(), (int)paircl->GetClassSize(), (int)fValDiff);
+                           paircl->ReplaceWith(newpaircl);
+                           delete paircl;
+                        }
+                     }
                   }
                }
                newfValue = R__CreateValue(nam, silent);
