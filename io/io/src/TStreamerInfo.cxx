@@ -212,6 +212,9 @@ TStreamerInfo::TStreamerInfo(TClass *cl)
 
 TStreamerInfo::~TStreamerInfo()
 {
+   if (fNumber >=0)
+      gROOT->GetListOfStreamerInfo()->RemoveAt(fNumber);
+
    delete [] fComp;     fComp     = 0;
    delete [] fCompFull; fCompFull = 0;
    delete [] fCompOpt;  fCompOpt  = 0;
@@ -5664,7 +5667,13 @@ TVirtualStreamerInfo *TStreamerInfo::GenerateInfoForPair(const std::string &firs
    gErrorIgnoreLevel = kError;
    i->BuildCheck(nullptr, kFALSE); // Skipping the loading part (it would leads to infinite recursion on this very routine)
    gErrorIgnoreLevel = oldlevel;
+   // In the state emulated, BuildOld would recalculate the offset and undo the offset update.
+   // Note: we should consider adding a new state just for this (the hints indicates that we are mapping a compiled class but
+   // then we would have to investigate all use of the state with <= and >= condition to make sure they are still appropriate).
+   auto state = i->GetClass()->GetState();
+   i->GetClass()->fState = TClass::kInterpreted;
    i->BuildOld();
+   i->GetClass()->fState = state;
    if (hint_pair_size)
       i->GetClass()->SetClassSize(hint_pair_size);
    return i;
