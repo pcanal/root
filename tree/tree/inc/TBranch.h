@@ -111,13 +111,18 @@ protected:
    using BulkObj = ROOT::Experimental::Internal::TBulkBranchRead;
    static Int_t fgCount;          ///<! branch counter
    Int_t       fCompress;         ///<  Compression level and algorithm
+   // Note: This needs to be extended to support merging of trees and change in configuration
+   // since the configuration is passed/required for uncompressing (eg. compression dictionary).
+   // We probably need a collection of (a variation of the) triplet { validity range, size, array }
+   Int_t       fNCompConfig;      ///<  Number of bytes in compression algorithm configuration array.
+   Char_t     *fCompConfig;       ///<[fNCompConfig] Compression configuration array (eg. compression dictionary)
    Int_t       fBasketSize;       ///<  Initial Size of  Basket Buffer
    Int_t       fEntryOffsetLen;   ///<  Initial Length of fEntryOffset table in the basket buffers
    Int_t       fWriteBasket;      ///<  Last basket number written
    Long64_t    fEntryNumber;      ///<  Current entry number (last one filled in this branch)
    TBasket    *fExtraBasket;      ///<! Allocated basket not currently holding any data.
    TIOFeatures fIOFeatures;       ///<  IO features for newly-created baskets.
-   Int_t       fOffset;           ///<  Offset of this branch
+   Int_t       fOffset;           ///<! Offset of this branch
    Int_t       fMaxBaskets;       ///<  Maximum number of Baskets so far
    Int_t       fNBaskets;         ///<! Number of baskets in memory
    Int_t       fSplitLevel;       ///<  Branch split level
@@ -217,6 +222,8 @@ public:
            Int_t     GetCompressionAlgorithm() const;
            Int_t     GetCompressionLevel() const;
            Int_t     GetCompressionSettings() const;
+           Int_t     GetConfigArraySize() const { return fNCompConfig; }
+           Char_t   *GetConfigArray() { return fCompConfig; }  // Not const as the compression engine might update it.
    TDirectory       *GetDirectory() const {return fDirectory;}
    virtual Int_t     GetEntry(Long64_t entry=0, Int_t getall = 0);
    virtual Int_t     GetEntryExport(Long64_t entry, Int_t getall, TClonesArray *list, Int_t n);
@@ -288,7 +295,7 @@ public:
 
    static  void      ResetCount();
 
-   ClassDef(TBranch, 13); // Branch descriptor
+   ClassDef(TBranch, 14); // Branch descriptor
 };
 
 //______________________________________________________________________________
