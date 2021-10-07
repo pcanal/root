@@ -20,6 +20,7 @@ target_include_directories(Zip PRIVATE
    ${CMAKE_SOURCE_DIR}/core/lzma/inc
    ${CMAKE_SOURCE_DIR}/core/lz4/inc
    ${CMAKE_SOURCE_DIR}/core/zstd/inc
+   ${CMAKE_SOURCE_DIR}/core/accelogic/inc
    ${CMAKE_SOURCE_DIR}/core/foundation/inc
    ${CMAKE_SOURCE_DIR}/core/clib/inc
    ${CMAKE_SOURCE_DIR}/core/meta/inc

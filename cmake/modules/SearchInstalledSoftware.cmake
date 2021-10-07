@@ -263,6 +263,29 @@ if(builtin_lzma)
   endif()
 endif()
 
+#---Check for Accelogic-------------------------------------------------------------------
+if(NOT builtin_accelogic)
+  message(STATUS "Looking for Accelogic")
+  if(fail-on-missing)
+    find_package(libAccelogicBLAST REQUIRED)
+  else()
+    find_package(libAccelogicBLAST)
+    if(NOT LIBACCELOGICBLAST_FOUND)
+      message(STATUS "Accelogic not found. Switching on builtin_Accelogic option")
+      set(builtin_accelogic ON CACHE BOOL "Enabled because Accelogic not found (${builtin_Accelogic_description})" FORCE)
+    endif()
+  endif()
+endif()
+
+if(builtin_accelogic)
+  # When activating this, also update RootBuildOptions.cmake accordingly.
+  message(FATAL_ERROR "Builtin Accelogic library is not yet supported.")
+endif()
+
+if(NOT LIBACCELOGICBLAST_FOUND AND NOT builtin_accelogic)
+  message(FATAL_ERROR "Accelogic library is required.")
+endif()
+
 #---Check for xxHash-----------------------------------------------------------------
 if(NOT builtin_xxhash)
   message(STATUS "Looking for xxHash")
