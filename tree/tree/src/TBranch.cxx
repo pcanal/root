@@ -88,6 +88,8 @@ TBranch::TBranch()
 : TNamed()
 , TAttFill(0, 1001)
 , fCompress(0)
+, fNCompConfig(0)
+, fCompConfig(nullptr)
 , fBasketSize(32000)
 , fEntryOffsetLen(1000)
 , fWriteBasket(0)
@@ -200,6 +202,8 @@ TBranch::TBranch(TTree *tree, const char *name, void *address, const char *leafl
    : TNamed(name, leaflist)
 , TAttFill(0, 1001)
 , fCompress(compress)
+, fNCompConfig(0)
+, fCompConfig(nullptr)
 , fBasketSize((basketsize < 100) ? 100 : basketsize)
 , fEntryOffsetLen(0)
 , fWriteBasket(0)
@@ -254,6 +258,8 @@ TBranch::TBranch(TBranch *parent, const char *name, void *address, const char *l
 : TNamed(name, leaflist)
 , TAttFill(0, 1001)
 , fCompress(compress)
+, fNCompConfig(0)
+, fCompConfig(nullptr)
 , fBasketSize((basketsize < 100) ? 100 : basketsize)
 , fEntryOffsetLen(0)
 , fWriteBasket(0)
@@ -463,6 +469,10 @@ TBranch::~TBranch()
 
    delete [] fBasketBytes;
    fBasketBytes = 0;
+
+   delete [] fCompConfig;
+   fCompConfig = 0;
+   fNCompConfig = 0;
 
    fBaskets.Delete();
    fNBaskets = 0;
@@ -2883,6 +2893,10 @@ void TBranch::Streamer(TBuffer& b)
       fCurrentBasket    = 0;
       fFirstBasketEntry = -1;
       fNextBasketEntry  = -1;
+      fOffset           = 0;
+      // Reset new fields (and thus maybe no field in some version)
+      fNCompConfig = 0;
+      delete [] fCompConfig;
 
       Version_t v = b.ReadVersion(&R__s, &R__c);
       if (v > 9) {
