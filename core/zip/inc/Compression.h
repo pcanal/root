@@ -96,8 +96,6 @@ struct RCompressionSetting {
          kLZ4,
          /// Use ZSTD compression
          kZSTD,
-         /// Use Accelogic BLAST family of algorithms
-         kBLAST,
          /// Undefined compression algorithm (must be kept the last of the list in case a new algorithm is added).
          kUndefined
       };
