@@ -605,6 +605,9 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file)
       Int_t nin, nbuf;
       Int_t nout = 0, noutot = 0, nintot = 0;
 
+      Int_t configArraySize = fBranch->GetConfigArraySize();
+      char *configArray = fBranch->GetConfigArray();
+
       // Unzip all the compressed objects in the compressed object buffer.
       while (1) {
          // Check the header for errors.
@@ -618,7 +621,7 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file)
             goto AfterBuffer;
          }
 
-         R__unzip(&nin, rawCompressedObjectBuffer, &nbuf, (unsigned char*) rawUncompressedObjectBuffer, &nout);
+         R__unzip(&nin, rawCompressedObjectBuffer, &nbuf, (unsigned char*) rawUncompressedObjectBuffer, &nout, configArraySize, configArray);
          if (!nout) break;
          noutot += nout;
          nintot += nin;
@@ -1230,6 +1233,8 @@ Int_t TBasket::WriteBuffer()
       char *bufcur = &fBuffer[fKeylen];
       noutot = 0;
       nzip   = 0;
+      Int_t configArraySize = fBranch->GetConfigArraySize();
+      char *configArray = fBranch->GetConfigArray();
       for (Int_t i = 0; i < nbuffers; ++i) {
          if (i == nbuffers - 1) bufmax = fObjlen - nzip;
          else bufmax = kMAXZIPBUF;
@@ -1242,7 +1247,7 @@ Int_t TBasket::WriteBuffer()
          // NOTE this is declared with C linkage, so it shouldn't except.  Also, when
          // USE_IMT is defined, we are guaranteed that the compression buffer is unique per-branch.
          // (see fCompressedBufferRef in constructor).
-         R__zipMultipleAlgorithm(cxlevel, &bufmax, objbuf, &bufmax, bufcur, &nout, cxAlgorithm);
+         R__zipMultipleAlgorithm(cxlevel, &bufmax, objbuf, &bufmax, bufcur, &nout, cxAlgorithm, configArraySize, configArray);
 #ifdef R__USE_IMT
          sentry.lock();
 #endif  // R__USE_IMT

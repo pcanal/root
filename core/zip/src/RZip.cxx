@@ -76,7 +76,11 @@ unsigned long R__crc32(unsigned long crc, const unsigned char* buf, unsigned int
 /*                      1 = zlib */
 /*                      2 = lzma */
 /*                      3 = old */
-void R__zipMultipleAlgorithm(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, ROOT::RCompressionSetting::EAlgorithm::EValues compressionAlgorithm)
+/* int configsize;                   indicatest the size of the 'configarray' */
+/* char *configarray;                extra configuration information for the compression engine, for example an ongoing compression dictionary.  */
+
+void R__zipMultipleAlgorithm(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep,
+                             ROOT::RCompressionSetting::EAlgorithm::EValues compressionAlgorithm, int /* configsize = 0 */, char * /* configarray = nullptr */)
 {
 
   if (*srcsize < 1 + HDRSIZE + 1) {
@@ -319,7 +323,7 @@ int R__unzip_header(int *srcsize, uch *src, int *tgtsize)
  ***********************************************************************/
 // N.B. (Brian) - I have kept the original note out of complete awe of the
 // age of the original code...
-void R__unzip(int *srcsize, uch *src, int *tgtsize, uch *tgt, int *irep)
+void R__unzip(int *srcsize, uch *src, int *tgtsize, uch *tgt, int *irep, int /* configsize = 0 */, char * /* configarray = nullptr */)
 {
    long isize;
    uch *ibufptr, *obufptr;

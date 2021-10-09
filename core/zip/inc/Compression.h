@@ -14,6 +14,8 @@
 
 #include "RtypesCore.h"
 
+#include <cstring> // For mempcpy
+
 namespace ROOT {
 
 /// The global settings depend on a global variable named R__ZipMode which can be
@@ -124,6 +126,54 @@ enum ECompressionAlgorithm {
 int CompressionSettings(RCompressionSetting::EAlgorithm::EValues algorithm, int compressionLevel);
 /// Deprecated name, do *not* use:
 int CompressionSettings(ROOT::ECompressionAlgorithm algorithm, int compressionLevel);
+
+class CompressionConfig
+{
+private:
+   RCompressionSetting::EAlgorithm::EValues fAlgorithm = RCompressionSetting::EAlgorithm::kUseGlobal;  ///< Which compression alogrithm/library to use
+   Int_t                           fLevel = 0;                                                         ///< Compression level (0 through 99) to pass to the algorithm
+   Int_t                           fNConfig = 0;                                                       ///< Number of bytes in compression algorithm configuration array.
+   Char_t                         *fConfigArray = nullptr;                                             ///<[fNCompConfig] Compression configuration array (eg. compression dictionary)
+
+public:
+   CompressionConfig(const CompressionConfig &other) : fAlgorithm(other.fAlgorithm), fLevel(other.fLevel), fNConfig(other.fNConfig)
+   {
+      fConfigArray = new char[fNConfig];
+      std::memcpy(fConfigArray, other.fConfigArray, fNConfig);
+   }
+
+   CompressionConfig(CompressionConfig && other) : fAlgorithm(other.fAlgorithm), fLevel(other.fLevel), fNConfig(other.fNConfig), fConfigArray(other.fConfigArray)
+   {
+      other.fNConfig = 0;
+      other.fConfigArray = nullptr;
+   }
+
+   ~CompressionConfig() {
+      delete [] fConfigArray;
+   }
+
+   Int_t GetCompressionSettings() {
+      return CompressionSettings(fAlgorithm, fLevel);
+   }
+
+   Int_t GetCompressionLevel() {
+      return fLevel;
+   }
+
+   RCompressionSetting::EAlgorithm::EValues GetCompressionAlgorithm() {
+      return fAlgorithm;
+   }
+
+   Int_t GetNConfigArray() {
+      return fNConfig;
+   }
+
+   Char_t *GetConfigArray() {
+      return fConfigArray;
+   }
+
+};
+
 } // namespace ROOT
 
 #endif
