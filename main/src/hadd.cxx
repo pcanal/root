@@ -339,8 +339,8 @@ int main( int argc, char **argv )
             }
          }
          char ft[7];
-         for (int alg = 0; !useFirstInputCompression && alg <= 5; ++alg) {
-            for( int j=0; j<=9; ++j ) {
+         for (int alg = 0; !useFirstInputCompression && alg < ROOT::RCompressionSetting::EAlgorithm::kUndefined; ++alg) {
+            for( int j=0; j<=99; ++j ) {
                const int comp = (alg*100)+j;
                snprintf(ft,7,"-f%s%d",prefix,comp);
                if (!strcmp(argv[a],ft)) {
