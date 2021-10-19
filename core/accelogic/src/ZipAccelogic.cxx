@@ -31,13 +31,14 @@ void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, 
 
    size_t out_size;
 
-   if (cxlevel < 71) {
+   if (cxlevel < 71 && (*srcsize % 4 == 0)) {
+      int float_size = *srcsize / 4;
       // Use "absSense".  We shift the request config from [1,71] to [-60, 10]
       auto absSensLevel = cxlevel - 61;
       // Note: We need to check the source really start of a float boundary.
       // Note: We need to upgrade blast to avoid the memcpy (which is IN ADDITION to an internal copy already!!!)
       char *staging = nullptr;
-      out_size = blast1_compress<true>(absSensLevel, (float*)src, *srcsize, staging);
+      out_size = blast1_compress<true>(absSensLevel, (float*)src, float_size, staging);
       if ( (out_size + kHeaderSize) > (size_t)*tgtsize ) {
          delete [] staging;
          return;
