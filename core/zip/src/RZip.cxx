@@ -379,6 +379,7 @@ void R__unzip(int *srcsize, uch *src, int *tgtsize, uch *tgt, int *irep)
       return;
    } else if (is_valid_header_blast(src)) {
       R__unzipBLAST(srcsize, src, tgtsize, tgt, irep);
+      return;
    }
 
    /* Old zlib format */
