@@ -363,8 +363,8 @@ TLeaf* TLeaf::GetLeafCounter(Int_t& countval) const
 /// len: number of entries to read.
 const TLeaf::Counts_t *TLeaf::GetLeafCountValues(Long64_t start, Long64_t len)
 {
-   if (len <= 0 || !IsRange())
-     return nullptr;
+   if (len <= 0)
+      return nullptr;
 
    if (fLeafCountValues) {
       if (fLeafCountValues->fStartEntry == start && len < (Long64_t)fLeafCountValues->fValues.size())
@@ -382,7 +382,6 @@ const TLeaf::Counts_t *TLeaf::GetLeafCountValues(Long64_t start, Long64_t len)
       fLeafCountValues = new LeafCountValues();
    }
 
-
    fLeafCountValues->fValues.clear();
    fLeafCountValues->fValues.reserve(len);
    fLeafCountValues->fStartEntry = start;
@@ -390,11 +389,11 @@ const TLeaf::Counts_t *TLeaf::GetLeafCountValues(Long64_t start, Long64_t len)
    auto branch = GetBranch();
    Long64_t orig_leaf_entry = branch->GetReadEntry();
    for (Long64_t idx = 0; idx < len; ++idx) {
-       branch->GetEntry(start + idx);
-       auto size = static_cast<Int_t>(GetValue());
+       branch->TBranch::GetEntry(start + idx);
+       auto size = GetNdata(); // static_cast<Int_t>(GetValue());
        fLeafCountValues->fValues.push_back( size );
    }
-   branch->GetEntry(orig_leaf_entry);
+   branch->TBranch::GetEntry(orig_leaf_entry);
    return &(fLeafCountValues->fValues);
 }
 

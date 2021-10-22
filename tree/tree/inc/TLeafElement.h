@@ -26,6 +26,8 @@
 #include "TDataType.h"
 #include "TLeaf.h"
 #include "TBranchElement.h"
+#include "TStreamerInfo.h"
+
 
 class TMethodCall;
 
@@ -46,7 +48,7 @@ public:
    TLeafElement(TBranch *parent, const char *name, Int_t id, Int_t type);
    virtual ~TLeafElement();
 
-   virtual Bool_t   CanGenerateOffsetArray() { return fLeafCount && fLenType; }
+   virtual Bool_t   CanGenerateOffsetArray() { return fLeafCount && fLenType && (fType < TStreamerInfo::kOffsetP); }
    virtual Int_t   *GenerateOffsetArrayBase(Int_t /*base*/, Int_t /*events*/) { return nullptr; }
    virtual DeserializeType GetDeserializeType() const;
 
