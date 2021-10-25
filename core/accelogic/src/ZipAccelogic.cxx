@@ -31,7 +31,7 @@ void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, 
 
    size_t out_size;
 
-   if (cxlevel < 71 && (*srcsize % 4 == 0)) {
+   if (cxlevel <= 71 && (*srcsize % 4 == 0)) {
       size_t float_size = *srcsize / 4;
       // Use "absSense".  We shift the request config from [1,71] to [-60, 10]
       auto absSensLevel = cxlevel - 61;
