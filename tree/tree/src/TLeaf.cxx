@@ -389,6 +389,7 @@ const TLeaf::Counts_t *TLeaf::GetLeafCountValues(Long64_t start, Long64_t len)
    auto branch = GetBranch();
    Long64_t orig_leaf_entry = branch->GetReadEntry();
    for (Long64_t idx = 0; idx < len; ++idx) {
+       branch->SetupAddresses();
        branch->TBranch::GetEntry(start + idx);
        Int_t size = static_cast<Int_t>(GetValue());
        fLeafCountValues->fValues.push_back( size );
