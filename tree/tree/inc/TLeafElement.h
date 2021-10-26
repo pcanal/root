@@ -41,14 +41,14 @@ protected:
    mutable std::atomic<EDataType> fDataTypeCache{EDataType::kOther_t}; ///<! Cache of the EDataType of deserialization.
 
 private:
-   virtual Int_t       GetOffsetHeaderSize() const {return 1;}
+   virtual Int_t       GetOffsetHeaderSize() const { return fType < TStreamerInfo::kOffsetP ? 0 : 1; } // a fType < TStreamerInfo::kObject is implicit through CanGenerateOffsetArray.
 
 public:
    TLeafElement();
    TLeafElement(TBranch *parent, const char *name, Int_t id, Int_t type);
    virtual ~TLeafElement();
 
-   virtual Bool_t   CanGenerateOffsetArray() { return fLeafCount && fLenType && (fType < TStreamerInfo::kOffsetP); }
+   virtual Bool_t   CanGenerateOffsetArray() { return fLeafCount && fLenType && (fType < TStreamerInfo::kObject); }
    virtual Int_t   *GenerateOffsetArrayBase(Int_t /*base*/, Int_t /*events*/) { return nullptr; }
    virtual DeserializeType GetDeserializeType() const;
 
