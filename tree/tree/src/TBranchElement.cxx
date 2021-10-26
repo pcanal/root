@@ -2952,7 +2952,10 @@ T TBranchElement::GetTypedValue(Int_t j, Int_t len, Bool_t subarr) const
       return 0;
    }
 
-   if (fType == 31) {
+   if ((fType == 3) || (fType == 4)) {
+      // Top-level branch of a TClonesArray.
+      return fNdata;
+   } else if (fType == 31) {
       TClonesArray* clones = (TClonesArray*) object;
       if (subarr) {
          return GetInfoImp()->GetTypedValueClones<T>(clones, prID, j, len, fOffset);
