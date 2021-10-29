@@ -16,7 +16,7 @@
 #include <cstring>
 #include "TError.h"
 
-static const int kHeaderSize = 9;
+static const int kHeaderSize = 10; // Regular ROOT header (9) plus one more for Blast.
 
 void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, EDataType datatype)
 {
@@ -41,14 +41,29 @@ void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, 
 
    size_t out_size;
 
-   if (cxlevel <= 71 && (*srcsize % sizeof(float) == 0)) {
-      size_t float_size = *srcsize / sizeof(float);
+   int rawtype = datatype % EDataType::kOffsetL;
+
+   int isfloat = (rawtype == EDataType::kFloat_t);
+   bool isdouble = (rawtype == EDataType::kDouble_t);
+
+   if (isfloat || isdouble) {
+      // cxlevel <= 71
+      const size_t elsize = isfloat ? sizeof(float) : sizeof(double);
+
+      if ( (*srcsize % elsize) != 0 )
+         return;
+      size_t float_number = *srcsize / elsize;
       // Use "absSense".  We shift the request config from [1,71] to [-60, 10]
       auto absSensLevel = cxlevel - 61;
       // Note: We need to check the source really start of a float boundary.
       // Note: We need to upgrade blast to avoid the memcpy (which is IN ADDITION to an internal copy already!!!)
       char *staging = nullptr;
-      out_size = blast1_compress<true>(absSensLevel, (float*)src, float_size, staging);
+
+      if (isfloat)
+         out_size = blast1_compress<true>(absSensLevel, (float*)src, float_number, staging);
+      else
+         out_size = blast1_compress<true>(absSensLevel, (double*)src, float_number, staging);
+
       if ( (out_size + kHeaderSize) > (size_t)*tgtsize ) {
          delete [] staging;
          return;
@@ -96,7 +111,7 @@ void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, 
 
    tgt[0] = 'B';  /* Signature of Accelogic BLAST */
    tgt[1] = 'L';
-   tgt[2] = cxlevel;
+   tgt[2] = datatype;
 
    unsigned in_size   = (unsigned) (*srcsize);
 
@@ -108,6 +123,9 @@ void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, 
    tgt[7] = (char)((in_size >> 8) & 0xff);
    tgt[8] = (char)((in_size >> 16) & 0xff);
 
+   // Blast specific
+   tgt[9] = datatype;
+
    *irep = out_size + kHeaderSize;
 }
 
@@ -116,23 +134,38 @@ void R__unzipBLAST(int *srcsize, unsigned char *src, int *tgtsize, unsigned char
    *irep = 0;
 
    auto cxlevel = src[2];
+   auto datatype = src[9];
 
    size_t out_size;
 
-   if (cxlevel <= 71) {
+   int rawtype = datatype % EDataType::kOffsetL;
+
+   int isfloat = (rawtype == EDataType::kFloat_t);
+   bool isdouble = (rawtype == EDataType::kDouble_t);
+
+   if (isfloat || isdouble) {
       // Use "absSense".  We shift the request config from [1,71] to [-60, 10]
       auto absSensLevel = cxlevel - 61;
       // Note: We need to check the destination really start of a float boundary.
-      float *staging = nullptr;
-      size_t float_size = blast1_decompress<true>(absSensLevel, (char*)(&src[kHeaderSize]), *srcsize, staging);
-      out_size = float_size * sizeof(float);
+      union {
+         float *f;
+         double *d;
+         char *c;
+      } staging;
+      staging.c = nullptr;
+
+      size_t float_size = isfloat ? blast1_decompress<true>(absSensLevel, (char*)(&src[kHeaderSize]), *srcsize, staging.f)
+                                  : blast1_decompress<true>(absSensLevel, (char*)(&src[kHeaderSize]), *srcsize, staging.d);
+
+      const size_t elsize = isfloat ? sizeof(float) : sizeof(double);
+      out_size = float_size * elsize;
       // Note: We need to upgrade blast to avoid the memcpy
       if ( out_size > (size_t)*tgtsize ) {
-         delete [] staging;
+         delete [] staging.c;
          return;
       }
-      memcpy(tgt, staging, out_size);
-      delete [] staging;
+      memcpy(tgt, staging.c, out_size);
+      delete [] staging.c;
       *irep = out_size;
    } else if (cxlevel <= 79) {
       // Use "RLE.  cx level determines data type
