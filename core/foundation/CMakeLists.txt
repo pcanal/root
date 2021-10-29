@@ -9,6 +9,7 @@
 ############################################################################
 
 set(Foundation_dict_headers
+  EDataType.h
   ESTLType.h
   RStringView.h
   TClassEdit.h
