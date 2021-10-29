@@ -12,11 +12,13 @@
 #ifndef ROOT_ZipAccelogic
 #define ROOT_ZipAccelogic
 
+#include "EDataType.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep);
+void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, EDataType datatype);
 
 void R__unzipBLAST(int *srcsize, unsigned char *src, int *tgtsize, unsigned char *tgt, int *irep);
 

@@ -77,7 +77,8 @@ unsigned long R__crc32(unsigned long crc, const unsigned char* buf, unsigned int
 /*                      1 = zlib */
 /*                      2 = lzma */
 /*                      3 = old */
-void R__zipMultipleAlgorithm(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, ROOT::RCompressionSetting::EAlgorithm::EValues compressionAlgorithm)
+void R__zipMultipleAlgorithm(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, ROOT::RCompressionSetting::EAlgorithm::EValues compressionAlgorithm,
+                             EDataType datatype /* = kNoType_t */ )
 {
 
   if (*srcsize < 1 + HDRSIZE + 1) {
@@ -102,7 +103,7 @@ void R__zipMultipleAlgorithm(int cxlevel, int *srcsize, char *src, int *tgtsize,
   } else if (compressionAlgorithm == ROOT::RCompressionSetting::EAlgorithm::kZSTD) {
      R__zipZSTD(cxlevel, srcsize, src, tgtsize, tgt, irep);
   } else if (compressionAlgorithm == ROOT::RCompressionSetting::EAlgorithm::kBLAST) {
-     R__zipBLAST(cxlevel, srcsize, src, tgtsize, tgt, irep);
+     R__zipBLAST(cxlevel, srcsize, src, tgtsize, tgt, irep, datatype);
   } else if (compressionAlgorithm == ROOT::RCompressionSetting::EAlgorithm::kOldCompressionAlgo || compressionAlgorithm == ROOT::RCompressionSetting::EAlgorithm::kUseGlobal) {
      R__zipOld(cxlevel, srcsize, src, tgtsize, tgt, irep);
   } else {

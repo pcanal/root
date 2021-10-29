@@ -14,10 +14,11 @@
 #include <cstdio>
 #include <cstdint>
 #include <cstring>
+#include "TError.h"
 
 static const int kHeaderSize = 9;
 
-void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep)
+void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, EDataType datatype)
 {
    *irep = 0;
 
@@ -26,6 +27,15 @@ void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, 
    }
 
    if (*srcsize > 0xffffff || *srcsize < 0) {
+      return;
+   }
+
+   if (datatype >= (EDataType::kOffsetP + EDataType::kVoid_t)) {
+      Error("R__zipBLAST", "Accelogic BLAST connector requires a buffer with homegeonous numericla data types (datatype is %d)\n", datatype);
+      return;
+   }
+   if (datatype >= EDataType::kOffsetP) {
+      Error("R__zipBLAST", "Accelogic BLAST connector does not yet support variable size array (datatype is %d)\n", datatype);
       return;
    }
 
@@ -80,7 +90,7 @@ void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, 
       delete [] staging;
       *irep = out_size + kHeaderSize;
    } else {
-      // Call the other engines
+      // Here we should call the other engines
       return;
    }
 
