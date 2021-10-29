@@ -1239,10 +1239,13 @@ Int_t TBasket::WriteBuffer()
 #ifdef R__USE_IMT
          sentry.unlock();
 #endif  // R__USE_IMT
+         TClass *tmp = nullptr;
+         EDataType datatype;
+         fBranch->GetExpectedType( tmp, datatype );
          // NOTE this is declared with C linkage, so it shouldn't except.  Also, when
          // USE_IMT is defined, we are guaranteed that the compression buffer is unique per-branch.
          // (see fCompressedBufferRef in constructor).
-         R__zipMultipleAlgorithm(cxlevel, &bufmax, objbuf, &bufmax, bufcur, &nout, cxAlgorithm);
+         R__zipMultipleAlgorithm(cxlevel, &bufmax, objbuf, &bufmax, bufcur, &nout, cxAlgorithm, datatype);
 #ifdef R__USE_IMT
          sentry.lock();
 #endif  // R__USE_IMT
