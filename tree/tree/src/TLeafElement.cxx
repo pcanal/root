@@ -93,6 +93,7 @@ TLeafElement::TLeafElement(TBranch *parent, const char *name, Int_t id, Int_t ty
          case kDataTypeAliasUnsigned_t: // fall-through
          case kDataTypeAliasSignedChar_t: // fall-through
          case kNumDataTypes: // fall-through
+         case kOffsetP: // fall-through
             fLenType = 0;
       };
    }
