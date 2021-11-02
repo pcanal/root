@@ -91,6 +91,7 @@
 
 #pragma read sourceClass="TTree" targetClass="TTree" version="[-16]" source="" target="fDefaultEntryOffsetLen" code="{ fDefaultEntryOffsetLen = 1000; }"
 #pragma read sourceClass="TTree" targetClass="TTree" version="[-18]" source="" target="fNClusterRange" code="{ fNClusterRange = 0; }"
+#pragma read sourceClass="TLeafElement" targetClass="TLeafElement" version="[1]" source="Int_t fType" target="fType"  code="{ fType = onfile.fType; if (fType < TVirtualStreamerInfo::kObject) newObj->SetLenType(fType); }"
 
 #pragma link C++ namespace ROOT::Internal::TreeUtils;
 

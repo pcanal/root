@@ -72,7 +72,9 @@ public:
    virtual void     PrintValue(Int_t i=0) const {((TBranchElement*)fBranch)->PrintValue(i);}
    virtual void     SetLeafCount(TLeaf *leaf) {fLeafCount = leaf;}
 
-   ClassDef(TLeafElement,1);  //A TLeaf for a general object derived from TObject.
+           void     SetLenType(Int_t datatype);
+
+   ClassDef(TLeafElement,2);  //A TLeaf for a general object derived from TObject.
 };
 
 #endif
