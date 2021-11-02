@@ -18,6 +18,24 @@
 
 static const int kHeaderSize = 10; // Regular ROOT header (9) plus one more for Blast.
 
+union RealTypes {
+   float *f;
+   double *d;
+   char *c;
+};
+
+union IntegerTypes {
+   char *c;
+   short *s;
+   int *i;
+   long long *l;
+   unsigned char *uc;
+   unsigned short *us;
+   unsigned int *ui;
+   unsigned long long *ul;
+};
+
+
 void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, EDataType datatype)
 {
    *irep = 0;
@@ -58,11 +76,13 @@ void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, 
       // Note: We need to check the source really start of a float boundary.
       // Note: We need to upgrade blast to avoid the memcpy (which is IN ADDITION to an internal copy already!!!)
       char *staging = nullptr;
+      RealTypes source;
+      source.c = src;
 
       if (isfloat)
-         out_size = blast1_compress<true>(absSensLevel, (float*)src, float_number, staging);
+         out_size = blast1_compress<true>(absSensLevel, source.f, float_number, staging);
       else
-         out_size = blast1_compress<true>(absSensLevel, (double*)src, float_number, staging);
+         out_size = blast1_compress<true>(absSensLevel, source.d, float_number, staging);
 
       if ( (out_size + kHeaderSize) > (size_t)*tgtsize ) {
          delete [] staging;
@@ -76,23 +96,25 @@ void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, 
       // Note: We need to check the source really start of a boundary.
       // Note: We need to upgrade blast to avoid the memcpy (which is IN ADDITION to an internal copy already!!!)
       char *staging = nullptr;
-      // out_size = blast2_compress<T,true>((T*)src, *srcsize, staging);
+      IntegerTypes source;
+      source.c = src;
+
       if (cxlevel == 72) {
-         out_size = blast2_compress<char,true>(src, *srcsize, staging);
+         out_size = blast2_compress<char,true>(source.c, *srcsize, staging);
       } else if (cxlevel == 73 && (*srcsize % sizeof(short) == 0)) {
-         out_size = blast2_compress<short,true>((short*)src, *srcsize, staging);
+         out_size = blast2_compress<short,true>(source.s, *srcsize, staging);
       } else if (cxlevel == 74 && (*srcsize % sizeof(int) == 0)) {
-         out_size = blast2_compress<int,true>((int*)src, *srcsize, staging);
+         out_size = blast2_compress<int,true>(source.i, *srcsize, staging);
       } else if (cxlevel == 75 && (*srcsize % sizeof(long long) == 0)) {
-         out_size = blast2_compress<long long,true>((long long*)src, *srcsize, staging);
+         out_size = blast2_compress<long long,true>(source.l, *srcsize, staging);
       } else if (cxlevel == 76) {
-         out_size = blast2_compress<unsigned char,true>((unsigned char*) src, *srcsize, staging);
+         out_size = blast2_compress<unsigned char,true>(source.uc, *srcsize, staging);
       } else if (cxlevel == 77 && (*srcsize % sizeof(unsigned short) == 0)) {
-         out_size = blast2_compress<unsigned short,true>((unsigned short*)src, *srcsize, staging);
+         out_size = blast2_compress<unsigned short,true>(source.us, *srcsize, staging);
       } else if (cxlevel == 78 && (*srcsize % sizeof(unsigned int) == 0)) {
-         out_size = blast2_compress<unsigned int,true>((unsigned int*)src, *srcsize, staging);
+         out_size = blast2_compress<unsigned int,true>(source.ui, *srcsize, staging);
       } else if (cxlevel == 79 && (*srcsize % sizeof(unsigned long long) == 0)) {
-         out_size = blast2_compress<unsigned long long,true>((unsigned long long*)src, *srcsize, staging);
+         out_size = blast2_compress<unsigned long long,true>(source.ul, *srcsize, staging);
       } else {
          // not proper length
          return;
@@ -133,11 +155,11 @@ void R__unzipBLAST(int *srcsize, unsigned char *src, int *tgtsize, unsigned char
 {
    *irep = 0;
 
+   char* source = (char*)(&src[kHeaderSize]);
+   size_t in_size = (*srcsize) - kHeaderSize;
    auto cxlevel = src[2];
    auto datatype = src[9];
 
-   char* source = (char*)(&src[kHeaderSize]);
-   size_t in_size = (*srcsize) - kHeaderSize;
    size_t out_size;
 
    int rawtype = datatype % EDataType::kOffsetL;
@@ -149,11 +171,7 @@ void R__unzipBLAST(int *srcsize, unsigned char *src, int *tgtsize, unsigned char
       // Use "absSense".  We shift the request config from [1,71] to [-60, 10]
       auto absSensLevel = cxlevel - 61;
       // Note: We need to check the destination really start of a float boundary.
-      union {
-         float *f;
-         double *d;
-         char *c;
-      } staging;
+      RealTypes staging;
       staging.c = nullptr;
 
       size_t float_size = isfloat ? blast1_decompress<true>(absSensLevel, source, in_size, staging.f)
@@ -172,25 +190,25 @@ void R__unzipBLAST(int *srcsize, unsigned char *src, int *tgtsize, unsigned char
    } else if (cxlevel <= 79) {
       // Use "RLE.  cx level determines data type
       // Note: We need to check the destination really start of a short boundary.
-      char *staging = nullptr;
-      char*& stagingPtr = staging;
+      IntegerTypes staging;
+      staging.c = nullptr;
       switch (cxlevel) {
-         case (79) : out_size = blast2_decompress<unsigned long long,true>(source, in_size, (unsigned long long*&) stagingPtr); break;
-         case (78) : out_size = blast2_decompress<unsigned int,true>(source, in_size, (unsigned int*&) stagingPtr); break;
-         case (77) : out_size = blast2_decompress<unsigned short,true>(source, in_size, (unsigned short*&) stagingPtr); break;
-         case (76) : out_size = blast2_decompress<unsigned char,true>(source, in_size, (unsigned char*&) stagingPtr); break;
-         case (75) : out_size = blast2_decompress<long long,true>(source, in_size, (long long*&) stagingPtr); break;
-         case (74) : out_size = blast2_decompress<int,true>(source, in_size, (int*&) stagingPtr); break;
-         case (73) : out_size = blast2_decompress<short,true>(source, in_size, (short*&) stagingPtr); break;
-         default   : out_size = blast2_decompress<char,true>(source, in_size, staging);
+         case (79) : out_size = blast2_decompress<unsigned long long,true>(source, in_size, staging.ul); break;
+         case (78) : out_size = blast2_decompress<unsigned int,true>(source, in_size, staging.ui); break;
+         case (77) : out_size = blast2_decompress<unsigned short,true>(source, in_size, staging.us); break;
+         case (76) : out_size = blast2_decompress<unsigned char,true>(source, in_size, staging.uc); break;
+         case (75) : out_size = blast2_decompress<long long,true>(source, in_size, staging.l); break;
+         case (74) : out_size = blast2_decompress<int,true>(source, in_size, staging.i); break;
+         case (73) : out_size = blast2_decompress<short,true>(source, in_size, staging.s); break;
+         default   : out_size = blast2_decompress<char,true>(source, in_size, staging.c);
       }
       // Note: We need to upgrade blast to avoid the memcpy
       if ( out_size > (size_t)*tgtsize ) {
-         delete [] staging;
+         delete [] staging.c;
          return;
       }
-      memcpy(tgt, staging, out_size);
-      delete [] staging;
+      memcpy(tgt, staging.c, out_size);
+      delete [] staging.c;
       *irep = out_size;
    } else {
       // Need to handle the other engine
