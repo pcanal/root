@@ -136,6 +136,8 @@ void R__unzipBLAST(int *srcsize, unsigned char *src, int *tgtsize, unsigned char
    auto cxlevel = src[2];
    auto datatype = src[9];
 
+   char* source = (char*)(&src[kHeaderSize]);
+   size_t in_size = (*srcsize) - kHeaderSize;
    size_t out_size;
 
    int rawtype = datatype % EDataType::kOffsetL;
@@ -154,8 +156,8 @@ void R__unzipBLAST(int *srcsize, unsigned char *src, int *tgtsize, unsigned char
       } staging;
       staging.c = nullptr;
 
-      size_t float_size = isfloat ? blast1_decompress<true>(absSensLevel, (char*)(&src[kHeaderSize]), *srcsize, staging.f)
-                                  : blast1_decompress<true>(absSensLevel, (char*)(&src[kHeaderSize]), *srcsize, staging.d);
+      size_t float_size = isfloat ? blast1_decompress<true>(absSensLevel, source, in_size, staging.f)
+                                  : blast1_decompress<true>(absSensLevel, source, in_size, staging.d);
 
       const size_t elsize = isfloat ? sizeof(float) : sizeof(double);
       out_size = float_size * elsize;
@@ -173,14 +175,14 @@ void R__unzipBLAST(int *srcsize, unsigned char *src, int *tgtsize, unsigned char
       char *staging = nullptr;
       char*& stagingPtr = staging;
       switch (cxlevel) {
-         case (79) : out_size = blast2_decompress<unsigned long long,true>((char*)(&src[kHeaderSize]), *srcsize, (unsigned long long*&) stagingPtr); break;
-         case (78) : out_size = blast2_decompress<unsigned int,true>((char*)(&src[kHeaderSize]), *srcsize, (unsigned int*&) stagingPtr); break;
-         case (77) : out_size = blast2_decompress<unsigned short,true>((char*)(&src[kHeaderSize]), *srcsize, (unsigned short*&) stagingPtr); break;
-         case (76) : out_size = blast2_decompress<unsigned char,true>((char*)(&src[kHeaderSize]), *srcsize, (unsigned char*&) stagingPtr);
-         case (75) : out_size = blast2_decompress<long long,true>((char*)(&src[kHeaderSize]), *srcsize, (long long*&) stagingPtr); break;
-         case (74) : out_size = blast2_decompress<int,true>((char*)(&src[kHeaderSize]), *srcsize, (int*&) stagingPtr); break;
-         case (73) : out_size = blast2_decompress<short,true>((char*)(&src[kHeaderSize]), *srcsize, (short*&) stagingPtr); break;
-         default   : out_size = blast2_decompress<char,true>((char*)(&src[kHeaderSize]), *srcsize, staging);
+         case (79) : out_size = blast2_decompress<unsigned long long,true>(source, in_size, (unsigned long long*&) stagingPtr); break;
+         case (78) : out_size = blast2_decompress<unsigned int,true>(source, in_size, (unsigned int*&) stagingPtr); break;
+         case (77) : out_size = blast2_decompress<unsigned short,true>(source, in_size, (unsigned short*&) stagingPtr); break;
+         case (76) : out_size = blast2_decompress<unsigned char,true>(source, in_size, (unsigned char*&) stagingPtr); break;
+         case (75) : out_size = blast2_decompress<long long,true>(source, in_size, (long long*&) stagingPtr); break;
+         case (74) : out_size = blast2_decompress<int,true>(source, in_size, (int*&) stagingPtr); break;
+         case (73) : out_size = blast2_decompress<short,true>(source, in_size, (short*&) stagingPtr); break;
+         default   : out_size = blast2_decompress<char,true>(source, in_size, staging);
       }
       // Note: We need to upgrade blast to avoid the memcpy
       if ( out_size > (size_t)*tgtsize ) {
