@@ -100,21 +100,21 @@ void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, 
       source.c = src;
 
       if (cxlevel == 72) {
-         out_size = blast2_compress<char,true>(source.c, *srcsize, staging);
+         out_size = blast2_compress<true>(source.c, *srcsize, staging);
       } else if (cxlevel == 73 && (*srcsize % sizeof(short) == 0)) {
-         out_size = blast2_compress<short,true>(source.s, *srcsize, staging);
+         out_size = blast2_compress<true>(source.s, *srcsize, staging);
       } else if (cxlevel == 74 && (*srcsize % sizeof(int) == 0)) {
-         out_size = blast2_compress<int,true>(source.i, *srcsize, staging);
+         out_size = blast2_compress<true>(source.i, *srcsize, staging);
       } else if (cxlevel == 75 && (*srcsize % sizeof(long long) == 0)) {
-         out_size = blast2_compress<long long,true>(source.l, *srcsize, staging);
+         out_size = blast2_compress<true>(source.l, *srcsize, staging);
       } else if (cxlevel == 76) {
-         out_size = blast2_compress<unsigned char,true>(source.uc, *srcsize, staging);
+         out_size = blast2_compress<true>(source.uc, *srcsize, staging);
       } else if (cxlevel == 77 && (*srcsize % sizeof(unsigned short) == 0)) {
-         out_size = blast2_compress<unsigned short,true>(source.us, *srcsize, staging);
+         out_size = blast2_compress<true>(source.us, *srcsize, staging);
       } else if (cxlevel == 78 && (*srcsize % sizeof(unsigned int) == 0)) {
-         out_size = blast2_compress<unsigned int,true>(source.ui, *srcsize, staging);
+         out_size = blast2_compress<true>(source.ui, *srcsize, staging);
       } else if (cxlevel == 79 && (*srcsize % sizeof(unsigned long long) == 0)) {
-         out_size = blast2_compress<unsigned long long,true>(source.ul, *srcsize, staging);
+         out_size = blast2_compress<true>(source.ul, *srcsize, staging);
       } else {
          // not proper length
          return;
@@ -193,14 +193,14 @@ void R__unzipBLAST(int *srcsize, unsigned char *src, int *tgtsize, unsigned char
       IntegerTypes staging;
       staging.c = nullptr;
       switch (cxlevel) {
-         case (79) : out_size = blast2_decompress<unsigned long long,true>(source, in_size, staging.ul); break;
-         case (78) : out_size = blast2_decompress<unsigned int,true>(source, in_size, staging.ui); break;
-         case (77) : out_size = blast2_decompress<unsigned short,true>(source, in_size, staging.us); break;
-         case (76) : out_size = blast2_decompress<unsigned char,true>(source, in_size, staging.uc); break;
-         case (75) : out_size = blast2_decompress<long long,true>(source, in_size, staging.l); break;
-         case (74) : out_size = blast2_decompress<int,true>(source, in_size, staging.i); break;
-         case (73) : out_size = blast2_decompress<short,true>(source, in_size, staging.s); break;
-         default   : out_size = blast2_decompress<char,true>(source, in_size, staging.c);
+         case (79) : out_size = blast2_decompress<true>(source, in_size, staging.ul); break;
+         case (78) : out_size = blast2_decompress<true>(source, in_size, staging.ui); break;
+         case (77) : out_size = blast2_decompress<true>(source, in_size, staging.us); break;
+         case (76) : out_size = blast2_decompress<true>(source, in_size, staging.uc); break;
+         case (75) : out_size = blast2_decompress<true>(source, in_size, staging.l); break;
+         case (74) : out_size = blast2_decompress<true>(source, in_size, staging.i); break;
+         case (73) : out_size = blast2_decompress<true>(source, in_size, staging.s); break;
+         default   : out_size = blast2_decompress<true>(source, in_size, staging.c);
       }
       // Note: We need to upgrade blast to avoid the memcpy
       if ( out_size > (size_t)*tgtsize ) {
