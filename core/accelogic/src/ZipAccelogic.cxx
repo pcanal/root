@@ -133,7 +133,7 @@ void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, 
 
    tgt[0] = 'B';  /* Signature of Accelogic BLAST */
    tgt[1] = 'L';
-   tgt[2] = datatype;
+   tgt[2] = cxlevel;
 
    unsigned in_size   = (unsigned) (*srcsize);
 
