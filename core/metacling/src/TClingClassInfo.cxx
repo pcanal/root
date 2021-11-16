@@ -70,7 +70,7 @@ static std::string FullyQualifiedName(const Decl *decl) {
 
 TClingClassInfo::TClingClassInfo(cling::Interpreter *interp, Bool_t all)
    : TClingDeclInfo(nullptr), fInterp(interp), fFirstTime(true), fDescend(false), fIterAll(all),
-     fIsIter(true), fType(0), fOffsetCache(0)
+     fIsIter(true), fType(0), fOffsetCache(0), fLastUsedOffsetCache(nullptr)
 {
    TranslationUnitDecl *TU =
       interp->getCI()->getASTContext().getTranslationUnitDecl();
@@ -81,7 +81,7 @@ TClingClassInfo::TClingClassInfo(cling::Interpreter *interp, Bool_t all)
 
 TClingClassInfo::TClingClassInfo(cling::Interpreter *interp, const char *name, bool intantiateTemplate /* = true */)
    : TClingDeclInfo(nullptr), fInterp(interp), fFirstTime(true), fDescend(false), fIterAll(kTRUE), fIsIter(false),
-     fType(0), fTitle(""), fOffsetCache(0)
+     fType(0), fTitle(""), fOffsetCache(0), fLastUsedOffsetCache(nullptr)
 {
    const cling::LookupHelper& lh = fInterp->getLookupHelper();
    const Type *type = 0;
@@ -116,7 +116,7 @@ TClingClassInfo::TClingClassInfo(cling::Interpreter *interp, const char *name, b
 TClingClassInfo::TClingClassInfo(cling::Interpreter *interp,
                                  const Type &tag)
    : TClingDeclInfo(nullptr), fInterp(interp), fFirstTime(true), fDescend(false), fIterAll(kTRUE),
-     fIsIter(false), fType(0), fTitle(""), fOffsetCache(0)
+     fIsIter(false), fType(0), fTitle(""), fOffsetCache(0), fLastUsedOffsetCache(nullptr)
 {
    Init(tag);
 }
@@ -124,7 +124,7 @@ TClingClassInfo::TClingClassInfo(cling::Interpreter *interp,
 TClingClassInfo::TClingClassInfo(cling::Interpreter *interp,
                                  const Decl *D)
    : TClingDeclInfo(nullptr), fInterp(interp), fFirstTime(true), fDescend(false), fIterAll(kTRUE),
-     fIsIter(false), fType(0), fTitle(""), fOffsetCache(0)
+     fIsIter(false), fType(0), fTitle(""), fOffsetCache(0), fLastUsedOffsetCache(nullptr)
 {
    Init(D);
 }
@@ -619,6 +619,7 @@ ptrdiff_t TClingClassInfo::GetBaseOffset(TClingClassInfo* base, void* address, b
       // Check for the offset in the cache.
       auto iter = fOffsetCache.find(base->GetDecl());
       if (iter != fOffsetCache.end()) {
+         // fLastUsedOffsetCache = &(*iter);
          std::pair<ptrdiff_t, OffsetPtrFunc_t> offsetCache = (*iter).second;
          if (OffsetPtrFunc_t executableFunc = offsetCache.second) {
             if (address) {

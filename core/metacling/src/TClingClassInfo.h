@@ -72,7 +72,17 @@ private:
    std::string           fDeclFileName; // Name of the file where the underlying entity is declared.
 
    std::mutex fOffsetCacheMutex;
-   llvm::DenseMap<const clang::Decl*, std::pair<ptrdiff_t, OffsetPtrFunc_t> > fOffsetCache; // Functions already generated for offsets.
+   using OffsetCacheMap_t = llvm::DenseMap<const clang::Decl*, std::pair<ptrdiff_t, OffsetPtrFunc_t> >;
+   OffsetCacheMap_t fOffsetCache; // Functions already generated for offsets.
+
+   struct LastUsedOffsetCache {
+      LastUsedOffsetCache(const clang::Decl *decl = nullptr) : first(decl) {};
+      LastUsedOffsetCache(const LastUsedOffsetCache &) = default;
+      const clang::Decl* first = nullptr;
+      ptrdiff_t second = 0;
+      OffsetPtrFunc_t thrid = nullptr;
+   };
+   std::atomic<LastUsedOffsetCache> fLastUsedOffsetCache; // Point to the last used offset.
 
 public: // Types
 
@@ -84,14 +94,16 @@ public: // Types
 public:
    explicit TClingClassInfo():
       fFirstTime(true), fDescend(false),
-      fIterAll(false), fIsIter(false)
+      fIterAll(false), fIsIter(false),
+      fOffsetCache(), fLastUsedOffsetCache(nullptr)
    {}
    TClingClassInfo(const TClingClassInfo &rhs) : // Copy all but the mutex
       TClingDeclInfo(rhs),
       fInterp(rhs.fInterp), fFirstTime(rhs.fFirstTime), fDescend(rhs.fDescend),
       fIterAll(rhs.fIterAll), fIsIter(rhs.fIsIter), fIter(rhs.fIter),
       fType(rhs.fType), fIterStack(rhs.fIterStack), fTitle(rhs.fTitle),
-      fDeclFileName(rhs.fDeclFileName), fOffsetCache(rhs.fOffsetCache)
+      fDeclFileName(rhs.fDeclFileName), fOffsetCache(rhs.fOffsetCache),
+      fLastUsedOffsetCache(nullptr)
    {}
    explicit TClingClassInfo(cling::Interpreter *, Bool_t all = kTRUE);
    explicit TClingClassInfo(cling::Interpreter *, const char *classname, bool intantiateTemplate = kTRUE);
@@ -112,6 +124,7 @@ public:
       fTitle = rhs.fTitle;
       fDeclFileName = rhs.fDeclFileName;
       fOffsetCache = rhs.fOffsetCache;
+      fLastUsedOffsetCache = LastUsedOffsetCache();
       return *this;
    }
 
