@@ -77,6 +77,7 @@ void TBufferMerger::Push(TBufferFile *buffer)
       std::lock_guard<std::mutex> lock(fQueueMutex);
       fBuffered += buffer->BufferSize();
       fQueue.push(buffer);
+      if (fQueue.size() > 150) fprintf(stderr, "DEBUG: queue size is %ld\n", fQueue.size());
    }
 
    if (fBuffered > fAutoSave)
