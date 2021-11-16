@@ -115,6 +115,7 @@ void TBufferMerger::Merge()
 void TBufferMerger::MergeImpl()
 {
    std::queue<TBufferFile *> queue;
+   while(fBuffered) {
    {
       std::lock_guard<std::mutex> q(fQueueMutex);
       std::swap(queue, fQueue);
@@ -125,6 +126,7 @@ void TBufferMerger::MergeImpl()
       std::unique_ptr<TBufferFile> buffer{queue.front()};
       fMerger.AddAdoptFile(new TMemFile(fMerger.GetOutputFileName(), std::move(buffer)));
       queue.pop();
+   }
    }
 
    fMerger.PartialMerge(TFileMerger::kAll | TFileMerger::kIncremental | TFileMerger::kDelayWrite |
