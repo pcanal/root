@@ -184,3 +184,5 @@ if(APPLE)
 elseif(NOT MSVC)
   target_link_libraries(Cling PUBLIC -Wl,--unresolved-symbols=ignore-in-object-files)
 endif()
+
+target_link_libraries(Cling PRIVATE -latomic)
