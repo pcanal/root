@@ -70,6 +70,8 @@ TBuffer::TBuffer(EMode mode)
 /// Create an I/O buffer object. Mode should be either TBuffer::kRead or
 /// TBuffer::kWrite.
 
+static long inflight = 0;
+
 TBuffer::TBuffer(EMode mode, Int_t bufsiz)
 {
    if (bufsiz < 0)
@@ -82,6 +84,8 @@ TBuffer::TBuffer(EMode mode, Int_t bufsiz)
 
    SetBit(kIsOwner);
 
+   ++inflight;
+   // fprintf(stderr, "Buffer in flight %ld\n", inflight);
    fBuffer = new char[fBufSize+kExtraSpace];
 
    fBufCur = fBuffer;
@@ -112,6 +116,9 @@ TBuffer::TBuffer(EMode mode, Int_t bufsiz, void *buf, Bool_t adopt, ReAllocCharF
 
    SetBit(kIsOwner);
 
+   ++inflight;
+   // fprintf(stderr, "Buffer in flight %ld\n", inflight);
+
    if (buf) {
       fBuffer = (char *)buf;
       if ( (fMode&kWrite)!=0 ) {
@@ -139,6 +146,9 @@ TBuffer::TBuffer(EMode mode, Int_t bufsiz, void *buf, Bool_t adopt, ReAllocCharF
 
 TBuffer::~TBuffer()
 {
+   --inflight;
+   // fprintf(stderr, "Buffer (dest) in flight %ld\n", inflight);
+
    if (TestBit(kIsOwner)) {
       //printf("Deleting fBuffer=%lx\n", fBuffer);
       delete [] fBuffer;

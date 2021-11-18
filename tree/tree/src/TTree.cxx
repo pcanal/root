@@ -733,6 +733,7 @@ Long64_t TTree::TClusterIterator::Previous()
 ///
 /// Note: We do *not* insert ourself into the current directory.
 ///
+static int inflight = 0;
 
 TTree::TTree()
 : TNamed()
@@ -802,6 +803,7 @@ TTree::TTree()
    fMaxEntryLoop *= 1000;
 
    fBranches.SetOwner(kTRUE);
+   ++inflight;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -912,6 +914,7 @@ TTree::TTree(const char* name, const char* title, Int_t splitlevel /* = 99 */,
          Branch(title+1,32000,splitlevel);
       }
    }
+   ++inflight;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -919,6 +922,7 @@ TTree::TTree(const char* name, const char* title, Int_t splitlevel /* = 99 */,
 
 TTree::~TTree()
 {
+   --inflight;
    if (auto link = dynamic_cast<TNotifyLinkBase*>(fNotify)) {
       link->Clear();
    }
@@ -4592,6 +4596,7 @@ Int_t TTree::Fill()
       fIMTFlush = true;
       fIMTZipBytes.store(0);
       fIMTTotBytes.store(0);
+      // fprintf(stderr, "Using IMT in Fill");
    }
 #endif
 
@@ -4753,6 +4758,15 @@ Int_t TTree::Fill()
             if (!(dynamic_cast<TMemFile *>(file)))
                ChangeFile(file);
 
+   int nbaskets = 0;
+   TIter next(GetListOfLeaves());
+   TLeaf* leaf = 0;
+   while ((leaf = (TLeaf*) next())) {
+      TBranch *br = leaf->GetBranch();
+      nbaskets += br->GetListOfBaskets()->GetEntries();
+   }
+   if (fEntries > 50) 
+     fprintf(stderr, "TTree %p has %d top branch %d leaves and %d baskets %d inflight %lld entries\n", this, GetListOfBranches()->GetEntries(), GetListOfLeaves()->GetEntries(), nbaskets, inflight, fEntries);
    return nerror == 0 ? nbytes : -1;
 }
 
@@ -5647,7 +5661,7 @@ Int_t TTree::GetEntry(Long64_t entry, Int_t getall)
 
       // Enable this IMT use case (activate its locks)
       ROOT::Internal::TParBranchProcessingRAII pbpRAII;
-
+// fprintf(stderr, "Using IMT in GetEntry\n");
       Int_t errnb = 0;
       std::atomic<Int_t> pos(0);
       std::atomic<Int_t> nbpar(0);
