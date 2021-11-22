@@ -3734,8 +3734,15 @@ void TFile::WriteStreamerInfo()
    // build a temporary list with the marked files
    TIter next(gROOT->GetListOfStreamerInfo());
    TStreamerInfo *info;
-   TList list;
+   // listOfRules will be added to list and thus  needs to be declared before it,
+   // otherwise, in case of 'exception' or crash (like out of memory in this or
+   // other threads), we need to have the destructor for 'list' to be run before
+   // the destructor for 'listOfRules'.  If it not the case, the execution of
+   // TList::Clear for the object list will pick at the content of listOfRules
+   // (since it is an element of that the TList `list`) but it will also notice
+   // it has already been deleted.
    TList listOfRules;
+   TList list;
    listOfRules.SetOwner(kTRUE);
    listOfRules.SetName("listOfRules");
    std::set<TClass*> classSet;
@@ -3786,7 +3793,6 @@ void TFile::WriteStreamerInfo()
 
    fClassIndex->fArray[0] = 0;
 
-   list.RemoveLast(); // remove the listOfRules.
 }
 
 ////////////////////////////////////////////////////////////////////////////////
