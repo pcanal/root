@@ -83,7 +83,9 @@ private:
       OffsetPtrFunc_t thrid = nullptr;
    };
    std::atomic<LastUsedOffsetCache> fLastUsedOffsetCache; // Point to the last used offset.
-
+   std::atomic<LastUsedOffsetCache*> fOftenUsedCache[2];         // Same content as fOftenUsedCacheOwner but for concurrent access.
+   std::unique_ptr<LastUsedOffsetCache> fOftenUsedCacheOwner[2]; // Same content as fOftenUsedCache but for deletion.
+   
 public: // Types
 
    enum EInheritanceMode {
@@ -95,7 +97,7 @@ public:
    explicit TClingClassInfo():
       fFirstTime(true), fDescend(false),
       fIterAll(false), fIsIter(false),
-      fOffsetCache(), fLastUsedOffsetCache(nullptr)
+      fOffsetCache(), fLastUsedOffsetCache(nullptr), fOftenUsedCache{nullptr, nullptr}
    {}
    TClingClassInfo(const TClingClassInfo &rhs) : // Copy all but the mutex
       TClingDeclInfo(rhs),
@@ -103,7 +105,7 @@ public:
       fIterAll(rhs.fIterAll), fIsIter(rhs.fIsIter), fIter(rhs.fIter),
       fType(rhs.fType), fIterStack(rhs.fIterStack), fTitle(rhs.fTitle),
       fDeclFileName(rhs.fDeclFileName), fOffsetCache(rhs.fOffsetCache),
-      fLastUsedOffsetCache(nullptr)
+      fLastUsedOffsetCache(nullptr), fOftenUsedCache{nullptr, nullptr}
    {}
    explicit TClingClassInfo(cling::Interpreter *, Bool_t all = kTRUE);
    explicit TClingClassInfo(cling::Interpreter *, const char *classname, bool intantiateTemplate = kTRUE);
@@ -125,6 +127,10 @@ public:
       fDeclFileName = rhs.fDeclFileName;
       fOffsetCache = rhs.fOffsetCache;
       fLastUsedOffsetCache = LastUsedOffsetCache();
+      for(size_t i = 0; i < (sizeof(fOftenUsedCache)/sizeof(fOftenUsedCache[0])); ++i) {
+         fOftenUsedCache[i] = nullptr;
+         fOftenUsedCacheOwner[i].release();
+      }
       return *this;
    }
 
@@ -170,7 +176,7 @@ public:
                                   EInheritanceMode imode = kWithInheritance) const;
    int                  GetMethodNArg(const char *method, const char *proto, Bool_t objectIsConst, ROOT::EFunctionMatchMode mode = ROOT::kConversionMatch) const;
    Longptr_t            GetOffset(const clang::CXXMethodDecl* md) const;
-   ptrdiff_t            GetBaseOffset(TClingClassInfo* toBase, void* address, bool isDerivedObject);
+   ptrdiff_t            GetBaseOffset(TClingClassInfo* toBase, void* address, bool isDerivedObject, int oftenUsedIndex);
    const clang::Type   *GetType() const { return fType; } // Underlying representation with Double32_t
    std::vector<std::string> GetUsingNamespaces();
    ROOT::TMetaUtils::EIOCtorCategory HasDefaultConstructor(bool checkio = false, std::string *type_name = nullptr) const;

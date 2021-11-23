@@ -3003,7 +3003,7 @@ void TCling::InspectMembers(TMemberInspector& insp, const void* obj,
             TClingClassInfo* baseCi = (TClingClassInfo*)baseCl->GetClassInfo();
             if (ci && baseCi) {
                baseOffset = ci->GetBaseOffset(baseCi, const_cast<void*>(obj),
-                                              true /*isDerivedObj*/);
+                                              true /*isDerivedObj*/, -1 /* oftenUsedIndex */);
                if (baseOffset == -1) {
                   Error("InspectMembers",
                         "Error calculating offset of virtual base %s of class %s",
@@ -8486,7 +8486,7 @@ Longptr_t TCling::BaseClassInfo_Offset(BaseClassInfo_t* toBaseClassInfo, void * 
 
 ////////////////////////////////////////////////////////////////////////////////
 
-Longptr_t TCling::ClassInfo_GetBaseOffset(ClassInfo_t* fromDerived, ClassInfo_t* toBase, void * address, bool isDerivedObject) const
+Longptr_t TCling::ClassInfo_GetBaseOffset(ClassInfo_t* fromDerived, ClassInfo_t* toBase, void * address, bool isDerivedObject, int oftenUsedIndex) const
 {
    TClingClassInfo* TClinginfo = (TClingClassInfo*) fromDerived;
    TClingClassInfo* TClinginfoBase = (TClingClassInfo*) toBase;
@@ -8494,7 +8494,7 @@ Longptr_t TCling::ClassInfo_GetBaseOffset(ClassInfo_t* fromDerived, ClassInfo_t*
    if (TClinginfo->GetDecl() == TClinginfoBase->GetDecl()) {
       return 0;
    }
-   return TClinginfo->GetBaseOffset(TClinginfoBase, address, isDerivedObject);
+   return TClinginfo->GetBaseOffset(TClinginfoBase, address, isDerivedObject, oftenUsedIndex);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

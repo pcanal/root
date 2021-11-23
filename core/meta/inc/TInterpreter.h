@@ -409,7 +409,7 @@ public:
    virtual ClassInfo_t  *ClassInfo_Factory(const char * /* name */) const = 0;
    virtual ClassInfo_t  *ClassInfo_Factory(DeclId_t declid) const = 0;
    virtual Longptr_t ClassInfo_GetBaseOffset(ClassInfo_t* /* fromDerived */,
-                                            ClassInfo_t* /* toBase */, void* /* address */ = 0, bool /*isderived*/ = true) const {return 0;}
+                                            ClassInfo_t* /* toBase */, void* /* address */ = 0, bool /*isderived*/ = true, int /* oftenUsedIndex */ = -1) const {return 0;}
    virtual int    ClassInfo_GetMethodNArg(ClassInfo_t * /* info */, const char * /* method */,const char * /* proto */, Bool_t /* objectIsConst */ = false, ROOT::EFunctionMatchMode /* mode */ = ROOT::kConversionMatch) const {return 0;}
    virtual Bool_t ClassInfo_HasDefaultConstructor(ClassInfo_t * /* info */, Bool_t = kFALSE) const {return kFALSE;}
    virtual Bool_t ClassInfo_HasMethod(ClassInfo_t * /* info */, const char * /* name */) const {return kFALSE;}

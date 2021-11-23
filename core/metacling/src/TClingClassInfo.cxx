@@ -70,7 +70,7 @@ static std::string FullyQualifiedName(const Decl *decl) {
 
 TClingClassInfo::TClingClassInfo(cling::Interpreter *interp, Bool_t all)
    : TClingDeclInfo(nullptr), fInterp(interp), fFirstTime(true), fDescend(false), fIterAll(all),
-     fIsIter(true), fType(0), fOffsetCache(0), fLastUsedOffsetCache(nullptr)
+     fIsIter(true), fType(0), fOffsetCache(0), fLastUsedOffsetCache(nullptr), fOftenUsedCache{nullptr, nullptr}
 {
    TranslationUnitDecl *TU =
       interp->getCI()->getASTContext().getTranslationUnitDecl();
@@ -81,7 +81,7 @@ TClingClassInfo::TClingClassInfo(cling::Interpreter *interp, Bool_t all)
 
 TClingClassInfo::TClingClassInfo(cling::Interpreter *interp, const char *name, bool intantiateTemplate /* = true */)
    : TClingDeclInfo(nullptr), fInterp(interp), fFirstTime(true), fDescend(false), fIterAll(kTRUE), fIsIter(false),
-     fType(0), fTitle(""), fOffsetCache(0), fLastUsedOffsetCache(nullptr)
+     fType(0), fTitle(""), fOffsetCache(0), fLastUsedOffsetCache(nullptr), fOftenUsedCache{nullptr, nullptr}
 {
    const cling::LookupHelper& lh = fInterp->getLookupHelper();
    const Type *type = 0;
@@ -116,7 +116,7 @@ TClingClassInfo::TClingClassInfo(cling::Interpreter *interp, const char *name, b
 TClingClassInfo::TClingClassInfo(cling::Interpreter *interp,
                                  const Type &tag)
    : TClingDeclInfo(nullptr), fInterp(interp), fFirstTime(true), fDescend(false), fIterAll(kTRUE),
-     fIsIter(false), fType(0), fTitle(""), fOffsetCache(0), fLastUsedOffsetCache(nullptr)
+     fIsIter(false), fType(0), fTitle(""), fOffsetCache(0), fLastUsedOffsetCache(nullptr), fOftenUsedCache{nullptr, nullptr}
 {
    Init(tag);
 }
@@ -124,7 +124,7 @@ TClingClassInfo::TClingClassInfo(cling::Interpreter *interp,
 TClingClassInfo::TClingClassInfo(cling::Interpreter *interp,
                                  const Decl *D)
    : TClingDeclInfo(nullptr), fInterp(interp), fFirstTime(true), fDescend(false), fIterAll(kTRUE),
-     fIsIter(false), fType(0), fTitle(""), fOffsetCache(0), fLastUsedOffsetCache(nullptr)
+     fIsIter(false), fType(0), fTitle(""), fOffsetCache(0), fLastUsedOffsetCache(nullptr), fOftenUsedCache{nullptr, nullptr}
 {
    Init(D);
 }
@@ -610,8 +610,29 @@ Longptr_t TClingClassInfo::GetOffset(const CXXMethodDecl* md) const
    return offset;
 }
 
-ptrdiff_t TClingClassInfo::GetBaseOffset(TClingClassInfo* base, void* address, bool isDerivedObject)
+ptrdiff_t TClingClassInfo::GetBaseOffset(TClingClassInfo* base, void* address, bool isDerivedObject, int oftenUsedIndex)
 {
+#ifdef OFTEN_USED
+   if (oftenUsedIndex >= 0 && (size_t)oftenUsedIndex < sizeof(fOftenUsedCache)/sizeof(fOftenUsedCache[0])) {
+      auto cached = fOftenUsedCache[oftenUsedIndex].load();
+      if (cached) {
+         assert(cached->first == base->GetDecl()); // If this is not true then we also need to update the code assigning ot the array (see below)
+         if (OffsetPtrFunc_t executableFunc = cached->thrid) {
+            if (address) {
+               return (*executableFunc)(address, isDerivedObject);
+            }
+            else {
+               Error("TClingBaseClassInfo::Offset", "The address of the object for virtual base offset calculation is not valid.");
+               return -1;
+            }
+         }
+         else {
+            return cached->second;
+         }
+      }
+   }
+#endif
+// LastUsedOffsetCache> fOftenUsedCache
 #if 0
    auto cached = fLastUsedOffsetCache.load();
    if (cached.first == base->GetDecl()) {
@@ -643,6 +664,17 @@ ptrdiff_t TClingClassInfo::GetBaseOffset(TClingClassInfo* base, void* address, b
          // cached.second = offsetCache.first;
          // cached.thrid = offsetCache.second;
          // fLastUsedOffsetCache = cached;
+
+#ifdef OFTEN_USED
+         if (oftenUsedIndex >= 0 && (size_t)oftenUsedIndex < sizeof(fOftenUsedCache)/sizeof(fOftenUsedCache[0])) {
+            auto cached = std::make_unique<LastUsedOffsetCache>();
+            cached->first = base->GetDecl();
+            cached->second = offsetCache.first;
+            cached->thrid = offsetCache.second;
+            fOftenUsedCache[oftenUsedIndex] = cached.get();
+            fOftenUsedCacheOwner[oftenUsedIndex] = std::move(cached);
+         }         
+#endif
          if (OffsetPtrFunc_t executableFunc = offsetCache.second) {
             if (address) {
                return (*executableFunc)(address, isDerivedObject);

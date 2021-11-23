@@ -421,7 +421,7 @@ public: // Public Interface
    virtual ClassInfo_t*  ClassInfo_Factory(ClassInfo_t* cl) const;
    virtual ClassInfo_t*  ClassInfo_Factory(const char* name) const;
    virtual ClassInfo_t*  ClassInfo_Factory(DeclId_t declid) const;
-   virtual Longptr_t ClassInfo_GetBaseOffset(ClassInfo_t* fromDerived, ClassInfo_t* toBase, void * address, bool isDerivedObject) const;
+   virtual Longptr_t ClassInfo_GetBaseOffset(ClassInfo_t* fromDerived, ClassInfo_t* toBase, void * address, bool isDerivedObject, int oftenUsedIndex) const;
    virtual int    ClassInfo_GetMethodNArg(ClassInfo_t* info, const char* method, const char* proto, Bool_t objectIsConst = false, ROOT::EFunctionMatchMode mode = ROOT::kConversionMatch) const;
    virtual bool   ClassInfo_HasDefaultConstructor(ClassInfo_t* info, Bool_t testio = kFALSE) const;
    virtual bool   ClassInfo_HasMethod(ClassInfo_t* info, const char* name) const;

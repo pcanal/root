@@ -2796,8 +2796,15 @@ Int_t TClass::GetBaseClassOffset(const TClass *toBase, void *address, bool isDer
    ClassInfo_t* derived = GetClassInfo();
    ClassInfo_t* base = toBase->GetClassInfo();
    if(derived && base) {
+      static TClassRef oftenUsed[2] = { "TObject", "TLeaf" };
+      int oftenUsedIndex = 0;
+      for(; (size_t)oftenUsedIndex < sizeof(oftenUsed)/sizeof(TClassRef); ++oftenUsedIndex )
+      {
+	if (toBase == oftenUsed[oftenUsedIndex])
+           break;
+      }
       // TClingClassInfo::GetBaseOffset takes the lock.
-      return gCling->ClassInfo_GetBaseOffset(derived, base, address, isDerivedObject);
+      return gCling->ClassInfo_GetBaseOffset(derived, base, address, isDerivedObject, oftenUsedIndex);
    }
    else {
       Int_t offset = GetBaseClassOffsetRecurse (toBase);
