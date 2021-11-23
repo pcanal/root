@@ -2792,7 +2792,7 @@ Int_t TClass::GetBaseClassOffset(const TClass *toBase, void *address, bool isDer
       }
       return offset;
    }
-
+   //fprintf(stderr, "BaseClassOffset From %s to base %s\n", GetName(), toBase->GetName());
    ClassInfo_t* derived = GetClassInfo();
    ClassInfo_t* base = toBase->GetClassInfo();
    if(derived && base) {

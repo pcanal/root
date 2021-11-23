@@ -612,15 +612,37 @@ Longptr_t TClingClassInfo::GetOffset(const CXXMethodDecl* md) const
 
 ptrdiff_t TClingClassInfo::GetBaseOffset(TClingClassInfo* base, void* address, bool isDerivedObject)
 {
+#if 0
+   auto cached = fLastUsedOffsetCache.load();
+   if (cached.first == base->GetDecl()) {
 
+         if (OffsetPtrFunc_t executableFunc = cached.thrid) {
+            if (address) {
+               return (*executableFunc)(address, isDerivedObject);
+            }
+            else {
+               Error("TClingBaseClassInfo::Offset", "The address of the object for virtual base offset calculation is not valid.");
+               return -1;
+            }
+         }
+         else {
+            return cached.second;
+         }
+
+   }
+#endif
    {
       std::unique_lock<std::mutex> lock(fOffsetCacheMutex);
 
       // Check for the offset in the cache.
       auto iter = fOffsetCache.find(base->GetDecl());
       if (iter != fOffsetCache.end()) {
-         // fLastUsedOffsetCache = &(*iter);
+         // cached.first = base->GetDecl();
+         //fLastUsedOffsetCache = &(*iter);
          std::pair<ptrdiff_t, OffsetPtrFunc_t> offsetCache = (*iter).second;
+         // cached.second = offsetCache.first;
+         // cached.thrid = offsetCache.second;
+         // fLastUsedOffsetCache = cached;
          if (OffsetPtrFunc_t executableFunc = offsetCache.second) {
             if (address) {
                return (*executableFunc)(address, isDerivedObject);
