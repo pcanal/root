@@ -358,10 +358,8 @@ void TMemFile::ResetAfterMerge(TFileMergeInfo *info)
    fSysOffset   = 0;
    fBlockSeek   = &fBlockList;
    fBlockOffset = 0;
-   {
-      R__LOCKGUARD(gROOTMutex);
-      gROOT->GetListOfFiles()->Remove(this);
-   }
+
+   gROOT->GetListOfFiles()->Remove(this);
 
    {
       TDirectory::TContext ctxt(this);
