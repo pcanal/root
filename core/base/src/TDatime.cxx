@@ -291,6 +291,20 @@ void TDatime::Set()
 #ifndef WIN32
    time_t tloc   = time(nullptr);
 #ifdef _REENTRANT
+#if 1
+   struct Caching {
+      time_t first;
+      UInt_t second;
+   };
+   // static std::atomic<Caching*> cached;
+   static Caching cached;
+   auto prev = cached; // .load();
+   if ( prev.first && (tloc - prev.first) < 6000) {
+      fDatime = prev.second;
+      return;
+   }
+   fprintf(stderr, "TDatime::Set will call localtime_r\n");
+#endif
    struct tm tpa;
    struct tm *tp = localtime_r(&tloc, &tpa);
 #else
@@ -314,6 +328,12 @@ void TDatime::Set()
 #endif
 
    fDatime = (year-95)<<26 | month<<22 | day<<17 | hour<<12 | min<<6 | sec;
+#ifdef _REENTRANT
+#if 1
+   if (tloc != prev.first)
+      cached = { tloc, fDatime };
+#endif
+#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////
