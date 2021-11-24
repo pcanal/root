@@ -612,6 +612,7 @@ Longptr_t TClingClassInfo::GetOffset(const CXXMethodDecl* md) const
 
 ptrdiff_t TClingClassInfo::GetBaseOffset(TClingClassInfo* base, void* address, bool isDerivedObject, int oftenUsedIndex)
 {
+#define OFTEN_USED
 #ifdef OFTEN_USED
    if (oftenUsedIndex >= 0 && (size_t)oftenUsedIndex < sizeof(fOftenUsedCache)/sizeof(fOftenUsedCache[0])) {
       auto cached = fOftenUsedCache[oftenUsedIndex].load();
