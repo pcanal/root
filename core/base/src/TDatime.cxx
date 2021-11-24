@@ -334,13 +334,25 @@ void TDatime::Set(UInt_t tloc, Bool_t dosDate)
       min   = (tloc >> 5) & 0x3f;
       sec   = (tloc & 0x1f) * 2;
    } else {
-      time_t t = (time_t) tloc;
-#ifdef _REENTRANT
+      struct tm *tp = nullptr;
       struct tm tpa;
-      struct tm *tp = localtime_r(&t, &tpa);
+      time_t t = (time_t) tloc;
+      if (tloc == 0) {
+#ifdef _REENTRANT
+         static struct tm gtp = *localtime_r(&t, &tpa);
 #else
-      struct tm *tp = localtime(&t);
+         static struct tm gtp = *localtime_r(&t);
 #endif
+         tp = &gtp; 
+      } else {
+
+	      fprintf(stderr, "TDatime::Set(UInt_t tloc, Bool_t dosDate) will call localtime_r\n");
+#ifdef _REENTRANT
+         tp = localtime_r(&t, &tpa);
+#else
+         tp = localtime(&t);
+#endif
+      }
       year   = tp->tm_year;
       month  = tp->tm_mon + 1;
       day    = tp->tm_mday;
