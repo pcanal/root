@@ -2412,10 +2412,10 @@ Bool_t TFile::WriteBuffer(const char *buf, Int_t len)
       }
 
       ssize_t siz;
-      gSystem->IgnoreInterrupt();
+      //gSystem->IgnoreInterrupt();
       while ((siz = SysWrite(fD, buf, len)) < 0 && GetErrno() == EINTR)  // NOLINT: silence clang-tidy warnings
          ResetErrno();                                                   // NOLINT: silence clang-tidy warnings
-      gSystem->IgnoreInterrupt(kFALSE);
+      //gSystem->IgnoreInterrupt(kFALSE);
       if (siz < 0) {
          // Write the system error only once for this file
          SetBit(kWriteError); SetWritable(kFALSE);
