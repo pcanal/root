@@ -171,7 +171,7 @@ void TBuffer::AutoExpand(Int_t size_needed)
       Fatal("AutoExpand","Request to expand to a negative size, likely due to an integer overflow: 0x%x for a max of 0x%x.", size_needed, kMaxBufferSize);
    }
    if (size_needed > fBufSize) {
-      Long64_t doubling = 2LLU * fBufSize;
+      Long64_t doubling = ((2LLU * fBufSize) + 7) & (~8LLU);
       if (doubling > kMaxBufferSize)
          doubling = kMaxBufferSize;
       if (size_needed > doubling) {
