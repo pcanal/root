@@ -33,6 +33,7 @@
 #include "ROOT/RRangeCast.hxx"
 
 #include <cassert>
+#include <atomic>
 
 class TClass;
 class TObjectTable;
@@ -57,7 +58,6 @@ R__EXTERN TVirtualMutex *gCollectionMutex;
 // Entering a writing section by a single Reader thread is allowed.
 
 #ifdef R__CHECK_COLLECTION_MULTI_ACCESS
-#include <atomic>
 #include <thread>
 #include <unordered_multiset>
 #endif
@@ -132,7 +132,7 @@ public:
 
 private:
    static TCollection  *fgCurrentCollection;  //used by macro R__FOR_EACH
-   static TObjectTable *fgGarbageCollection;  //used by garbage collector
+   static std::atomic<TObjectTable *> fgGarbageCollection;  //used by garbage collector
    static Bool_t        fgEmptyingGarbage;    //used by garbage collector
    static Int_t         fgGarbageStack;       //used by garbage collector
 

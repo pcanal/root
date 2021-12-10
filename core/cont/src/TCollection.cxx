@@ -52,7 +52,7 @@ In a later release the collections may become templatized.
 TVirtualMutex *gCollectionMutex = nullptr;
 
 TCollection   *TCollection::fgCurrentCollection = nullptr;
-TObjectTable  *TCollection::fgGarbageCollection = nullptr;
+std::atomic<TObjectTable*> TCollection::fgGarbageCollection{nullptr};
 Bool_t         TCollection::fgEmptyingGarbage   = kFALSE;
 Int_t          TCollection::fgGarbageStack      = 0;
 
@@ -713,7 +713,7 @@ void TCollection::EmptyGarbageCollection()
    if (fgGarbageStack > 0) fgGarbageStack--;
    if (fgGarbageCollection && fgGarbageStack == 0 && fgEmptyingGarbage == kFALSE) {
       fgEmptyingGarbage = kTRUE;
-      fgGarbageCollection->Delete();
+      fgGarbageCollection.load()->Delete();
       fgEmptyingGarbage = kFALSE;
       SafeDelete(fgGarbageCollection);
    }
@@ -724,13 +724,11 @@ void TCollection::EmptyGarbageCollection()
 
 void TCollection::GarbageCollect(TObject *obj)
 {
-   {
+   if (fgGarbageCollection) {
       R__LOCKGUARD2(gCollectionMutex);
-      if (fgGarbageCollection) {
-         if (!fgEmptyingGarbage) {
-            fgGarbageCollection->Add(obj);
-            return;
-         }
+      if (!fgEmptyingGarbage) {
+         fgGarbageCollection.load()->Add(obj);
+         return;
       }
    }
    delete obj;
