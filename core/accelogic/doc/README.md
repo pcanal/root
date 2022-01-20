@@ -17,11 +17,11 @@ For integer type (as the moment) there is only one level of compression.
 ROOT current supports the compression of the following data types through
 the Accelogic algorithms:
 
-- float
-- double
-- signed and unsigned short
-- signed and unsigned int
-- signed and unsigned long long
+- `float`
+- `double`
+- `signed and unsigned short`
+- `signed and unsigned int`
+- `signed and unsigned long long`
 
 and 
 
@@ -29,19 +29,20 @@ and
 
 The following are currently explicitly not supported:
 
-- signed and unsigned char
-- signed and unsigned long
-- Double32_t (stored as float)
+- `signed and unsigned char`
+- `signed and unsigned long`
+- `Double32_t` (stored as float)
 - variable size array of numerical types
 - STL collection of numerical types
 
 The following can not be supported:
 
 - boolean
-- Double32_t (stored as packed ints)
-- Float16_t
+- `Double32_t` (stored as packed ints)
+- `Float16_t`
 - strings (`const char*`, `TString`, `std::string`)
 - Any aggregate types
+- nested STL collection of numerical types
 
 ** Currently if the Accelogic compression is requested for a non-supported type,
 it is stored uncompressed **
