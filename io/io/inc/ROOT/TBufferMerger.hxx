@@ -139,6 +139,10 @@ public:
 
    friend class TBufferMergerFile;
 
+   /** Trigger the merging of an currently queue files.
+    */
+   void Merge();
+
 private:
    /** TBufferMerger has no default constructor */
    TBufferMerger();
@@ -153,7 +157,6 @@ private:
 
    void MergeImpl();
 
-   void Merge();
    void Push(TBufferFile *buffer);
    bool TryMerge(TBufferMergerFile *memfile);
 
