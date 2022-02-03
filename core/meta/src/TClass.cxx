@@ -819,7 +819,7 @@ void TBuildRealData::Inspect(TClass* cl, const char* pname, const char* mname, c
 
    Longptr_t offset = Longptr_t(((Longptr_t) add) - ((Longptr_t) fRealDataObject));
 
-   if (TClassEdit::IsStdArray(dm->GetTypeName())){ // We tackle the std array case
+   if (TClassEdit::IsStdArray(dm->GetTypeName())) { // We tackle the std array case
       TString rdName;
       TRealData::GetName(rdName,dm);
       rname += rdName;
