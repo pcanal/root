@@ -872,7 +872,7 @@ void TStreamerInfo::BuildCheck(TFile *file /* = 0 */, Bool_t load /* = kTRUE */)
 
          searchOnChecksum = kFALSE;
 
-      } else if (fClass->IsLoaded() /* implied: && fClass->IsForeign() */ ) {
+      } else if (fClass->IsLoaded() /* implied: && fClass->IsForeign() */ || TClassEdit::IsStdArray(GetName())) {
          // We are in the case of a Foreign class with no specified
          // class version.
 
@@ -1122,8 +1122,7 @@ void TStreamerInfo::BuildCheck(TFile *file /* = 0 */, Bool_t load /* = kTRUE */)
       }
       // The slot was free, however it might still be reserved for the current
       // loaded version of the class
-      if (fClass->IsLoaded()
-          && fClass->HasDataMemberInfo()
+      if (((fClass->IsLoaded() && fClass->HasDataMemberInfo()) /* || TClassEdit::IsStdArray(GetName()) */)
           && (fClassVersion != 0) // We don't care about transient classes
           && (fClassVersion == fClass->GetClassVersion())
           && (fCheckSum != fClass->GetCheckSum())) {
