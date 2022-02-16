@@ -99,25 +99,35 @@ void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, 
       IntegerTypes source;
       source.c = src;
 
-      if (cxlevel == 72) {
-         out_size = blast2_compress<true>(source.c, *srcsize, staging);
-      } else if (cxlevel == 73 && (*srcsize % sizeof(short) == 0)) {
-         out_size = blast2_compress<true>(source.s, *srcsize, staging);
-      } else if (cxlevel == 74 && (*srcsize % sizeof(int) == 0)) {
-         out_size = blast2_compress<true>(source.i, *srcsize, staging);
-      } else if (cxlevel == 75 && (*srcsize % sizeof(long long) == 0)) {
-         out_size = blast2_compress<true>(source.l, *srcsize, staging);
-      } else if (cxlevel == 76) {
-         out_size = blast2_compress<true>(source.uc, *srcsize, staging);
-      } else if (cxlevel == 77 && (*srcsize % sizeof(unsigned short) == 0)) {
-         out_size = blast2_compress<true>(source.us, *srcsize, staging);
-      } else if (cxlevel == 78 && (*srcsize % sizeof(unsigned int) == 0)) {
-         out_size = blast2_compress<true>(source.ui, *srcsize, staging);
-      } else if (cxlevel == 79 && (*srcsize % sizeof(unsigned long long) == 0)) {
-         out_size = blast2_compress<true>(source.ul, *srcsize, staging);
-      } else {
-         // not proper length
-         return;
+      switch(datatype) {
+         case EDataType::kChar_t:
+           out_size = blast2_compress<true>(source.c, *srcsize, staging);
+           break;
+         case EDataType::kUChar_t:
+           out_size = blast2_compress<true>(source.uc, *srcsize, staging);
+           break;
+         case EDataType::kShort_t:
+           out_size = blast2_compress<true>(source.s, *srcsize, staging);
+           break;
+         case EDataType::kUShort_t:
+           out_size = blast2_compress<true>(source.us, *srcsize, staging);
+           break;
+         case EDataType::kInt_t:
+           out_size = blast2_compress<true>(source.i, *srcsize, staging);
+           break;
+         case EDataType::kUInt_t:
+           out_size = blast2_compress<true>(source.ui, *srcsize, staging);
+           break;
+         case EDataType::kLong_t:
+           out_size = blast2_compress<true>(source.l, *srcsize, staging);
+           break;
+         case EDataType::kULong_t:
+           out_size = blast2_compress<true>(source.ul, *srcsize, staging);
+           break;
+         default:
+           // data type not supported.
+           // We actually need to use gzip, for now just bail
+           return;
       }
       if ( (out_size + kHeaderSize) > (size_t)*tgtsize ) {
          delete [] staging;
