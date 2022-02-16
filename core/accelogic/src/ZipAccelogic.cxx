@@ -210,16 +210,43 @@ void R__unzipBLAST(int *srcsize, unsigned char *src, int *tgtsize, unsigned char
       // Note: We need to check the destination really start of a short boundary.
       IntegerTypes staging;
       staging.c = nullptr;
-      switch (cxlevel) {
-         case (79) : out_size = blast2_decompress<true>(source, in_size, staging.ul); break;
-         case (78) : out_size = blast2_decompress<true>(source, in_size, staging.ui); break;
-         case (77) : out_size = blast2_decompress<true>(source, in_size, staging.us); break;
-         case (76) : out_size = blast2_decompress<true>(source, in_size, staging.uc); break;
-         case (75) : out_size = blast2_decompress<true>(source, in_size, staging.l); break;
-         case (74) : out_size = blast2_decompress<true>(source, in_size, staging.i); break;
-         case (73) : out_size = blast2_decompress<true>(source, in_size, staging.s); break;
-         default   : out_size = blast2_decompress<true>(source, in_size, staging.c);
+     switch(datatype) {
+         case EDataType::kChar_t:
+           out_size = blast2_decompress<true>(source, in_size, staging.c);
+           break;
+         case EDataType::kUChar_t:
+           out_size = blast2_decompress<true>(source, in_size, staging.uc);
+           break;
+         case EDataType::kShort_t:
+           out_size = blast2_decompress<true>(source, in_size, staging.s);
+           break;
+         case EDataType::kUShort_t:
+           out_size = blast2_decompress<true>(source, in_size, staging.us);
+           break;
+         case EDataType::kInt_t:
+           out_size = blast2_decompress<true>(source, in_size, staging.i);
+           break;
+         case EDataType::kUInt_t:
+           out_size = blast2_decompress<true>(source, in_size, staging.ui);
+           break;
+         case EDataType::kLong_t:
+           out_size = blast2_decompress<true>(source, in_size, staging.l);
+           break;
+         case EDataType::kULong_t:
+           out_size = blast2_decompress<true>(source, in_size, staging.ul);
+           break;
+         case EDataType::kLong64_t:
+           out_size = blast2_decompress<true>(source, in_size, staging.ll);
+           break;
+         case EDataType::kULong64_t:
+           out_size = blast2_decompress<true>(source, in_size, staging.ull);
+           break;
+         default:
+           // data type not supported.
+           // We actually need to use gzip, for now just bail
+           out_size = blast2_decompress<true>(source, in_size, staging.c);
       }
+
       // Note: We need to upgrade blast to avoid the memcpy
       if ( out_size > (size_t)*tgtsize ) {
          delete [] staging.c;
