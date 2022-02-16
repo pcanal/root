@@ -26,13 +26,15 @@ union RealTypes {
 
 union IntegerTypes {
    char *c;
-   short *s;
-   int *i;
-   long long *l;
+   Short_t *s;
+   Int_t *i;
+   Long_t *l;
+   Long64_t *ll;
    unsigned char *uc;
-   unsigned short *us;
-   unsigned int *ui;
-   unsigned long long *ul;
+   UShort_t *us;
+   UInt_t *ui;
+   ULong_t *ul;
+   ULong64_t *ull;
 };
 
 
@@ -123,6 +125,12 @@ void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, 
            break;
          case EDataType::kULong_t:
            out_size = blast2_compress<true>(source.ul, *srcsize, staging);
+           break;
+         case EDataType::kLong64_t:
+           out_size = blast2_compress<true>(source.ll, *srcsize, staging);
+           break;
+         case EDataType::kULong64_t:
+           out_size = blast2_compress<true>(source.ull, *srcsize, staging);
            break;
          default:
            // data type not supported.
