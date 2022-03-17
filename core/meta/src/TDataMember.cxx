@@ -222,12 +222,7 @@ void TDataMember::Init(bool afterReading)
             fDataType = gROOT->GetType(name,kTRUE);
          }
       } else {
-         auto enumdesc = TEnum::GetEnum(GetFullTypeName(), TEnum::kInterpLookup);
-         if (enumdesc) {
-            fDataType = TDataType::GetDataType(enumdesc->GetUnderlyingType());
-         }
-         if (fDataType == nullptr)
-            fDataType = gROOT->GetType("Int_t", kTRUE); // In rare instance we are called before Int_t has been added to the list of types in TROOT, the kTRUE insures it is there.
+         fDataType = gROOT->GetType("Int_t", kTRUE); // In rare instance we are called before Int_t has been added to the list of types in TROOT, the kTRUE insures it is there.
       }
       //         if (!fDataType)
       //            Error("TDataMember", "basic data type %s not found in list of basic types",
