@@ -906,11 +906,6 @@ TGenCollectionProxy *TGenCollectionProxy::InitializeEx(Bool_t silent)
                      }
                   } else {
                      if ((!paircl->IsSyntheticPair() && paircl->GetState() < TClass::kInterpreted) || paircl->GetClassSize() != fValDiff) {
-                        //if (paircl->GetState() < TClass::kInterpreted && paircl->GetClassSize() == fValDiff) {
-                        //   Warning("InitializeEx", "Would have kept TClass %s and TStreamerInfo %p", paircl, paircl->GetStreamerInfo());
-                        //   paircl->GetStreamerInfo()->ls();
-                        //   Warning("InitializeEx", "end of this message");
-                        //}
                         if (paircl->GetState() >= TClass::kInterpreted)
                            Fatal("InitializeEx",
                                  "The %s for %s reports a class size that is inconsistent with the one registered "
