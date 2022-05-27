@@ -647,13 +647,10 @@ void TStreamerInfo::Build(Bool_t isTransient)
          } else {
             // If the element is just cached and not repeat, we need to inject an element
             // to insure the writing.
-            TStreamerElement *writecopy = (TStreamerElement*)element->Clone();
-            fElements->Add(element);
-            writecopy->SetBit(TStreamerElement::kWrite);
-            writecopy->SetNewType( writecopy->GetType() );
-            writecopy->SetOffset( element->GetOffset() );
-            // Put the write element after the read element (that does caching).
-            element = writecopy;
+            TStreamerElement *copy = (TStreamerElement*)element->Clone();
+            fElements->Add(copy);
+            cached = copy;
+            element->SetBit(TStreamerElement::kWrite);
          }
          cached->SetBit(TStreamerElement::kCache);
          cached->SetNewType( cached->GetType() );
@@ -2521,12 +2518,11 @@ void TStreamerInfo::BuildOld()
             } else {
                // If the element is just cached and not repeat, we need to inject an element
                // to insure the writing.
-               TStreamerElement *writecopy = (TStreamerElement*)element->Clone();
-               R__TObjArray_InsertAfter( fElements, writecopy, element );
+               TStreamerElement *copy = (TStreamerElement*)element->Clone();
+               R__TObjArray_InsertBefore( fElements, copy, element );
                next(); // move the cursor passed the insert object.
-               writecopy->SetBit(TStreamerElement::kWrite);
-               writecopy->SetNewType( writecopy->GetType() );
-               writecopy->SetOffset(element->GetOffset());
+               element->SetBit(TStreamerElement::kWrite);
+               element = copy;  // copy becomes the cached element.
             }
             element->SetBit(TStreamerElement::kCache);
             element->SetNewType( element->GetType() );
