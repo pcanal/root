@@ -61,7 +61,7 @@ static TString ExtractClassName(const TString &type_name)
 /// same class a 'countClass' the streamerInfo is used instead of the current StreamerInfo of the TClass
 /// for 'countClass'.
 
-static TStreamerBasicType *InitCounter(const char *countClass, const char *countName, TVirtualStreamerInfo *directive)
+static TStreamerBasicType *InitCounter(const char *countClass, const char *countName, TVirtualStreamerInfo *directive, bool cachedElement)
 {
    TStreamerBasicType *counter = nullptr;
 
@@ -74,6 +74,9 @@ static TStreamerBasicType *InitCounter(const char *countClass, const char *count
 
          TStreamerElement *element = (TStreamerElement *)directive->GetElements()->FindObject(countName);
          if (!element) return nullptr;
+         if (cachedElement != element->TestBit(TStreamerElement::kCache)) {
+            Fatal("InitCounter", "Mismatch of caching level for %s::%s", cl->GetName(), element->GetName());
+         }
          if (element->IsA() != TStreamerBasicType::Class()) return nullptr;
          counter = (TStreamerBasicType*)element;
 
@@ -90,12 +93,12 @@ static TStreamerBasicType *InitCounter(const char *countClass, const char *count
             cl = directive->GetClass();
          }
          if (cl==nullptr) return nullptr;
-         counter = TVirtualStreamerInfo::GetElementCounter(countName,cl);
+         counter = TVirtualStreamerInfo::GetElementCounter(countName, cl, cachedElement);
       }
    } else {
 
       if (cl==nullptr) return nullptr;
-      counter = TVirtualStreamerInfo::GetElementCounter(countName,cl);
+      counter = TVirtualStreamerInfo::GetElementCounter(countName, cl, cachedElement);
    }
 
    //at this point the counter may be declared to be skipped
@@ -960,7 +963,7 @@ Int_t TStreamerBasicPointer::GetSize() const
 
 void TStreamerBasicPointer::Init(TVirtualStreamerInfo *directive)
 {
-   fCounter = InitCounter( fCountClass, fCountName, directive );
+   fCounter = InitCounter( fCountClass, fCountName, directive, TestBit(kCache));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -984,7 +987,7 @@ void TStreamerBasicPointer::Streamer(TBuffer &R__b)
       if (R__v > 1) {
          R__b.ReadClassBuffer(TStreamerBasicPointer::Class(), this, R__v, R__s, R__c);
          //Init();
-         //fCounter = InitCounter( fCountClass, fCountName );
+         //fCounter = InitCounter( fCountClass, fCountName, TestBit(kCache) );
          return;
       }
       //====process old versions before automatic schema evolution
@@ -1067,7 +1070,7 @@ Int_t TStreamerLoop::GetSize() const
 
 void TStreamerLoop::Init(TVirtualStreamerInfo *directive)
 {
-   fCounter = InitCounter( fCountClass, fCountName, directive );
+   fCounter = InitCounter( fCountClass, fCountName, directive, TestBit(kCache));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
