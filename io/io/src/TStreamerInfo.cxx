@@ -482,7 +482,7 @@ void TStreamerInfo::Build(Bool_t isTransient)
                   Error("Build", "%s, discarding: %s %s, illegal [%s] (must be Int_t)\n", GetName(), dmFull, dmName, counterName);
                continue;
             }
-            TStreamerBasicType* bt = TStreamerInfo::GetElementCounter(counterName, dmCounter->GetClass());
+            TStreamerBasicType* bt = TStreamerInfo::GetElementCounter(counterName, dmCounter->GetClass(), false);
             if (!bt) {
                if (dmCounter->GetClass()->Property() & kIsAbstract) {
                   continue;
