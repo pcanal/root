@@ -1031,11 +1031,16 @@ void TStreamerInfo::BuildCheck(TFile *file /* = 0 */, Bool_t load /* = kTRUE */)
             fNumber = info->GetNumber();
             Int_t nel = fElements->GetEntriesFast();
             TObjArray* elems = info->GetElements();
+            Int_t onel = elems->GetEntriesFast();
             TStreamerElement* e1 = 0;
             TStreamerElement* e2 = 0;
-            for (Int_t i = 0; i < nel; ++i) {
+            // Because of artificial, repeat/write elements, the 2 list
+            // can be somewhat out of sync.
+            for (Int_t i = 0, j = 0; i < nel && j < onel; ++i) {
                e1 = (TStreamerElement*) fElements->UncheckedAt(i);
-               e2 = (TStreamerElement*) elems->At(i);
+               do {
+                  e2 = (TStreamerElement*) elems->At(j++);
+               } while (e2 && (e2->IsA() == TStreamerArtificial::Class() || e2->TestBit(TStreamerElement::kRepeat) || e2->TestBit(TStreamerElement::kWrite)));
                if (!e1 || !e2) {
                   continue;
                }
