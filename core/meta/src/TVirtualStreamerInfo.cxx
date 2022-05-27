@@ -114,7 +114,7 @@ const char *TVirtualStreamerInfo::GetElementCounterStart(const char *dmTitle)
 /// Get pointer to a TStreamerBasicType in TClass *cl
 ///static function
 
-TStreamerBasicType *TVirtualStreamerInfo::GetElementCounter(const char *countName, TClass *cl)
+TStreamerBasicType *TVirtualStreamerInfo::GetElementCounter(const char *countName, TClass *cl, bool cachedElement)
 {
    TVirtualStreamerInfo *info;
    {
@@ -138,6 +138,22 @@ TStreamerBasicType *TVirtualStreamerInfo::GetElementCounter(const char *countNam
    if (!info) return nullptr;
    TStreamerElement *element = (TStreamerElement *)info->GetElements()->FindObject(countName);
    if (!element) return nullptr;
+   if (cachedElement && element->TestBit(TStreamerElement::kCache)) {
+      if (element->IsA() == TStreamerBasicType::Class()) return (TStreamerBasicType*)element;
+   }
+   if (!cachedElement && !element->TestBit(TStreamerElement::kCache)) {
+      if (element->IsA() == TStreamerBasicType::Class()) return (TStreamerBasicType*)element;
+   }
+   if (!cachedElement && element->TestBit(TStreamerElement::kCache)) {
+      element = (TStreamerElement *)info->GetElements()->After(element);
+      if (!element || 0 != strcmp(countName, element->GetName()))
+         return nullptr;
+      // should we loop
+   } else if (cachedElement && !element->TestBit(TStreamerElement::kCache)) {
+      // Is that acceptable and/or possible?
+      // or should we just
+      return nullptr;
+   }
    if (element->IsA() == TStreamerBasicType::Class()) return (TStreamerBasicType*)element;
    return nullptr;
 }
