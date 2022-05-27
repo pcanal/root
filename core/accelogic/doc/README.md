@@ -19,8 +19,10 @@ the Accelogic algorithms:
 
 - `float`
 - `double`
+- `signed and unsigned char`
 - `signed and unsigned short`
 - `signed and unsigned int`
+- `signed and unsigned long`
 - `signed and unsigned long long`
 
 and 
@@ -29,8 +31,6 @@ and
 
 The following are currently explicitly not supported:
 
-- `signed and unsigned char`
-- `signed and unsigned long`
 - `Double32_t` (stored as float)
 - variable size array of numerical types
 - STL collection of numerical types
