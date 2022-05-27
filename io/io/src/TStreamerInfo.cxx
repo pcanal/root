@@ -655,6 +655,41 @@ void TStreamerInfo::Build(Bool_t isTransient)
          cached->SetBit(TStreamerElement::kCache);
          cached->SetNewType( cached->GetType() );
       }
+      if (rules) {
+         auto counterElement = element->GetCounterElement();
+         if (counterElement) {
+            // We will find either the preceding 'cached/repeat' element
+            // or the element itself.
+            auto found = fElements->FindObject(counterElement->GetName());
+            if (found) {
+               if (found != counterElement) {
+                  R__ASSERT(found->TestBit(TStreamerElement::kCache));
+                  if (found->TestBit(TStreamerElement::kRepeat)) {
+                     // nothing to do.
+                  } else {
+                     found->SetBit(TStreamerElement::kRepeat);
+                     // And check if the next one is set for reading.
+                     auto nextel = fElements->After(found);
+                     // This is a 'write' StreamerInfo (we are in Build)
+                     // so the next element should be a write element.
+                     R__ASSERT(strcmp(found->GetName(), nextel->GetName()) == 0
+                               && nextel->TestBit(TStreamerElement::kWrite));
+                     nextel->ResetBit(TStreamerElement::kWrite);
+                  }
+               } else {
+                  TStreamerElement *copy = (TStreamerElement*)counterElement->Clone();
+                  R__TObjArray_InsertBefore( fElements, copy, counterElement );
+                  copy->SetBit(TStreamerElement::kRepeat);
+                  copy->SetBit(TStreamerElement::kCache);
+                  copy->SetNewType( counterElement->GetType() );
+               }
+            } else {
+               // Not from this class (likely base class)
+               Warning("Build", "Counter/Size variable %s not found directly in %s but needs to be set as cached/repeat",
+                       counterElement->GetName(), GetName());
+            }
+         }
+      }
 
       fElements->Add(element);
    } // end of member loop
