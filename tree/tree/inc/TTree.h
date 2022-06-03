@@ -142,6 +142,7 @@ protected:
    std::vector<TBranch*> fSeqBranches;    ///<! Branches to be processed sequentially when IMT is on
    Float_t fTargetMemoryRatio{1.1f};      ///<! Ratio for memory usage in uncompressed buffers versus actual occupancy.  1.0
                                            /// indicates basket should be resized to exact memory usage, but causes significant
+   TString fPrecisionCascasdeSuffix{"precisioncascade"};
 /// memory churn.
 #ifdef R__TRACK_BASKET_ALLOC_TIME
    mutable std::atomic<ULong64_t> fAllocationTime{0}; ///<! Time spent reallocating basket memory buffers, in microseconds.
@@ -499,6 +500,7 @@ public:
    TObject                *GetNotify() const { return fNotify; }
    TVirtualTreePlayer     *GetPlayer();
    virtual Int_t           GetPacketSize() const { return fPacketSize; }
+   const TString&          GetPrecisionCascadeFileSuffix() const { return fPrecisionCascasdeSuffix; }
    virtual TVirtualPerfStats *GetPerfStats() const { return fPerfStats; }
            TTreeCache     *GetReadCache(TFile *file) const;
            TTreeCache     *GetReadCache(TFile *file, Bool_t create);
@@ -636,6 +638,7 @@ public:
    virtual void            SetObject(const char* name, const char* title);
    virtual void            SetParallelUnzip(Bool_t opt=kTRUE, Float_t RelSize=-1);
    virtual void            SetPerfStats(TVirtualPerfStats* perf);
+           void            SetPrecisionCascadeFileSuffix(std::string_view suf) { fPrecisionCascasdeSuffix = suf; }
    virtual void            SetScanField(Int_t n = 50) { fScanField = n; } // *MENU*
    void SetTargetMemoryRatio(Float_t ratio) { fTargetMemoryRatio = ratio; }
    virtual void            SetTimerInterval(Int_t msec = 333) { fTimerInterval=msec; }
