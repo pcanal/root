@@ -2741,6 +2741,22 @@ void TBranch::SetCompressionSettings(Int_t settings)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// Set compression settings based on a ROOT::CompressionConfig
+
+void TBranch::SetCompressionSettings(ROOT::CompressionConfig &config)
+{
+   fNCompConfig = config.GetNConfigArray();
+   fCompConfig = new char[fNCompConfig];
+   std::memcpy(fCompConfig, config.GetConfigArray(), fNCompConfig);
+
+   Int_t nb = fBranches.GetEntriesFast();
+   for (Int_t i=0;i<nb;i++) {
+      TBranch *branch = (TBranch*)fBranches.UncheckedAt(i);
+      branch->SetCompressionSettings(config);
+   }
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// Update the default value for the branch's fEntryOffsetLen if and only if
 /// it was already non zero (and the new value is not zero)
 /// If updateExisting is true, also update all the existing branches.
