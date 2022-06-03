@@ -15,6 +15,7 @@
 #include "RtypesCore.h"
 
 #include <cstring> // For mempcpy
+#include <vector>
 
 namespace ROOT {
 
@@ -131,11 +132,13 @@ int CompressionSettings(ROOT::ECompressionAlgorithm algorithm, int compressionLe
 
 class CompressionConfig
 {
-private:
+protected:
    RCompressionSetting::EAlgorithm::EValues fAlgorithm = RCompressionSetting::EAlgorithm::kUseGlobal;  ///< Which compression alogrithm/library to use
    Int_t                           fLevel = 0;                                                         ///< Compression level (0 through 99) to pass to the algorithm
    Int_t                           fNConfig = 0;                                                       ///< Number of bytes in compression algorithm configuration array.
    Char_t                         *fConfigArray = nullptr;                                             ///<[fNCompConfig] Compression configuration array (eg. compression dictionary)
+
+   CompressionConfig() = default;
 
 public:
    CompressionConfig(const CompressionConfig &other) : fAlgorithm(other.fAlgorithm), fLevel(other.fLevel), fNConfig(other.fNConfig)
@@ -174,6 +177,14 @@ public:
       return fConfigArray;
    }
 
+};
+
+class PrecisionCascadeCompressionConfig : CompressionConfig
+{
+public:
+PrecisionCascadeCompressionConfig(RCompressionSetting::EAlgorithm::EValues algo,
+                                  const std::vector<Int_t> &levels,
+                                  bool storeResidual = false);
 };
 
 } // namespace ROOT

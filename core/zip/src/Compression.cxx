@@ -10,6 +10,7 @@
  *************************************************************************/
 
 #include "Compression.h"
+#include <stdexcept>
 
 namespace ROOT {
 
@@ -34,4 +35,20 @@ namespace ROOT {
     if (algorithm >= ROOT::ECompressionAlgorithm::kUndefinedCompressionAlgorithm) algo = 0;
     return algo * 100 + compressionLevel;
   }
+
+  PrecisionCascadeCompressionConfig::PrecisionCascadeCompressionConfig(
+      RCompressionSetting::EAlgorithm::EValues algo,
+      const std::vector<Int_t> &levels, bool storeResidual /* = false */)
+  {
+    if (algo != RCompressionSetting::EAlgorithm::kBLAST) {
+      std::string msg("Requestion compression algorithm does not support Precision Cascade: ");
+      msg += algo;
+      throw std::runtime_error(msg);
+    }
+    fAlgorithm = algo;
+    if (!levels.empty())
+      fLevel = levels[0];
+  }
+
+
 }
