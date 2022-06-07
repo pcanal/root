@@ -19,6 +19,7 @@
 #pragma link C++ class TBranchClones-;
 #pragma link C++ class TBranchElement-;
 #pragma link C++ class TBranchObject-;
+#pragma link C++ class ROOT::Detail::TBranchPrecisionCascade+;
 #pragma link C++ class TBranchRef+;
 #pragma link C++ class TTreeSQL+;
 #pragma link C++ class TBufferSQL+;
@@ -56,6 +57,7 @@
 #pragma link C++ class TTreeCloner+;
 #pragma link C++ class TTreeCache+;
 #pragma link C++ class TTreeCacheUnzip+;
+#pragma link C++ class ROOT::Detail::TTreePrecisionCascade+;
 #pragma link C++ class TVirtualTreePlayer;
 #pragma link C++ class TVirtualIndex+;
 #pragma link C++ class TTreeResult+;

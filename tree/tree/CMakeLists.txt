@@ -23,6 +23,7 @@ ROOT_STANDARD_LIBRARY_PACKAGE(Tree
     TBranchElement.h
     TBranch.h
     TBranchObject.h
+    TBranchPrecisionCascade.h
     TBranchRef.h
     TBranchSTL.h
     TBufferSQL.h
@@ -61,6 +62,7 @@ ROOT_STANDARD_LIBRARY_PACKAGE(Tree
     TTreeCacheUnzip.h
     TTreeCloner.h
     TTree.h
+    TTreePrecisionCascade.h
     TTreeResult.h
     TTreeRow.h
     TTreeSQL.h
@@ -78,6 +80,7 @@ ROOT_STANDARD_LIBRARY_PACKAGE(Tree
     src/TBranchElement.cxx
     src/TBranchIMTHelper.h
     src/TBranchObject.cxx
+    src/TBranchPrecisionCascade.cxx
     src/TBranchRef.cxx
     src/TBranchSTL.cxx
     src/TBufferSQL.cxx
@@ -116,6 +119,7 @@ ROOT_STANDARD_LIBRARY_PACKAGE(Tree
     src/TTreeCacheUnzip.cxx
     src/TTreeCloner.cxx
     src/TTree.cxx
+    src/TTreePrecisionCascade.cxx
     src/TTreeResult.cxx
     src/TTreeRow.cxx
     src/TTreeSQL.cxx
