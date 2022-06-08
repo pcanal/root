@@ -51,6 +51,9 @@ class TBulkBranchRead;
 namespace Internal {
 class TBranchIMTHelper; ///< A helper class for managing IMT work during TTree:Fill operations.
 }
+namespace Detail {
+class TBranchPrecisionCascade;
+}
 }
 
 const Int_t kDoNotProcess = BIT(10); // Active bit for branches
@@ -152,6 +155,8 @@ protected:
    TBuffer    *fTransientBuffer;  ///<! Pointer to the current transient buffer.
    TList      *fBrowsables;       ///<! List of TVirtualBranchBrowsables used for Browse()
    BulkObj     fBulk;             ///<! Helper for performing bulk IO
+
+   std::vector<ROOT::Detail::TBranchPrecisionCascade*> *fPrecisionCascades = nullptr; ///<! Where to find the location of the precision cascade elements.
 
    Bool_t      fSkipZip;          ///<! After being read, the buffer will not be unzipped.
 
@@ -265,6 +270,7 @@ public:
    virtual void      Print(Option_t *option="") const;
            void      PrintCacheInfo() const;
    virtual void      ReadBasket(TBuffer &b);
+           void      Register(UInt_t level, ROOT::Detail::TBranchPrecisionCascade &);
    virtual void      Refresh(TBranch *b);
    virtual void      Reset(Option_t *option="");
    virtual void      ResetAfterMerge(TFileMergeInfo *);

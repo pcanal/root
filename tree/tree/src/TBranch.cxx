@@ -2418,6 +2418,21 @@ void TBranch::ReadLeaves2Impl(TBuffer& b)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// Register a Precision Cascade element for this branch.
+///
+/// \param[in] level level or rank of the precision (starts at 1)
+/// \param[in] precisionCascade  Pointer to the information used to find the cascade elements.
+
+void TBranch::Register(UInt_t level, ROOT::Detail::TBranchPrecisionCascade &precisionCascade)
+{
+   if (!fPrecisionCascades)
+      fPrecisionCascades = new std::vector<ROOT::Detail::TBranchPrecisionCascade *>;
+   // CHECK: should we require registration in incremental order?
+   fPrecisionCascades->resize(level + 1);
+   (*fPrecisionCascades)[level] = &precisionCascade;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// Loop on all leaves of this branch to fill Basket buffer.
 
 void TBranch::FillLeavesImpl(TBuffer& b)
