@@ -1067,7 +1067,7 @@ TDirectory *TDirectory::mkdir(const char *name, const char *title, Bool_t return
          tmpdir = mkdir(workname,title);
       delete[] workname;
       if (!tmpdir) return nullptr;
-      return tmpdir->mkdir(slash+1);
+      return tmpdir->mkdir(slash+1, title, returnExistingDirectory);
    }
 
    TDirectory::TContext ctxt(this);

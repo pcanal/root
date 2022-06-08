@@ -1253,7 +1253,7 @@ TDirectory *TDirectoryFile::mkdir(const char *name, const char *title, Bool_t re
          if (!tmpdir) return nullptr;
       }
       if (!newdir) newdir = tmpdir;
-      tmpdir->mkdir(slash+1);
+      tmpdir->mkdir(slash+1, title, returnExistingDirectory);
       return newdir;
    }
 
