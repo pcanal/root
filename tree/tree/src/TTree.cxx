@@ -374,6 +374,7 @@ End_Macro
 #include "TBranchClones.h"
 #include "TBranchElement.h"
 #include "TBranchObject.h"
+#include "TBranchPrecisionCascade.h"
 #include "TBranchRef.h"
 #include "TBrowser.h"
 #include "TClass.h"
@@ -415,6 +416,7 @@ End_Macro
 #include "TTreeCloner.h"
 #include "TTreeCache.h"
 #include "TTreeCacheUnzip.h"
+#include "TTreePrecisionCascade.h"
 #include "TVirtualCollectionProxy.h"
 #include "TEmulatedCollectionProxy.h"
 #include "TVirtualIndex.h"
@@ -3264,6 +3266,124 @@ TTree* TTree::CloneTree(Long64_t nentries /* = -1 */, Option_t* option /* = "" *
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// Register a TTreePrecisionCascade.
+void TTree::Register(UInt_t level, ROOT::Detail::TTreePrecisionCascade &precisionCascade)
+{
+   if (!fPrecisionCascades)
+      fPrecisionCascades = new std::vector<ROOT::Detail::TTreePrecisionCascade *>;
+   // CHECK: should we require registration in incremental order?
+   fPrecisionCascades->resize(level + 1);
+   (*fPrecisionCascades)[level] = &precisionCascade;
+
+   // To be move to its own function
+   for (auto brpc : ROOT::Detail::TRangeStaticCast<ROOT::Detail::TBranchPrecisionCascade>(precisionCascade.GetBranches()))
+   {
+      TBranch *br = GetBranch(brpc->GetName());
+      if (br)
+         br->Register(level, *brpc);
+   }
+
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Open and connect to the Precission Cascade files when present.
+/// Returns the number of opened files.
+
+Int_t TTree::ConnectPrecisionCascade()
+{
+   if (!fIOFeatures.Test(ROOT::Experimental::EIOFeatures::kPrecisionCascade))
+      return 0;
+
+   if (!fDirectory || !fDirectory->GetFile()) {
+      // In memory tree.
+      Error("ConnectPrecisionCascade", "Not supported for in-memory tree %s", GetName());
+      return 0;
+
+   } else if (fPrecisionCascasdeSuffix.Length() == 0)
+   {
+      // Stored in the same file as the TTree.
+
+      if (fDirectory) {
+         TString cascadeName;
+         for(UInt_t level = 1 /* 0 is this file */; ; ++level)
+         {
+            // FIXME: Almost Copy/paste to be moved to its own function.
+            cascadeName.Form("%s_pc%d", GetName(), level);
+            auto tpc = fDirectory->Get<ROOT::Detail::TTreePrecisionCascade>(cascadeName);
+            if (!tpc) {
+               return level - 1;
+            }
+            tpc->SetDirectory(fDirectory, false);
+
+            if (! tpc->Verify(*this, level)) {
+               Error("ConnectPrecisionCascade",
+                  "The TTreePrecisionCascade found in %s not correspond to the current TTree (name:%s id: %d) or level %d:",
+                  fDirectory->GetName(), GetName(), GetUniqueID(), level);
+               tpc->Print();
+               return level - 1;
+            }
+
+            Register(level, *tpc);
+         }
+      }
+
+      return 0;
+
+   } else {
+      TUrl url = *(fDirectory->GetFile()->GetEndpointUrl());
+      TString thisfilename = url.GetFile();
+      if (thisfilename.EndsWith(".root"))
+         thisfilename.Remove(thisfilename.Length()-5,5);
+      TString directoryname(fDirectory->GetPath());
+      directoryname.Remove(0, strlen(fDirectory->GetFile()->GetPath()));
+      TString cascadeFilename;
+      TString cascadeName;
+      for(UInt_t level = 1 /* 0 is this file */; ; ++level) {
+         cascadeFilename.Form("%s_%s_%d.root", thisfilename.Data(), fPrecisionCascasdeSuffix.Data(), level);
+         cascadeName.Form("%s_pc%d", GetName(), level);
+         url.SetFile(cascadeFilename.Data());
+         FileStat_t stat;
+         if (0 != gSystem->GetPathInfo(url.GetUrl(), stat)) {
+            // File not found, moving on
+            return level - 1;
+         } else {
+            TFile *f = (TFile*)gROOT->GetListOfFiles()->FindObject(url.GetUrl());
+            bool owned = false;
+            if (!f) {
+               f = TFile::Open(url.GetUrl(),"UPDATE");
+               owned = true;
+            }
+            if (!f)
+               return level - 1;
+            f->mkdir(directoryname, "", kTRUE);
+            auto d = f->GetDirectory(directoryname); // mkdir only returns the top directory.
+            auto tpc = d->Get<ROOT::Detail::TTreePrecisionCascade>(cascadeName);
+            if (!tpc) {
+               if (owned)
+                  delete f;
+               return level - 1;
+            }
+            tpc->SetDirectory(d, owned);
+
+            if (! tpc->Verify(*this, level)) {
+               Error("ConnectPrecisionCascade",
+                  "The TTreePrecisionCascade found in %s not correspond to the current TTree (name:%s id: %d) or level %d:",
+                  f->GetName(), GetName(), GetUniqueID(), level);
+               tpc->Print();
+               return level - 1;
+            }
+
+            Register(level, *tpc);
+         }
+      }
+      return 0;
+   }
+
+}
+
+
+
+////////////////////////////////////////////////////////////////////////////////
 /// Set branch addresses of passed tree equal to ours.
 /// If undo is true, reset the branch addresses instead of copying them.
 /// This ensures 'separation' of a cloned tree from its original.
@@ -5614,6 +5734,10 @@ Int_t TTree::GetEntry(Long64_t entry, Int_t getall)
    Int_t i;
    Int_t nbytes = 0;
    fReadEntry = entry;
+
+   if (fIOFeatures.Test(ROOT::Experimental::EIOFeatures::kPrecisionCascade)
+      && !fPrecisionCascades)
+      ConnectPrecisionCascade();
 
    // create cache if wanted
    if (fCacheDoAutoInit)

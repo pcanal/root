@@ -76,6 +76,12 @@ class TTreeCloner;
 class TFileMergeInfo;
 class TVirtualPerfStats;
 
+namespace ROOT {
+namespace Detail {
+   class TTreePrecisionCascade;
+}
+}
+
 class TTree : public TNamed, public TAttLine, public TAttFill, public TAttMarker {
 
    using TIOFeatures = ROOT::TIOFeatures;
@@ -143,6 +149,8 @@ protected:
    Float_t fTargetMemoryRatio{1.1f};      ///<! Ratio for memory usage in uncompressed buffers versus actual occupancy.  1.0
                                            /// indicates basket should be resized to exact memory usage, but causes significant
    TString fPrecisionCascasdeSuffix{"precisioncascade"};
+   std::vector<ROOT::Detail::TTreePrecisionCascade*> *fPrecisionCascades; ///<! Where to find the location of the precision cascade elements.
+
 /// memory churn.
 #ifdef R__TRACK_BASKET_ALLOC_TIME
    mutable std::atomic<ULong64_t> fAllocationTime{0}; ///<! Time spent reallocating basket memory buffers, in microseconds.
@@ -176,12 +184,15 @@ protected:
    friend  TBranch *TTreeBranchImpRef(TTree *tree, const char* branchname, TClass* ptrClass, EDataType datatype, void* addobj, Int_t bufsize, Int_t splitlevel);
    Int_t    SetBranchAddressImp(TBranch *branch, void* addr, TBranch** ptr);
    virtual TLeaf   *GetLeafImpl(const char* branchname, const char* leafname);
+           Int_t    ConnectPrecisionCascade();
 
    Long64_t         GetCacheAutoSize(Bool_t withDefault = kFALSE);
    char             GetNewlineValue(std::istream &inputStream);
    void             ImportClusterRanges(TTree *fromtree);
    void             MoveReadCache(TFile *src, TDirectory *dir);
    Int_t            SetCacheSizeAux(Bool_t autocache = kTRUE, Long64_t cacheSize = 0);
+
+   void Register(UInt_t level, ROOT::Detail::TTreePrecisionCascade &precisionCascade);
 
    class TFriendLock {
       // Helper class to prevent infinite recursion in the
