@@ -43,6 +43,8 @@ public:
 
    Int_t StoreCascade(Int_t basketnumber, Long64_t nbytes, char *buffer);
 
+   char *RetrieveCascade(Int_t basketnumber);
+
    ClassDef(TBranchPrecisionCascade, 3);
 };
 
