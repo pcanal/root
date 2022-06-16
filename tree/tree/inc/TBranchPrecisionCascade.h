@@ -25,7 +25,9 @@
 #include "THashList.h"
 #include "TNamed.h"
 
+class TBasketPC;
 class TBranch;
+class TTree;
 
 namespace ROOT {
 namespace Detail {
@@ -37,16 +39,20 @@ class TBranchPrecisionCascade : public TNamed
    Long64_t   *fBasketBytes  = nullptr; ///<[fMaxBaskets] Length of baskets on file
    Long64_t   *fBasketSeek   = nullptr; ///<[fMaxBaskets] Addresses of baskets on file
 
+   TBasketPC  *fBasket = nullptr;   ///<! Current basket to read or write the Precision Cascade element.
+
 public:
    TBranchPrecisionCascade() = default;
    TBranchPrecisionCascade(UInt_t cascadelevel, TBranch &br);
    ~TBranchPrecisionCascade();
 
-   Int_t StoreCascade(Int_t basketnumber, Long64_t nbytes, char *buffer);
+   TBasketPC *GetBasketPC(TTree &tree, UInt_t /* basketnumber */);
 
    UInt_t GetCascadeLevel() const { return fCascadeLevel; }
 
-   char *RetrieveCascade(Int_t basketnumber);
+   Int_t StoreCascade(TTree &tree, Int_t basketnumber, Long64_t nbytes, char *buffer, Int_t uncompressedSize);
+
+   char *RetrieveCascade(TTree &tree, Int_t basketnumber);
 
    ClassDef(TBranchPrecisionCascade, 3);
 };

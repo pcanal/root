@@ -12,13 +12,16 @@
 /** \class ROOT::Detail::TBranchPrecisionCascade
 \ingroup tree
 
-An Auxiliary objects holding the TBaskets information for the 
+An Auxiliary objects holding the TBaskets information for the
 supplemental parts of the precision cascades for a specific branch.
 
 **/
 
+#include "TBasketPC.h"
 #include "TBranchPrecisionCascade.h"
 #include "TBranch.h"
+#include "TStorage.h"
+#include "TTree.h"
 
 namespace ROOT {
 namespace Detail {
@@ -51,19 +54,51 @@ TBranchPrecisionCascade::~TBranchPrecisionCascade()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// Return (and create if need be) the request TBasketPC
+///
+/// Note: Currently there is no caching of the basket, so we always reuse
+/// a single instance.
+
+TBasketPC *TBranchPrecisionCascade::GetBasketPC(TTree &tree, UInt_t /* basketnumber */)
+{
+   if (!fBasket)
+      fBasket = tree.CreateBasketPC(*this);
+   return fBasket;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// Store a precision cascade buffer and record its location.
 
-Int_t TBranchPrecisionCascade::StoreCascade(Int_t basketnumber, Long64_t nbytes, char *buffer)
+Int_t TBranchPrecisionCascade::StoreCascade(TTree &tree, Int_t basketnumber, Long64_t nbytes, char *buffer, Int_t uncompressedSize)
 {
-   return 0;
+   if (basketnumber > fMaxBaskets) {
+      Int_t newsize = TMath::Max(10,Int_t(1.5*basketnumber));
+      fBasketBytes  = (Long64_t*)TStorage::ReAlloc(fBasketBytes, newsize*sizeof(Long64_t), fMaxBaskets*sizeof(Long64_t));
+      fBasketSeek   = (Long64_t*)TStorage::ReAlloc(fBasketSeek,
+                                                   newsize*sizeof(Long64_t),fMaxBaskets*sizeof(Long64_t));
+      fMaxBaskets   = newsize;
+   }
+   TBasketPC *basket = GetBasketPC(tree, basketnumber);
+   if (!basket)
+      return 0;
+   return basket->WriteCascade(nbytes, buffer, uncompressedSize, basketnumber);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Retrieve a precision cascade buffer
 
-char *TBranchPrecisionCascade::RetrieveCascade(Int_t basketnumber)
+char *TBranchPrecisionCascade::RetrieveCascade(TTree &tree, Int_t basketnumber)
 {
-   return nullptr;
+   if (basketnumber > fMaxBaskets)
+      return nullptr;
+   TBasketPC *basket = GetBasketPC(tree, basketnumber);
+   if (!basket)
+      return nullptr;
+   if (basket->ReadCascade(fBasketSeek[basketnumber], fBasketBytes[basketnumber]))
+      return nullptr;
+
+   // Do we need to also return fBasketBytes[fBasketSeek] ?
+   return basket->GetBuffer();
 }
 
 } // Details
