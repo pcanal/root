@@ -70,6 +70,7 @@ class TCut;
 class TVirtualIndex;
 class TBranchRef;
 class TBasket;
+class TBasketPC;
 class TStreamerInfo;
 class TTreeCache;
 class TTreeCloner;
@@ -434,6 +435,7 @@ public:
    virtual Long64_t        CopyEntries(TTree* tree, Long64_t nentries = -1, Option_t *option = "", Bool_t needCopyAddresses = false);
    virtual TTree          *CopyTree(const char* selection, Option_t* option = "", Long64_t nentries = kMaxEntries, Long64_t firstentry = 0);
    virtual TBasket        *CreateBasket(TBranch*);
+   virtual TBasketPC      *CreateBasketPC(ROOT::Detail::TBranchPrecisionCascade &cascade);
    virtual void            DirectoryAutoAdd(TDirectory *);
    Int_t                   Debug() const { return fDebug; }
    virtual void            Delete(Option_t* option = ""); // *MENU*

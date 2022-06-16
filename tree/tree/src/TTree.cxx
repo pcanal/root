@@ -371,6 +371,7 @@ End_Macro
 #include "TBufferFile.h"
 #include "TBaseClass.h"
 #include "TBasket.h"
+#include "TBasketPC.h"
 #include "TBranchClones.h"
 #include "TBranchElement.h"
 #include "TBranchObject.h"
@@ -3826,6 +3827,18 @@ TBasket* TTree::CreateBasket(TBranch* branch)
       return 0;
    }
    return new TBasket(branch->GetName(), GetName(), branch);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Create a Precision Cascade basket for this tree and given branch.
+
+TBasketPC* TTree::CreateBasketPC(ROOT::Detail::TBranchPrecisionCascade &cascade)
+{
+   UInt_t level = cascade.GetCascadeLevel();
+   if (!level || !fPrecisionCascades || level > fPrecisionCascades->size()) {
+      return 0;
+   }
+   return new TBasketPC((*fPrecisionCascades)[level]->GetDirectory(), cascade);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
