@@ -438,6 +438,8 @@ void R__unzipPrecisionCascade(int **srcsizes, uch **srcs, int *tgtsize, uch *tgt
 
    *irep = 0L;
  
+   /* This check can be done here, or in R__unzipBLAST, depending on whether
+      the check may apply to other [future] PrecisionCascade algorithms
    if (src_number > srcs[0][10]) {
      src_number = srcs[0][10]; // more sources than we need?!? Ignore extras for now
    } else if (src_number < srcs[0][10] && srcs[src_number-1][2] == 0) {
@@ -447,6 +449,7 @@ void R__unzipPrecisionCascade(int **srcsizes, uch **srcs, int *tgtsize, uch *tgt
      fprintf(stderr, "R__unzipPrecisionCascade: too few sources provided (%d) to obtain full precision (requires at least %d sources)", src_number, srcs[0][10]);
      return;
    }
+   */
 
    obufcnt = *tgtsize;
 
