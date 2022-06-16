@@ -11,7 +11,6 @@
 
 #include "Compression.h"
 #include <stdexcept>
-#include <string>
 
 namespace ROOT {
 
