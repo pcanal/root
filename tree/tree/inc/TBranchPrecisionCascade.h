@@ -32,16 +32,19 @@ namespace Detail {
 
 class TBranchPrecisionCascade : public TNamed
 {
-   Int_t       fMaxBaskets = 0;             ///< Maximum number of Baskets so far
-   Long64_t   *fBasketBytes = nullptr;      ///<[fMaxBaskets] Length of baskets on file
-   Long64_t   *fBasketSeek = nullptr;       ///<[fMaxBaskets] Addresses of baskets on file
+   UInt_t      fCascadeLevel = 0;       ///< Position in the precision cascade.
+   Int_t       fMaxBaskets   = 0;       ///< Maximum number of Baskets so far
+   Long64_t   *fBasketBytes  = nullptr; ///<[fMaxBaskets] Length of baskets on file
+   Long64_t   *fBasketSeek   = nullptr; ///<[fMaxBaskets] Addresses of baskets on file
 
 public:
    TBranchPrecisionCascade() = default;
-   TBranchPrecisionCascade(TBranch &br);
+   TBranchPrecisionCascade(UInt_t cascadelevel, TBranch &br);
    ~TBranchPrecisionCascade();
 
    Int_t StoreCascade(Int_t basketnumber, Long64_t nbytes, char *buffer);
+
+   UInt_t GetCascadeLevel() const { return fCascadeLevel; }
 
    char *RetrieveCascade(Int_t basketnumber);
 

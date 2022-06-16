@@ -26,8 +26,9 @@ namespace Detail {
 ////////////////////////////////////////////////////////////////////////////////
 /// Usual Constructor
 
-TBranchPrecisionCascade::TBranchPrecisionCascade(TBranch &br) :
-   TNamed(br.GetFullName().Data(), "Precision Cascade"), fMaxBaskets(br.GetMaxBaskets())
+TBranchPrecisionCascade::TBranchPrecisionCascade(UInt_t cascadelevel, TBranch &br) :
+   TNamed(br.GetFullName().Data(), "Precision Cascade"), fCascadeLevel(cascadelevel),
+   fMaxBaskets(br.GetMaxBaskets())
 {
    if (fMaxBaskets) {
       fBasketBytes = new Long64_t[fMaxBaskets];
