@@ -61,6 +61,8 @@ public:
       fOwnsFile = own;
    }
 
+   TDirectory *GetDirectory() const { return fDirectory; }
+
    /// Return false if the PrecisionCascade is not of the expected level for the given TTree.
    Bool_t Verify(TTree& tree, UInt_t level) const;
 
