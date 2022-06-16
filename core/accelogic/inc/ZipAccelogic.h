@@ -14,13 +14,25 @@
 
 #include "EDataType.h"
 
+void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int **tgtsizes, char **tgts, int tgt_number, int *irep, EDataType datatype = EDataType::kNoType_t);
+
+void R__unzipBLAST(int **srcsizes, unsigned char **srcs, int *tgtsize, unsigned char *tgt, int src_number, int *irep);
+
+// The below two interfaces are to maintain backward compatibility until RZip.cxx is updated to use the above two interfaces
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, EDataType datatype);
+void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, EDataType datatype = EDataType::kNoType_t)
+{
+   R__zipBLAST(&cxlevel,srcsize,src,&tgtsize,&tgt,1,irep,datatype);
+}
 
-void R__unzipBLAST(int *srcsize, unsigned char *src, int *tgtsize, unsigned char *tgt, int *irep);
+void R__unzipBLAST(int *srcsize, unsigned char *src, int *tgtsize, unsigned char *tgt, int *irep)
+{
+  R__unzipBLAST(&srcsize,&src,tgtsize,tgt,1,irep);
+}
 
 #ifdef __cplusplus
 }
