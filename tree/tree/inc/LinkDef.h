@@ -15,6 +15,7 @@
 #pragma link off all functions;
 
 #pragma link C++ class TBasket-;
+#pragma link C++ class TBasketPC-;
 #pragma link C++ class TBranch-;
 #pragma link C++ class TBranchClones-;
 #pragma link C++ class TBranchElement-;

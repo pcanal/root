@@ -16,6 +16,7 @@ endif(imt)
 ROOT_STANDARD_LIBRARY_PACKAGE(Tree
   HEADERS
     TBasket.h
+    TBasketPC.h
     TBasketSQL.h
     TBranchBrowsable.h
     TBranchCacheInfo.h
@@ -73,6 +74,7 @@ ROOT_STANDARD_LIBRARY_PACKAGE(Tree
   SOURCES
     src/InternalTreeUtils.cxx
     src/TBasket.cxx
+    src/TBasketPC.cxx
     src/TBasketSQL.cxx
     src/TBranchBrowsable.cxx
     src/TBranchClones.cxx

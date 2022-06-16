@@ -58,6 +58,7 @@ class TFile : public TDirectoryFile {
 // if we are writing multiple baskets in parallel.
 #ifdef R__USE_IMT
   friend class TBasket;
+  friend class TBasketPC;
 #endif
 
 public:
