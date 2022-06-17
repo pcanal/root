@@ -40,17 +40,16 @@ union IntegerTypes {
 
 void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, EDataType datatype)
 {
-   R__zipBLAST(&cxlevel,srcsize,src,&tgtsize,&tgt,1,irep,datatype);
+   R__zipBLAST(&cxlevel,srcsize,src,tgtsize,&tgt,1,irep,datatype);
 }
 
-void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int **tgtsizes, char **tgts, int tgt_number, int *irep, EDataType datatype)
+void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int *tgtsize, char **tgts, int tgt_number, int *irep, EDataType datatype)
 {
-   *irep = 0;
-   int *tgtsize = *tgtsizes;
+   memset(irep,0,tgt_number*sizeof(int)); // irep needs to point to an array of integers of size tgt_number (could just be a single integer)
    char *tgt = *tgts;
 
    for (int tgt_idx=0; tgt_idx<tgt_number; tgt_idx++) {
-      if (*(tgtsizes[tgt_idx]) <= 0) {
+      if (tgtsize[tgt_idx] <= 0) {
          return;
       }
    }
@@ -109,7 +108,7 @@ void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int **tgtsizes, char **
 
       auto excessive_size = false;
       for (int tgt_idx=0; tgt_idx<tgt_number && !excessive_size; tgt_idx++)
-         excessive_size |= ( ( out_sizes[tgt_idx] + kHeaderSize) > (size_t)*tgtsizes[tgt_idx] );
+         excessive_size |= ( ( out_sizes[tgt_idx] + kHeaderSize) > (size_t)tgtsize[tgt_idx] );
 
       if (excessive_size) {
          for (int tgt_idx=0; tgt_idx<tgt_number; tgt_idx++)
@@ -121,8 +120,8 @@ void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int **tgtsizes, char **
          memcpy(tgts[tgt_idx] + kHeaderSize, staging[tgt_idx], out_sizes[tgt_idx]);
          tgts[tgt_idx][2] = cxlevels[tgt_idx];
          delete [] (staging[tgt_idx]);
-         // *irep will be the sum of all buffer sizes
-         *irep += out_sizes[tgt_idx] + kHeaderSize;
+         // irep points to an array of all buffer sizes
+         irep[tgt_idx] = out_sizes[tgt_idx] + kHeaderSize;
       }
    } else {
       // Use "RLE".
@@ -204,10 +203,10 @@ void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int **tgtsizes, char **
 
 void R__unzipBLAST(int *srcsize, unsigned char *src, int *tgtsize, unsigned char *tgt, int *irep)
 {
-  R__unzipBLAST(&srcsize,&src,tgtsize,tgt,1,irep);
+  R__unzipBLAST(srcsize,&src,tgtsize,tgt,1,irep);
 }
 
-void R__unzipBLAST(int **srcsizes, unsigned char **srcs, int *tgtsize, unsigned char *tgt, int src_number, int *irep)
+void R__unzipBLAST(int *srcsize, unsigned char **srcs, int *tgtsize, unsigned char *tgt, int src_number, int *irep)
 {
    *irep = 0;
    unsigned char *src = *srcs;
@@ -239,7 +238,7 @@ void R__unzipBLAST(int **srcsizes, unsigned char **srcs, int *tgtsize, unsigned 
       for (int src_idx=0; src_idx<src_number; src_idx++) {
          absSensLevels[src_idx] = srcs[src_idx][2] - 61;
          sources[src_idx] = (char*)(&srcs[src_idx][kHeaderSize]);
-         in_sizes[src_idx] = (size_t) (srcsizes[src_idx] - kHeaderSize);
+         in_sizes[src_idx] = (size_t) (srcsize[src_idx] - kHeaderSize);
       }
       auto absSens_src_number = src_number - 1; // Needs to be 1 less than provided sources
       // Note: We need to check the destination really start of a float boundary.
@@ -260,7 +259,6 @@ void R__unzipBLAST(int **srcsizes, unsigned char **srcs, int *tgtsize, unsigned 
       delete [] staging.c;
       *irep = out_size;
    } else {
-      int *srcsize = *srcsizes;
       char* source = (char*)(&src[kHeaderSize]);
       size_t in_size = (*srcsize) - kHeaderSize;
 
