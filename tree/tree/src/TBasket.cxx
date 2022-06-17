@@ -608,6 +608,12 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file, Int_t bas
          return ReadBasketBuffersUncompressedCase();
       }
 
+      memcpy(rawUncompressedBuffer, rawCompressedBuffer, fKeylen);
+      char *rawUncompressedObjectBuffer = rawUncompressedBuffer+fKeylen;
+      UChar_t *rawCompressedObjectBuffer = (UChar_t*)rawCompressedBuffer+fKeylen;
+      Int_t nin, nbuf;
+      Int_t nout = 0, noutot = 0, nintot = 0;
+      
       std::vector<unsigned char*> precisionCascades;
       std::vector<Int_t> nins;
       struct Destructor {
@@ -620,14 +626,16 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file, Int_t bas
          }
       };
       Destructor dst(precisionCascades);
-      if (fBranch->GetPrecisionCascades() && !fBranch->GetPrecisionCascades()->empty())
+      auto doPrecisionCascades = (fBranch->GetPrecisionCascades() && !fBranch->GetPrecisionCascades()->empty());
+      if (doPrecisionCascades)
       {
+         precisionCascades.push_back(rawCompressedObjectBuffer);
          auto tree = fBranch->GetTree();
          for(auto brpc : *fBranch->GetPrecisionCascades()) {
             precisionCascades.push_back((unsigned char*) brpc->RetrieveCascade(*tree, basketnumber) );
          }
+         nins.assign(precisionCascades.size(),0);
       }
-      auto doPrecisionCascades = (!precisionCascades.empty()); // decide before inserting primary buffer pointer at beginning
 
       // Optional monitor for zip time profiling.
       Double_t start = 0;
@@ -635,18 +643,8 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file, Int_t bas
          start = TTimeStamp();
       }
 
-      memcpy(rawUncompressedBuffer, rawCompressedBuffer, fKeylen);
-      char *rawUncompressedObjectBuffer = rawUncompressedBuffer+fKeylen;
-      UChar_t *rawCompressedObjectBuffer = (UChar_t*)rawCompressedBuffer+fKeylen;
-      Int_t nin, nbuf;
-      Int_t nout = 0, noutot = 0, nintot = 0;
-
       Int_t configArraySize = fBranch->GetConfigArraySize();
       char *configArray = fBranch->GetConfigArray();
-      if (doPrecisionCascades) {
-         precisionCascades.insert(precisionCascades.begin(),rawCompressedObjectBuffer);
-         nins.assign(precisionCascades.size(),0);
-      }
 
       // Unzip all the compressed objects in the compressed object buffer.
       while (1) {
@@ -1291,8 +1289,11 @@ Int_t TBasket::WriteBuffer()
 
       std::vector<char*> precisionCascades;
       std::vector<Int_t> nouts, bufmaxs, cxlevels;
-      if (fBranch->GetPrecisionCascades() && !fBranch->GetPrecisionCascades()->empty())
+      auto doPrecisionCascades = (fBranch->GetPrecisionCascades() && !fBranch->GetPrecisionCascades()->empty());
+      if (doPrecisionCascades)
       {
+         precisionCascades.push_back(bufcur);
+         cxlevels.push_back(cxlevel); 
          auto tree = fBranch->GetTree();
          auto basketnumber = fBranch->GetWriteBasket();
          for(auto brpc : *fBranch->GetPrecisionCascades()) {
@@ -1302,13 +1303,8 @@ Int_t TBasket::WriteBuffer()
             cascade_buffer->SetWriteMode();
             precisionCascades.push_back( cascade_buffer->Buffer() + cascade_basket->GetKeylen() );
             cxlevels.push_back(cxlevel); // WRONG! From where do we get the cxlevels of the precision cascade?
+            nouts.assign(precisionCascades.size(),0);
          }
-      }
-      auto doPrecisionCascades = (!precisionCascades.empty()); // decide before inserting primary buffer pointer at beginning
-      if (doPrecisionCascades) {
-         precisionCascades.insert(precisionCascades.begin(),bufcur);
-         cxlevels.insert(cxlevels.begin(),cxlevel);
-         nouts.assign(precisionCascades.size(),0);
       }
 
 
@@ -1328,7 +1324,7 @@ Int_t TBasket::WriteBuffer()
          // USE_IMT is defined, we are guaranteed that the compression buffer is unique per-branch.
          // (see fCompressedBufferRef in constructor).
          if (doPrecisionCascades) {
-            bufmaxs.assign(precisionCascades.size(),bufmax);  // is it OK to assume the samee size for all?
+            bufmaxs.assign(precisionCascades.size(),bufmax);  // assuming bufmax is the same for each of the precisionCascade buffers
             R__zipPrecisionCascade(cxlevels.data(), &bufmax, objbuf, bufmaxs.data(), precisionCascades.data(), precisionCascades.size(), nouts.data(), cxAlgorithm, datatype, configArraySize, configArray);
             nout = nouts[0];
          } else {
