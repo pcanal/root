@@ -11,6 +11,7 @@
 #include <chrono>
 
 #include "TBasket.h"
+#include "TBasketPC.h"
 #include "TBuffer.h"
 #include "TBufferFile.h"
 #include "TTree.h"
@@ -403,6 +404,19 @@ Int_t TBasket::ReadBasketBuffersUnzip(char* buffer, Int_t size, Bool_t mustFree,
 
    fBuffer = fBufferRef->Buffer();
    return fObjlen+fKeylen;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Initialize a buffer for reading if it is not already initialized
+
+static inline void R__SizeBuffer(TBuffer& bufferRef, Int_t len)
+{
+   Int_t curBufferSize = bufferRef.BufferSize();
+   if (curBufferSize < len) {
+      // Experience shows that giving 5% "wiggle-room" decreases churn.
+      bufferRef.Expand(Int_t(len*1.05));
+   }
+   bufferRef.Reset();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1258,6 +1272,21 @@ Int_t TBasket::WriteBuffer()
       nzip   = 0;
       Int_t configArraySize = fBranch->GetConfigArraySize();
       char *configArray = fBranch->GetConfigArray();
+
+      std::vector<char*> precisionCascades;
+      if (fBranch->GetPrecisionCascades() && !fBranch->GetPrecisionCascades()->empty())
+      {
+         auto tree = fBranch->GetTree();
+         auto basketnumber = fBranch->GetWriteBasket();
+         for(auto brpc : *fBranch->GetPrecisionCascades()) {
+            auto cascade_basket = brpc->GetBasketPC(*tree, basketnumber);
+            auto cascade_buffer = cascade_basket->GetBufferRef();
+            R__SizeBuffer(*cascade_buffer, buflen);
+            cascade_buffer->SetWriteMode();
+            precisionCascades.push_back( cascade_buffer->Buffer() + cascade_basket->GetKeylen() );
+         }
+      }
+
       for (Int_t i = 0; i < nbuffers; ++i) {
          if (i == nbuffers - 1) bufmax = fObjlen - nzip;
          else bufmax = kMAXZIPBUF;
@@ -1300,6 +1329,9 @@ Int_t TBasket::WriteBuffer()
          noutot += nout;
          objbuf += kMAXZIPBUF;
          nzip   += kMAXZIPBUF;
+         if (!precisionCascades.empty()) {
+            // increment each element by its corresponding nout.
+         }
       }
       nout = noutot;
       Create(noutot,file);
