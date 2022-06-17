@@ -636,6 +636,7 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file, Int_t bas
          }
          nins.assign(precisionCascades.size(),0);
       }
+      auto doPrecisionCascades = (!precisionCascades.empty()); // decide before inserting primary buffer pointer at beginning
 
       // Optional monitor for zip time profiling.
       Double_t start = 0;
@@ -645,6 +646,10 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file, Int_t bas
 
       Int_t configArraySize = fBranch->GetConfigArraySize();
       char *configArray = fBranch->GetConfigArray();
+      if (doPrecisionCascades) {
+         precisionCascades.insert(precisionCascades.begin(),rawCompressedObjectBuffer);
+         nins.assign(precisionCascades.size(),0);
+      }
 
       // Unzip all the compressed objects in the compressed object buffer.
       while (1) {
@@ -1304,6 +1309,13 @@ Int_t TBasket::WriteBuffer()
             nouts.assign(precisionCascades.size(),0);
          }
       }
+      auto doPrecisionCascades = (!precisionCascades.empty()); // decide before inserting primary buffer pointer at beginning
+      if (doPrecisionCascades) {
+         precisionCascades.insert(precisionCascades.begin(),bufcur);
+         cxlevels.insert(cxlevels.begin(),cxlevel);
+         nouts.assign(precisionCascades.size(),0);
+      }
+
 
 
       for (Int_t i = 0; i < nbuffers; ++i) {
