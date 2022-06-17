@@ -118,12 +118,13 @@ Int_t TBasketPC::ReadCascade(Long64_t pos, Long64_t len)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Write the Precision Cascade element to its file.
+/// Write the Precision Cascade element to its file assuming it is already
+/// streamed inside the fBufferRef
 /// \param[in] n Size of the compressed buffer (the number of bytes to write)
-/// \param[in] cascade the data to write
 /// \param[in] The estimated uncompressed size of the data (approximation)
+/// \param[in] Corresponding basketnumber in the main TTree/TBranch
 
-Int_t TBasketPC::WriteCascade(Int_t n, Char_t *cascade, Int_t uncompressedSize, Int_t basketnumber)
+Int_t TBasketPC::WriteCascade(Int_t n, Int_t uncompressedSize, Int_t basketnumber)
 {
    TFile *file = fMotherDir->GetFile();
    if (!file)
@@ -148,14 +149,26 @@ Int_t TBasketPC::WriteCascade(Int_t n, Char_t *cascade, Int_t uncompressedSize, 
 
    Create(n, file);
     
-   fBufferRef->WriteFastArray(cascade, n);
-
+   fBufferRef->SetBufferOffset(0);
    Streamer(*fBufferRef);  //write key itself again
 
    Int_t nBytes = WriteFileKeepBuffer(file);
    return nBytes>0 ? fKeylen + n : -1;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// Write the Precision Cascade element to its file.
+/// \param[in] n Size of the compressed buffer (the number of bytes to write)
+/// \param[in] cascade the data to write
+/// \param[in] The estimated uncompressed size of the data (approximation)
+/// \param[in] Corresponding basketnumber in the main TTree/TBranch
+
+Int_t TBasketPC::WriteCascade(Int_t n, Char_t *cascade, Int_t uncompressedSize, Int_t basketnumber)
+{
+   fBufferRef->SetBufferOffset(fKeylen);
+   fBufferRef->WriteFastArray(cascade, n);
+   return WriteCascade(n, uncompressedSize, basketnumber);
+}
 ////////////////////////////////////////////////////////////////////////////////
 /// Stream a class object.
 

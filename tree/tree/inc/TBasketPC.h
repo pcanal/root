@@ -44,6 +44,8 @@ public:
 
    Int_t WriteCascade(Int_t n, Char_t *cascade, Int_t uncompressedSize, Int_t basketnumber);
 
+   Int_t WriteCascade(Int_t n, Int_t uncompressedSize, Int_t basketnumber);
+
    ClassDefOverride(TBasketPC, 3);
 };
 

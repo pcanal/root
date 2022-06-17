@@ -1339,6 +1339,22 @@ Int_t TBasket::WriteBuffer()
 
       Streamer(*fBufferRef);         //write key itself again
       memcpy(fBuffer,fBufferRef->Buffer(),fKeylen);
+
+      if (!precisionCascades.empty()) {
+         // We are guaranteed (see above) that fBranch->GetPrecisionCascades() is valid
+         auto basketnumber = fBranch->GetWriteBasket();
+         auto tree = fBranch->GetTree();
+         int i = 1;
+         auto nout_sum = 0;
+         //for(auto single : nouts) {
+         //   nout_sum += single;
+         //}
+         auto ratio = ((double) fObjlen) / nout_sum;
+         for(auto brpc : *fBranch->GetPrecisionCascades()) {
+            brpc->StoreCascade(*tree, basketnumber, 0 /* nouts[i] */ ,  0 /* nouts[i] * ratio estimate uncompressed sizes */);
+            ++i;
+         }
+      }
    } else {
       fBuffer = fBufferRef->Buffer();
       Create(fObjlen,file);

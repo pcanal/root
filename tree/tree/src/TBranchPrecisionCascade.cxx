@@ -22,6 +22,7 @@ supplemental parts of the precision cascades for a specific branch.
 #include "TBranch.h"
 #include "TStorage.h"
 #include "TTree.h"
+#include "TFile.h"
 
 namespace ROOT {
 namespace Detail {
@@ -69,7 +70,7 @@ TBasketPC *TBranchPrecisionCascade::GetBasketPC(TTree &tree, UInt_t /* basketnum
 ////////////////////////////////////////////////////////////////////////////////
 /// Store a precision cascade buffer and record its location.
 
-Int_t TBranchPrecisionCascade::StoreCascade(TTree &tree, Int_t basketnumber, Long64_t nbytes, char *buffer, Int_t uncompressedSize)
+Int_t TBranchPrecisionCascade::StoreCascade(TTree &tree, Int_t basketnumber, Long64_t nbytes, Int_t uncompressedSize)
 {
    if (basketnumber > fMaxBaskets) {
       Int_t newsize = TMath::Max(10,Int_t(1.5*basketnumber));
@@ -81,7 +82,20 @@ Int_t TBranchPrecisionCascade::StoreCascade(TTree &tree, Int_t basketnumber, Lon
    TBasketPC *basket = GetBasketPC(tree, basketnumber);
    if (!basket)
       return 0;
-   return basket->WriteCascade(nbytes, buffer, uncompressedSize, basketnumber);
+
+   Int_t nout = basket->WriteCascade(nbytes, uncompressedSize, basketnumber);
+
+   if (nout < 0) {
+      auto dir = basket->GetMotherDir();
+      auto file = dir ? dir->GetFile() : (TFile*)nullptr;
+      const char *name = file ? file->GetName() : "memory";
+      Error("StoreCascade", "Precision cascade element was not properly stored in %s", name);
+   }
+   fBasketBytes[basketnumber] = basket->GetNbytes();
+   fBasketSeek[basketnumber] = basket->GetSeekKey();
+   // FIXME: Need to update some statistics in the TTree or the in TTreePrecisionCascade.
+
+   return nout;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

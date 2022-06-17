@@ -50,7 +50,7 @@ public:
 
    UInt_t GetCascadeLevel() const { return fCascadeLevel; }
 
-   Int_t StoreCascade(TTree &tree, Int_t basketnumber, Long64_t nbytes, char *buffer, Int_t uncompressedSize);
+   Int_t StoreCascade(TTree &tree, Int_t basketnumber, Long64_t nbytes, Int_t uncompressedSize);
 
    char *RetrieveCascade(TTree &tree, Int_t basketnumber);
 
