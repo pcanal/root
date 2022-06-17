@@ -11,6 +11,7 @@
 
 #include "Compression.h"
 #include <stdexcept>
+#include "PrecisionCascadeCompressionConfig.h"
 
 namespace ROOT {
 
@@ -36,6 +37,7 @@ namespace ROOT {
     return algo * 100 + compressionLevel;
   }
 
+
   PrecisionCascadeCompressionConfig::PrecisionCascadeCompressionConfig(
       RCompressionSetting::EAlgorithm::EValues algo,
       const std::vector<Int_t> &levels, bool storeResidual /* = false */)
@@ -49,7 +51,14 @@ namespace ROOT {
     fAlgorithm = algo;
     if (!levels.empty())
       fLevel = levels[0];
+    if (fIsPrecisionCascade) {
+      using ROOT::Internal::PrecisionCascadeConfigArrayContent;
+      fNConfig = PrecisionCascadeConfigArrayContent::SizeOf(levels.size());
+      fConfigArray = new char[fNConfig];
+      auto content = reinterpret_cast<PrecisionCascadeConfigArrayContent*>(fConfigArray);
+      content->fStoreResidual = storeResidual;
+      content->fLen = levels.size();
+      memcpy(&(content->fLevels), levels.data(), levels.size() * sizeof(Int_t));
+    }
   }
-
-
 }
