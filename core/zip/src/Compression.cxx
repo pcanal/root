@@ -45,6 +45,7 @@ namespace ROOT {
       msg += algo;
       throw std::runtime_error(msg);
     }
+    fIsPrecisionCascade = (levels.size() > 1 || storeResidual);
     fAlgorithm = algo;
     if (!levels.empty())
       fLevel = levels[0];
