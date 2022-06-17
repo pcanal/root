@@ -26,7 +26,7 @@ extern "C" void R__zipMultipleAlgorithm(int cxlevel, int *srcsize, char *src, in
                                         EDataType datatype = EDataType::kNoType_t, int configsize = 0, char *configarray = nullptr);
 
 extern "C" void R__zipPrecisionCascade(int *srcsize, char *src, int *tgtsize, char **tgts, int tgt_number, int *irep, ROOT::RCompressionSetting::EAlgorithm::EValues,
-                                        EDataType datatype = EDataType::kNoType_t, int configsize = 0, char *configarray = nullptr);
+                                       EDataType datatype = EDataType::kNoType_t, int configsize = 0, char *configarray = nullptr);
 
 /**
  * This is a historical definition, prior to ROOT supporting multiple algorithms in a single file.  Use
