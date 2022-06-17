@@ -25,6 +25,8 @@
 // - 3 bytes to identify the deflated buffer size.
 // - 3 bytes to identify the inflated buffer size.
 #define HDRSIZE 9
+// - 2 bytes to identify datatype and cascade count in BLAST
+#define HDRSIZE_BLAST 11
 
 /**
  * Forward decl's
@@ -107,7 +109,7 @@ void R__zipMultipleAlgorithm(int cxlevel, int *srcsize, char *src, int *tgtsize,
   } else if (compressionAlgorithm == ROOT::RCompressionSetting::EAlgorithm::kZSTD) {
      R__zipZSTD(cxlevel, srcsize, src, tgtsize, tgt, irep);
   } else if (compressionAlgorithm == ROOT::RCompressionSetting::EAlgorithm::kBLAST) {
-     R__zipBLAST(cxlevel, srcsize, src, tgtsize, tgt, irep, datatype);
+     R__zipBLAST(&cxlevel, srcsize, src, tgtsize, &tgt, 1, irep, datatype);
   } else if (compressionAlgorithm == ROOT::RCompressionSetting::EAlgorithm::kOldCompressionAlgo || compressionAlgorithm == ROOT::RCompressionSetting::EAlgorithm::kUseGlobal) {
      R__zipOld(cxlevel, srcsize, src, tgtsize, tgt, irep);
   } else {
@@ -116,6 +118,31 @@ void R__zipMultipleAlgorithm(int cxlevel, int *srcsize, char *src, int *tgtsize,
      // a surprising change in algorithm in a future version of ROOT.
      R__zipZLIB(cxlevel, srcsize, src, tgtsize, tgt, irep);
   }
+}
+
+void R__zipPrecisionCascade(int* cxlevels, int *srcsize, char *src, int *tgtsize, char **tgts, int tgt_number, int *irep, ROOT::RCompressionSetting::EAlgorithm::EValues compressionAlgorithm,
+                             EDataType datatype /* = kNoType_t */,
+                             int /* configsize = 0 */, char * /* configarray = nullptr */)
+{
+
+   if (*srcsize < 1 + HDRSIZE_BLAST + 1) {
+      memset(irep,0,tgt_number*sizeof(int));
+      return;
+   }
+
+   for (int tgt_idx=0; tgt_idx<tgt_number; tgt_idx++) {
+      // can only be 0 for the last of multiple (not just one) targets
+      // otherwise must be a positive value
+      int cxlevel_min = (tgt_idx > 0 && tgt_idx == tgt_number-1  ? 0 : 1);
+      if (cxlevels[tgt_idx] < cxlevel_min) {
+         memset(irep,0,tgt_number*sizeof(int));
+         return;
+      }
+   }
+
+   if (compressionAlgorithm == ROOT::RCompressionSetting::EAlgorithm::kBLAST) {
+      R__zipBLAST(cxlevels, srcsize, src, tgtsize, tgts, tgt_number, irep, datatype);
+   }
 }
 
   // The very old algorithm for backward compatibility
@@ -306,8 +333,9 @@ int R__unzip_header(int *srcsize, uch *src, int *tgtsize)
      return 1;
   }
 
-  *srcsize = HDRSIZE + ((long)src[3] | ((long)src[4] << 8) | ((long)src[5] << 16));
-  *tgtsize = (long)src[6] | ((long)src[7] << 8) | ((long)src[8] << 16);
+  *srcsize = ((long)src[3] | ((long)src[4] << 8) | ((long)src[5] << 16))
+             + (is_valid_header_blast(src) ? HDRSIZE_BLAST : HDRSIZE);  // compressed size
+  *tgtsize = (long)src[6] | ((long)src[7] << 8) | ((long)src[8] << 16);  // uncompressed size
 
   return 0;
 }
@@ -339,7 +367,7 @@ void R__unzip(int *srcsize, uch *src, int *tgtsize, uch *tgt, int *irep, int /* 
    long ibufcnt, obufcnt;
 
    *irep = 0L;
-
+  
    /*   C H E C K   H E A D E R   */
 
    if (*srcsize < HDRSIZE) {
@@ -383,7 +411,7 @@ void R__unzip(int *srcsize, uch *src, int *tgtsize, uch *tgt, int *irep, int /* 
       R__unzipZSTD(srcsize, src, tgtsize, tgt, irep);
       return;
    } else if (is_valid_header_blast(src)) {
-      R__unzipBLAST(srcsize, src, tgtsize, tgt, irep);
+      R__unzipBLAST(srcsize, &src, tgtsize, tgt, 1, irep);
       return;
    }
 
@@ -403,6 +431,80 @@ void R__unzip(int *srcsize, uch *src, int *tgtsize, uch *tgt, int *irep, int /* 
    }
 
    *irep = isize;
+}
+
+void R__unzipPrecisionCascade(int *srcsize, uch **srcs, int *tgtsize, uch *tgt, int src_number, int *irep, int /* configsize = 0 */, char * /* configarray = nullptr */)
+{
+
+   long isize = 0;
+   long ibufcnt, obufcnt;
+
+   *irep = 0L;
+ 
+   /* This check can be done here, or in R__unzipBLAST, depending on whether
+      the check may apply to other [future] PrecisionCascade algorithms
+   if (src_number > srcs[0][10]) {
+     src_number = srcs[0][10]; // more sources than we need?!? Ignore extras for now
+   } else if (src_number < srcs[0][10] && srcs[src_number-1][2] == 0) {
+     // This is a simple check that full precision is only ever possible with all sources from compression.
+     // However, it is possible that full precision was not saved at compression,
+     // so even using all saved sources may not return full precision
+     fprintf(stderr, "R__unzipPrecisionCascade: too few sources provided (%d) to obtain full precision (requires at least %d sources)", src_number, srcs[0][10]);
+     return;
+   }
+   */
+
+   obufcnt = *tgtsize;
+
+   auto is_valid_headers_blast = true;
+
+   for (int src_idx=0; src_idx<src_number; src_idx++) {
+  
+
+      /*   C H E C K   H E A D E R   */
+
+      if (srcsize[src_idx] < HDRSIZE_BLAST) {
+         fprintf(stderr, "R__unzipPrecisionCascade: too small source (index %d)\n",src_idx);
+         return;
+      }
+
+      uch *src = srcs[src_idx];
+      if (!is_valid_header(src)) {
+         fprintf(stderr, "Error R__unzipPrecisionCascade: error in header\n");
+         return;
+      }
+
+      ibufcnt = (long)src[3] | ((long)src[4] << 8) | ((long)src[5] << 16);  // compressed size
+      long isize_temp = (long)src[6] | ((long)src[7] << 8) | ((long)src[8] << 16);  // uncompressed size
+
+      if (src_idx) {
+        if (isize_temp != isize) {
+          fprintf(stderr, "R__unzipPrecisionCascade: mismatching source headers\n");
+          return;
+        }
+      } else {
+        if (obufcnt < isize_temp) {
+          fprintf(stderr, "R__unzipPrecisionCascade: too small target\n");
+          return;
+        }
+        isize = isize_temp;
+      }
+
+      if (ibufcnt + HDRSIZE_BLAST > srcsize[src_idx]) {
+         fprintf(stderr, "R__unzipPrecisionCascade: too small source\n");
+         return;
+      }
+    
+      is_valid_headers_blast &= is_valid_header_blast(srcs[src_idx]);
+   }
+
+   if (is_valid_headers_blast) {
+      R__unzipBLAST(srcsize, srcs, tgtsize, tgt, src_number, irep);
+      return;
+   }
+
+   // nothing else to do
+
 }
 
 void R__unzipZLIB(int *srcsize, unsigned char *src, int *tgtsize, unsigned char *tgt, int *irep)
