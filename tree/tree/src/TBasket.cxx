@@ -25,6 +25,7 @@
 #include "TTimeStamp.h"
 #include "ROOT/TIOFeatures.hxx"
 #include "RZip.h"
+#include "TBranchPrecisionCascade.h"
 
 #include <bitset>
 
@@ -461,7 +462,7 @@ void TBasket::ResetEntryOffset()
 /// There is a lot of code duplication but it was necessary to assure
 /// the expected behavior when there is no cache.
 
-Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file)
+Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file, Int_t basketnumber)
 {
    if(!fBranch->GetDirectory()) {
       return -1;
@@ -593,6 +594,25 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file)
          return ReadBasketBuffersUncompressedCase();
       }
 
+      std::vector<char*> precisionCascades;
+      struct Destructor {
+         std::vector<char*> &fValue;
+         Destructor(std::vector<char*> &cont) : fValue(cont) {} ;
+         ~Destructor() {
+            for(auto c : fValue) {
+               delete [] c;
+            }
+         }
+      };
+      Destructor dst(precisionCascades);
+      if (fBranch->GetPrecisionCascades() && !fBranch->GetPrecisionCascades()->empty())
+      {
+         auto tree = fBranch->GetTree();
+         for(auto brpc : *fBranch->GetPrecisionCascades()) {
+            precisionCascades.push_back( brpc->RetrieveCascade(*tree, basketnumber) );
+         }
+      }
+
       // Optional monitor for zip time profiling.
       Double_t start = 0;
       if (R__unlikely(gPerfStats)) {
@@ -628,6 +648,9 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file)
          if (noutot >= fObjlen) break;
          rawCompressedObjectBuffer += nin;
          rawUncompressedObjectBuffer += nout;
+         if (!precisionCascades.empty()) {
+            // increment each element by its corresponding nout.
+         }
       }
 
       // Make sure the uncompressed numbers are consistent with header.

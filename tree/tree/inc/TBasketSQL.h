@@ -46,7 +46,7 @@ public:
               TString *insert_query, std::vector<Int_t> *vc, TSQLRow **row);
    ~TBasketSQL();
    void    PrepareBasket(Long64_t entry);
-   virtual Int_t   ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file);
+   virtual Int_t   ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file, Int_t basketnumber);
    virtual Int_t   ReadBasketBytes(Long64_t pos, TFile *file);
 
    TSQLResult * GetResultSet() { return *fResultPtr;}

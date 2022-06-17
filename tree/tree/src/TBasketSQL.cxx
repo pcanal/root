@@ -131,7 +131,7 @@ Int_t TBasketSQL::ReadBasketBytes(Long64_t , TFile *)
 ////////////////////////////////////////////////////////////////////////////////
 /// See TBasket::ReadBasketBuffers.  This is not implemented in TBasketSQL.
 
-Int_t TBasketSQL::ReadBasketBuffers(Long64_t , Int_t, TFile *)
+Int_t TBasketSQL::ReadBasketBuffers(Long64_t , Int_t, TFile *, Int_t)
 {
    Error("ReadBasketBuffers","This member function should not be called!");
    return 0;
