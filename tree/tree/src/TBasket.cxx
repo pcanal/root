@@ -1293,6 +1293,7 @@ Int_t TBasket::WriteBuffer()
       if (doPrecisionCascades)
       {
          precisionCascades.push_back(bufcur);
+         cxlevels.push_back(cxlevel); 
          auto tree = fBranch->GetTree();
          auto basketnumber = fBranch->GetWriteBasket();
          for(auto brpc : *fBranch->GetPrecisionCascades()) {
@@ -1304,8 +1305,6 @@ Int_t TBasket::WriteBuffer()
             nouts.assign(precisionCascades.size(),0);
          }
       }
-
-
 
       for (Int_t i = 0; i < nbuffers; ++i) {
          if (i == nbuffers - 1) bufmax = fObjlen - nzip;
