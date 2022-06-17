@@ -608,10 +608,11 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file, Int_t bas
          return ReadBasketBuffersUncompressedCase();
       }
 
-      std::vector<char*> precisionCascades;
+      std::vector<unsigned char*> precisionCascades;
+      std::vector<Int_t> nins;
       struct Destructor {
-         std::vector<char*> &fValue;
-         Destructor(std::vector<char*> &cont) : fValue(cont) {} ;
+         std::vector<unsigned char*> &fValue;
+         Destructor(std::vector<unsigned char*> &cont) : fValue(cont) {} ;
          ~Destructor() {
             for(auto c : fValue) {
                delete [] c;
@@ -623,9 +624,10 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file, Int_t bas
       {
          auto tree = fBranch->GetTree();
          for(auto brpc : *fBranch->GetPrecisionCascades()) {
-            precisionCascades.push_back( brpc->RetrieveCascade(*tree, basketnumber) );
+            precisionCascades.push_back((unsigned char*) brpc->RetrieveCascade(*tree, basketnumber) );
          }
       }
+      auto doPrecisionCascades = (!precisionCascades.empty()); // decide before inserting primary buffer pointer at beginning
 
       // Optional monitor for zip time profiling.
       Double_t start = 0;
@@ -641,6 +643,10 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file, Int_t bas
 
       Int_t configArraySize = fBranch->GetConfigArraySize();
       char *configArray = fBranch->GetConfigArray();
+      if (doPrecisionCascades) {
+         precisionCascades.insert(precisionCascades.begin(),rawCompressedObjectBuffer);
+         nins.assign(precisionCascades.size(),0);
+      }
 
       // Unzip all the compressed objects in the compressed object buffer.
       while (1) {
@@ -655,16 +661,26 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file, Int_t bas
             goto AfterBuffer;
          }
 
-         R__unzip(&nin, rawCompressedObjectBuffer, &nbuf, (unsigned char*) rawUncompressedObjectBuffer, &nout, configArraySize, configArray);
+         if (doPrecisionCascades) {
+            nins[0] = nin;
+            for (size_t i=1; i<precisionCascades.size(); i++) {
+               if (R__unlikely(R__unzip_header(&nins[i], precisionCascades[i], &nbuf) != 0)) {
+                  Error("ReadBasketBuffers", "Inconsistency found in header (nin=%d, nbuf=%d)", nins[i], nbuf);
+                  break;
+               }
+            }
+            R__unzipPrecisionCascade(nins.data(), precisionCascades.data(), &nbuf, (unsigned char*) rawUncompressedObjectBuffer, precisionCascades.size(), &nout, configArraySize, configArray);
+         } else {
+            R__unzip(&nin, rawCompressedObjectBuffer, &nbuf, (unsigned char*) rawUncompressedObjectBuffer, &nout, configArraySize, configArray);
+         }
          if (!nout) break;
          noutot += nout;
          nintot += nin;
          if (noutot >= fObjlen) break;
          rawCompressedObjectBuffer += nin;
          rawUncompressedObjectBuffer += nout;
-         if (!precisionCascades.empty()) {
-            // increment each element by its corresponding nout.
-         }
+         for (size_t i = 0; i<precisionCascades.size(); i++)  // does nothing if no precision cascade
+            precisionCascades[i] += nins[i];  // increment each element by its corresponding nin.
       }
 
       // Make sure the uncompressed numbers are consistent with header.
@@ -1245,7 +1261,7 @@ Int_t TBasket::WriteBuffer()
    }
 
    Int_t nout, noutot, bufmax, nzip;
-
+ 
    fObjlen = fBufferRef->Length() - fKeylen;
 
    fHeaderOnly = kTRUE;
@@ -1274,6 +1290,7 @@ Int_t TBasket::WriteBuffer()
       char *configArray = fBranch->GetConfigArray();
 
       std::vector<char*> precisionCascades;
+      std::vector<Int_t> nouts, bufmaxs, cxlevels;
       if (fBranch->GetPrecisionCascades() && !fBranch->GetPrecisionCascades()->empty())
       {
          auto tree = fBranch->GetTree();
@@ -1284,8 +1301,16 @@ Int_t TBasket::WriteBuffer()
             R__SizeBuffer(*cascade_buffer, buflen);
             cascade_buffer->SetWriteMode();
             precisionCascades.push_back( cascade_buffer->Buffer() + cascade_basket->GetKeylen() );
+            cxlevels.push_back(cxlevel); // WRONG! From where do we get the cxlevels of the precision cascade?
          }
       }
+      auto doPrecisionCascades = (!precisionCascades.empty()); // decide before inserting primary buffer pointer at beginning
+      if (doPrecisionCascades) {
+         precisionCascades.insert(precisionCascades.begin(),bufcur);
+         cxlevels.insert(cxlevels.begin(),cxlevel);
+         nouts.assign(precisionCascades.size(),0);
+      }
+
 
       for (Int_t i = 0; i < nbuffers; ++i) {
          if (i == nbuffers - 1) bufmax = fObjlen - nzip;
@@ -1302,7 +1327,13 @@ Int_t TBasket::WriteBuffer()
          // NOTE this is declared with C linkage, so it shouldn't except.  Also, when
          // USE_IMT is defined, we are guaranteed that the compression buffer is unique per-branch.
          // (see fCompressedBufferRef in constructor).
-         R__zipMultipleAlgorithm(cxlevel, &bufmax, objbuf, &bufmax, bufcur, &nout, cxAlgorithm, datatype, configArraySize, configArray);
+         if (doPrecisionCascades) {
+            bufmaxs.assign(precisionCascades.size(),bufmax);  // is it OK to assume the samee size for all?
+            R__zipPrecisionCascade(cxlevels.data(), &bufmax, objbuf, bufmaxs.data(), precisionCascades.data(), precisionCascades.size(), nouts.data(), cxAlgorithm, datatype, configArraySize, configArray);
+            nout = nouts[0];
+         } else {
+            R__zipMultipleAlgorithm(cxlevel, &bufmax, objbuf, &bufmax, bufcur, &nout, cxAlgorithm, datatype, configArraySize, configArray);
+         }
 #ifdef R__USE_IMT
          sentry.lock();
 #endif  // R__USE_IMT
@@ -1329,9 +1360,8 @@ Int_t TBasket::WriteBuffer()
          noutot += nout;
          objbuf += kMAXZIPBUF;
          nzip   += kMAXZIPBUF;
-         if (!precisionCascades.empty()) {
-            // increment each element by its corresponding nout.
-         }
+         for (size_t i = 0; i<precisionCascades.size(); i++)  // does nothing if no precision cascade
+            precisionCascades[i] += nouts[i];  // increment each element by its corresponding nout.
       }
       nout = noutot;
       Create(noutot,file);
