@@ -302,6 +302,8 @@ public:
 
    static  void      ResetCount();
 
+   const std::vector<ROOT::Detail::TBranchPrecisionCascade*> *GetPrecisionCascades() const { return fPrecisionCascades; }
+
    ClassDef(TBranch, 14); // Branch descriptor
 };
 
