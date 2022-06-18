@@ -1288,12 +1288,11 @@ Int_t TBasket::WriteBuffer()
       char *configArray = fBranch->GetConfigArray();
 
       std::vector<char*> precisionCascades;
-      std::vector<Int_t> nouts, bufmaxs, cxlevels;
+      std::vector<Int_t> nouts, bufmaxs;
       auto doPrecisionCascades = (fBranch->GetPrecisionCascades() && !fBranch->GetPrecisionCascades()->empty());
       if (doPrecisionCascades)
       {
          precisionCascades.push_back(bufcur);
-         cxlevels.push_back(cxlevel); 
          auto tree = fBranch->GetTree();
          auto basketnumber = fBranch->GetWriteBasket();
          for(auto brpc : *fBranch->GetPrecisionCascades()) {
@@ -1302,7 +1301,6 @@ Int_t TBasket::WriteBuffer()
             R__SizeBuffer(*cascade_buffer, buflen);
             cascade_buffer->SetWriteMode();
             precisionCascades.push_back( cascade_buffer->Buffer() + cascade_basket->GetKeylen() );
-            cxlevels.push_back(cxlevel); // WRONG! From where do we get the cxlevels of the precision cascade?
             nouts.assign(precisionCascades.size(),0);
          }
       }
@@ -1325,7 +1323,7 @@ Int_t TBasket::WriteBuffer()
          // (see fCompressedBufferRef in constructor).
          if (doPrecisionCascades) {
             bufmaxs.assign(precisionCascades.size(),bufmax);  // assuming bufmax is the same for each of the precisionCascade buffers
-            R__zipPrecisionCascade(cxlevels.data(), &bufmax, objbuf, bufmaxs.data(), precisionCascades.data(), precisionCascades.size(), nouts.data(), cxAlgorithm, datatype, configArraySize, configArray);
+            R__zipPrecisionCascade(&bufmax, objbuf, bufmaxs.data(), precisionCascades.data(), precisionCascades.size(), nouts.data(), cxAlgorithm, datatype, configArraySize, configArray);
             nout = nouts[0];
          } else {
             R__zipMultipleAlgorithm(cxlevel, &bufmax, objbuf, &bufmax, bufcur, &nout, cxAlgorithm, datatype, configArraySize, configArray);
