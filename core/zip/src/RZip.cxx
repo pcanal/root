@@ -120,9 +120,9 @@ void R__zipMultipleAlgorithm(int cxlevel, int *srcsize, char *src, int *tgtsize,
   }
 }
 
-void R__zipPrecisionCascade(int* cxlevels, int *srcsize, char *src, int *tgtsize, char **tgts, int tgt_number, int *irep, ROOT::RCompressionSetting::EAlgorithm::EValues compressionAlgorithm,
+void R__zipPrecisionCascade(int *srcsize, char *src, int *tgtsize, char **tgts, int tgt_number, int *irep, ROOT::RCompressionSetting::EAlgorithm::EValues compressionAlgorithm,
                              EDataType datatype /* = kNoType_t */,
-                             int /* configsize = 0 */, char * /* configarray = nullptr */)
+                             int configsize /* = 0 */, char * configarray /* = nullptr */)
 {
 
    if (*srcsize < 1 + HDRSIZE_BLAST + 1) {
