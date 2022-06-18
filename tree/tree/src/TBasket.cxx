@@ -1301,7 +1301,6 @@ Int_t TBasket::WriteBuffer()
             R__SizeBuffer(*cascade_buffer, buflen);
             cascade_buffer->SetWriteMode();
             precisionCascades.push_back( cascade_buffer->Buffer() + cascade_basket->GetKeylen() );
-            cxlevels.push_back(cxlevel); // WRONG! From where do we get the cxlevels of the precision cascade?
             nouts.assign(precisionCascades.size(),0);
          }
       }
