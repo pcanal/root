@@ -1293,7 +1293,6 @@ Int_t TBasket::WriteBuffer()
       if (doPrecisionCascades)
       {
          precisionCascades.push_back(bufcur);
-         cxlevels.push_back(cxlevel); 
          auto tree = fBranch->GetTree();
          auto basketnumber = fBranch->GetWriteBasket();
          for(auto brpc : *fBranch->GetPrecisionCascades()) {
