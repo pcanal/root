@@ -25,7 +25,7 @@ extern "C" unsigned long R__memcompress(char *tgt, unsigned long tgtsize, char *
 extern "C" void R__zipMultipleAlgorithm(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, ROOT::RCompressionSetting::EAlgorithm::EValues,
                                         EDataType datatype = EDataType::kNoType_t, int configsize = 0, char *configarray = nullptr);
 
-extern "C" void R__zipPrecisionCascade(int *cxlevels, int *srcsize, char *src, int *tgtsize, char **tgts, int tgt_number, int *irep, ROOT::RCompressionSetting::EAlgorithm::EValues,
+extern "C" void R__zipPrecisionCascade(int *srcsize, char *src, int *tgtsize, char **tgts, int tgt_number, int *irep, ROOT::RCompressionSetting::EAlgorithm::EValues,
                                         EDataType datatype = EDataType::kNoType_t, int configsize = 0, char *configarray = nullptr);
 
 /**

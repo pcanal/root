@@ -14,6 +14,7 @@
 #include "ZipLZ4.h"
 #include "ZipZSTD.h"
 #include "ZipAccelogic.h"
+#include "PrecisionCascadeConfigArrayContent.h"
 
 #include "zlib.h"
 
@@ -129,6 +130,10 @@ void R__zipPrecisionCascade(int *srcsize, char *src, int *tgtsize, char **tgts, 
       memset(irep,0,tgt_number*sizeof(int));
       return;
    }
+
+   auto content = reinterpret_cast<PrecisionCascadeConfigArrayContent*>(fConfigArray);
+   assert(content->SizeOf() == configsize);
+   Int_t *cxlevels = content->GetLevels();  // This an array of size `content->fLen`
 
    for (int tgt_idx=0; tgt_idx<tgt_number; tgt_idx++) {
       // can only be 0 for the last of multiple (not just one) targets
