@@ -132,7 +132,7 @@ void R__zipPrecisionCascade(int *srcsize, char *src, int *tgtsize, char **tgts, 
    }
 
    auto content = reinterpret_cast<PrecisionCascadeConfigArrayContent*>(fConfigArray);
-   assert(content->SizeOf() == configsize);
+   assert(content && (content->SizeOf() == configsize));
    Int_t *cxlevels = content->GetLevels();  // This an array of size `content->fLen`
 
    for (int tgt_idx=0; tgt_idx<tgt_number; tgt_idx++) {
