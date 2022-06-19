@@ -1353,8 +1353,8 @@ Int_t TBasket::WriteBuffer()
          noutot += nout;
          objbuf += kMAXZIPBUF;
          nzip   += kMAXZIPBUF;
-         for (size_t i = 0; i<precisionCascades.size(); i++)  // does nothing if no precision cascade
-            precisionCascades[i] += nouts[i];  // increment each element by its corresponding nout.
+         for (size_t pce = 0; pce < precisionCascades.size(); ++pce)  // does nothing if no precision cascade
+            precisionCascades[pce] += nouts[pce];  // increment each element by its corresponding nout.
       }
       nout = noutot;
       Create(noutot,file);
