@@ -11,6 +11,7 @@
 
 #include "Compression.h"
 #include <stdexcept>
+#include <string>
 #include "PrecisionCascadeConfigArrayContent.h"
 
 namespace ROOT {
