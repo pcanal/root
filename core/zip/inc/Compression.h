@@ -184,7 +184,7 @@ public:
 
 };
 
-class PrecisionCascadeCompressionConfig : CompressionConfig
+class PrecisionCascadeCompressionConfig : public CompressionConfig
 {
 public:
 PrecisionCascadeCompressionConfig(RCompressionSetting::EAlgorithm::EValues algo,
