@@ -271,6 +271,7 @@ public:
            void      PrintCacheInfo() const;
    virtual void      ReadBasket(TBuffer &b);
            void      Register(UInt_t level, ROOT::Detail::TBranchPrecisionCascade &);
+           void      Register(UInt_t level);
    virtual void      Refresh(TBranch *b);
    virtual void      Reset(Option_t *option="");
    virtual void      ResetAfterMerge(TFileMergeInfo *);

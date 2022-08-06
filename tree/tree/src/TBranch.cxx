@@ -48,6 +48,8 @@
 #include "TVirtualPerfStats.h"
 #include "strlcpy.h"
 #include "snprintf.h"
+#include "TBranchPrecisionCascade.h"
+#include "core/zip/src/PrecisionCascadeConfigArrayContent.h" // this file is not in an include path, so something must change
 
 #include "TBranchIMTHelper.h"
 
@@ -2433,6 +2435,25 @@ void TBranch::Register(UInt_t level, ROOT::Detail::TBranchPrecisionCascade &prec
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// Register a new Precision Cascade element for this branch.
+///
+/// \param[in] level level or rank of the precision (starts at 1)
+/// \param[in] precisionCascade  Pointer to the information used to find the cascade elements.
+
+void TBranch::Register(UInt_t level)
+{
+   if (!fPrecisionCascades)
+      fPrecisionCascades = new std::vector<ROOT::Detail::TBranchPrecisionCascade *>;
+   // CHECK: should we require registration in incremental order?
+   if (fPrecisionCascades->size() < level + 1)
+   {
+      fPrecisionCascades->resize(level + 1);
+      (*fPrecisionCascades)[level] = new ROOT::Detail::TBranchPrecisionCascade(level,*this);
+      fTree->Register(level);
+   }
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// Loop on all leaves of this branch to fill Basket buffer.
 
 void TBranch::FillLeavesImpl(TBuffer& b)
@@ -2763,6 +2784,12 @@ void TBranch::SetCompressionSettings(ROOT::CompressionConfig &config)
    fNCompConfig = config.GetNConfigArray();
    fCompConfig = new char[fNCompConfig];
    std::memcpy(fCompConfig, config.GetConfigArray(), fNCompConfig);
+
+   if (fNCompConfig>0)
+   {
+      for (Int_t level=0;(size_t) level<((ROOT::Internal::PrecisionCascadeConfigArrayContent*) fCompConfig)->fLen;level++)
+         Register(level);
+   }
 
    Int_t nb = fBranches.GetEntriesFast();
    for (Int_t i=0;i<nb;i++) {

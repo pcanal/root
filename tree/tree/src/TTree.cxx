@@ -3287,6 +3287,22 @@ void TTree::Register(UInt_t level, ROOT::Detail::TTreePrecisionCascade &precisio
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// Register a new TTreePrecisionCascade.
+void TTree::Register(UInt_t level)
+{
+   if (!fPrecisionCascades)
+      fPrecisionCascades = new std::vector<ROOT::Detail::TTreePrecisionCascade *>;
+   // CHECK: should we require registration in incremental order?
+   if (fPrecisionCascades->size() < level +1)
+   {
+      fPrecisionCascades->resize(level + 1);
+      (*fPrecisionCascades)[level] = new ROOT::Detail::TTreePrecisionCascade(*this,level);
+   }
+
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
 /// Open and connect to the Precission Cascade files when present.
 /// Returns the number of opened files.
 

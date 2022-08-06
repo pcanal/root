@@ -584,6 +584,7 @@ public:
    virtual void            RemoveExternalFriend(TFriendElement *);
    virtual void            RemoveFriend(TTree*);
    virtual void            RecursiveRemove(TObject *obj);
+   void Register(UInt_t level);
    virtual void            Reset(Option_t* option = "");
    virtual void            ResetAfterMerge(TFileMergeInfo *);
    virtual void            ResetBranchAddress(TBranch *);
