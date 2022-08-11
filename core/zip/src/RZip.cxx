@@ -339,8 +339,7 @@ int R__unzip_header(int *srcsize, uch *src, int *tgtsize)
      return 1;
   }
 
-  *srcsize = ((long)src[3] | ((long)src[4] << 8) | ((long)src[5] << 16))
-             + (is_valid_header_blast(src) ? HDRSIZE_BLAST : HDRSIZE);  // compressed size
+  *srcsize = ((long)src[3] | ((long)src[4] << 8) | ((long)src[5] << 16)) + HDRSIZE;  // compressed size
   *tgtsize = (long)src[6] | ((long)src[7] << 8) | ((long)src[8] << 16);  // uncompressed size
 
   return 0;

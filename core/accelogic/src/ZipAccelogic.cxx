@@ -187,7 +187,8 @@ void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int *tgtsize, char **tg
       tgt[1] = 'L';
       // tgt[2] is set for each target buffer above
 
-      tgt[3] = (char)(out_sizes[tgt_idx] & 0xff);
+      // Include the 2 extra header byte into the out size.
+      tgt[3] = (char)((out_sizes[tgt_idx] + 2) & 0xff);
       tgt[4] = (char)((out_sizes[tgt_idx] >> 8) & 0xff);
       tgt[5] = (char)((out_sizes[tgt_idx] >> 16) & 0xff);
 
@@ -238,6 +239,7 @@ void R__unzipBLAST(int *srcsize, unsigned char **srcs, int *tgtsize, unsigned ch
       for (int src_idx=0; src_idx<src_number; src_idx++) {
          absSensLevels[src_idx] = srcs[src_idx][2] - 61;
          sources[src_idx] = (char*)(&srcs[src_idx][kHeaderSize]);
+         // The 2 extra header byte are include in the source size.
          in_sizes[src_idx] = (size_t) (srcsize[src_idx] - kHeaderSize);
       }
       auto absSens_src_number = src_number - 1; // Needs to be 1 less than provided sources
