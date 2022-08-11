@@ -797,6 +797,7 @@ TTree::TTree()
 , fCacheUserSet(kFALSE)
 , fIMTEnabled(ROOT::IsImplicitMTEnabled())
 , fNEntriesSinceSorting(0)
+, fPrecisionCascades(nullptr)
 {
    fMaxEntries = 1000000000;
    fMaxEntries *= 1000;
@@ -878,6 +879,7 @@ TTree::TTree(const char* name, const char* title, Int_t splitlevel /* = 99 */,
 , fCacheUserSet(kFALSE)
 , fIMTEnabled(ROOT::IsImplicitMTEnabled())
 , fNEntriesSinceSorting(0)
+, fPrecisionCascades(nullptr)
 {
    // TAttLine state.
    SetLineColor(gStyle->GetHistLineColor());
