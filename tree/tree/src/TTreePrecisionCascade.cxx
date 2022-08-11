@@ -36,6 +36,7 @@ TTreePrecisionCascade::TTreePrecisionCascade(TTree &tree, UInt_t level) :
       TProcessID::AssignID(&tree);
    }
    fTreeUniqueID = tree.GetUniqueID();
+   // See also TTree::ConnectPrecisionCascade where this pattern is used.
    fName.Form("%s_pc%d", tree.GetName(),level);
 }
 
@@ -59,6 +60,14 @@ Bool_t TTreePrecisionCascade::Verify(TTree& tree, UInt_t level) const {
 void TTreePrecisionCascade::Print(Option_t * /* option = "" */) const
 {
    std::cout << "TTreePrecisionCascade: " << GetName() << "\tTTree uniqueID: " << fTreeUniqueID << "\tlevel: " << fCascadeLevel << std::endl;
+}
+
+// Create a new TBranchPrecisionCascade
+TBranchPrecisionCascade *TTreePrecisionCascade::SetupPrecisionCascade(TBranch &branch)
+{
+   auto brpc = new TBranchPrecisionCascade(fCascadeLevel, branch);
+   fBranches.Add(brpc);
+   return brpc;
 }
 
 /// Remove reference to a deleted object

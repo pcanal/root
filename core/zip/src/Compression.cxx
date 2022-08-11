@@ -48,11 +48,11 @@ namespace ROOT {
       msg += algo;
       throw std::runtime_error(msg);
     }
-    fIsPrecisionCascade = (levels.size() > 1 || storeResidual);
+    fNPrecisionCascade = (levels.empty() ? 0 : levels.size() - 1) + storeResidual;
     fAlgorithm = algo;
     if (!levels.empty())
       fLevel = levels[0];
-    if (fIsPrecisionCascade) {
+    if (fNPrecisionCascade) {
       using ROOT::Internal::PrecisionCascadeConfigArrayContent;
       fNConfig = PrecisionCascadeConfigArrayContent::SizeOf(levels.size());
       fConfigArray = new char[fNConfig];

@@ -25,6 +25,7 @@
 #include "THashList.h"
 #include "TNamed.h"
 
+class TBranch;
 class TTree;
 class TDirectory;
 
@@ -71,6 +72,10 @@ public:
    const THashList &GetBranches() const { return fBranches; }
 
    void RecursiveRemove(TObject *obj) override;
+
+   // Create a new TBranchPrecisionCascade
+   TBranchPrecisionCascade *SetupPrecisionCascade(TBranch &branch);
+
 
    ClassDefOverride(TTreePrecisionCascade, 3); // TBranchPrecisionCascade holder
 };

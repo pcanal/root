@@ -3278,15 +3278,86 @@ void TTree::Register(UInt_t level, ROOT::Detail::TTreePrecisionCascade &precisio
    fPrecisionCascades->resize(level + 1);
    (*fPrecisionCascades)[level] = &precisionCascade;
 
-   // To be move to its own function
+   // To be moved to its own function
    for (auto brpc : ROOT::Detail::TRangeStaticCast<ROOT::Detail::TBranchPrecisionCascade>(precisionCascade.GetBranches()))
    {
       TBranch *br = GetBranch(brpc->GetName());
       if (br)
          br->Register(level, *brpc);
    }
-
 }
+
+////////////////////////////////////////////////////////////////////////////////
+/// Setup a TBranchPrecisionCascade.
+ROOT::Detail::TBranchPrecisionCascade *TTree::SetupPrecisionCascade(UInt_t level, TBranch &branch)
+{
+   if (SetupPrecisionCascade(level))
+      return (*fPrecisionCascades)[level]->SetupPrecisionCascade(branch);
+   else
+      return nullptr;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+namespace {
+   void GetCascadeNames(TDirectory *directory, TUrl &url, TString &thisfilename, TString &directoryname)
+   {
+      url = *(directory->GetFile()->GetEndpointUrl());
+      thisfilename = url.GetFile();
+      if (thisfilename.EndsWith(".root"))
+         thisfilename.Remove(thisfilename.Length()-5,5);
+      directoryname = directory->GetPath();
+      directoryname.Remove(0, strlen(directory->GetFile()->GetPath()));
+   }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Setup for incoming PrecisionCascade.
+Bool_t TTree::SetupPrecisionCascade(UInt_t nCascades)
+{
+   if (!fPrecisionCascades)
+   {
+      fPrecisionCascades = new std::vector<ROOT::Detail::TTreePrecisionCascade *>;
+      fIOFeatures.Set(ROOT::Experimental::EIOFeatures::kPrecisionCascade);
+   }
+   if (fPrecisionCascades->size() < (nCascades + 1)) /* 0 is this file */
+   {
+      fPrecisionCascades->reserve(nCascades + 1);
+      if (fPrecisionCascades->empty())
+         fPrecisionCascades->push_back(nullptr);
+      for(UInt_t l = fPrecisionCascades->size(); l <= nCascades; ++l)
+      {
+         ROOT::Detail::TTreePrecisionCascade *tpc = nullptr;
+         tpc = new ROOT::Detail::TTreePrecisionCascade(*this, l);
+         if (fPrecisionCascasdeSuffix.Length() == 0)
+         {
+            tpc->SetDirectory(fDirectory, false);
+         } else {
+            TUrl url;
+            TString thisfilename;
+            TString directoryname;
+            GetCascadeNames(fDirectory, url, thisfilename, directoryname);
+            TString cascadeFilename;
+            TString cascadeName;
+            cascadeFilename.Form("%s_%s_%d.root", thisfilename.Data(), fPrecisionCascasdeSuffix.Data(), l);
+            // See also TTreePrecisionCascade constructor where this pattern is used.
+            cascadeName.Form("%s_pc%d", GetName(), l);
+            url.SetFile(cascadeFilename.Data());
+
+            // We 'could' also first check:
+            // f = (TFile*)gROOT->GetListOfFiles()->FindObject(url.GetUrl());
+            TFile *f = TFile::Open(url.GetUrl(),"UPDATE");
+            if (!f)
+               return false;
+            f->mkdir(directoryname, "", kTRUE);
+            auto d = f->GetDirectory(directoryname); // mkdir only returns the top directory.
+            tpc->SetDirectory(d, true);
+         }
+         fPrecisionCascades->push_back(tpc);
+      }
+   }
+   return true;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Open and connect to the Precission Cascade files when present.
@@ -3311,6 +3382,7 @@ Int_t TTree::ConnectPrecisionCascade()
          for(UInt_t level = 1 /* 0 is this file */; ; ++level)
          {
             // FIXME: Almost Copy/paste to be moved to its own function.
+            // See also TTreePrecisionCascade constructor where this pattern is used.
             cascadeName.Form("%s_pc%d", GetName(), level);
             auto tpc = fDirectory->Get<ROOT::Detail::TTreePrecisionCascade>(cascadeName);
             if (!tpc) {
@@ -3333,16 +3405,15 @@ Int_t TTree::ConnectPrecisionCascade()
       return 0;
 
    } else {
-      TUrl url = *(fDirectory->GetFile()->GetEndpointUrl());
-      TString thisfilename = url.GetFile();
-      if (thisfilename.EndsWith(".root"))
-         thisfilename.Remove(thisfilename.Length()-5,5);
-      TString directoryname(fDirectory->GetPath());
-      directoryname.Remove(0, strlen(fDirectory->GetFile()->GetPath()));
+      TUrl url;
+      TString thisfilename;
+      TString directoryname;
+      GetCascadeNames(fDirectory, url, thisfilename, directoryname);
       TString cascadeFilename;
       TString cascadeName;
       for(UInt_t level = 1 /* 0 is this file */; ; ++level) {
          cascadeFilename.Form("%s_%s_%d.root", thisfilename.Data(), fPrecisionCascasdeSuffix.Data(), level);
+         // See also TTreePrecisionCascade constructor where this pattern is used.
          cascadeName.Form("%s_pc%d", GetName(), level);
          url.SetFile(cascadeFilename.Data());
          FileStat_t stat;

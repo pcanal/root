@@ -657,6 +657,8 @@ public:
    virtual void            SetTimerInterval(Int_t msec = 333) { fTimerInterval=msec; }
    virtual void            SetTreeIndex(TVirtualIndex* index);
    virtual void            SetWeight(Double_t w = 1, Option_t* option = "");
+           Bool_t          SetupPrecisionCascade(UInt_t nCascades);
+   ROOT::Detail::TBranchPrecisionCascade *SetupPrecisionCascade(UInt_t nCascades, TBranch &);
    virtual void            SetUpdate(Int_t freq = 0) { fUpdate = freq; }
    virtual void            Show(Long64_t entry = -1, Int_t lenmax = 20);
    virtual void            StartViewer(); // *MENU*
