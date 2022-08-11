@@ -55,7 +55,7 @@ public:
    /// Register the directory in which this object is stored
    ///
    /// \param[in] dir Pointer to the TDirectory
-   /// \param[in] own Indicates whether this own should take ownership of the TFile containing the directory.
+   /// \param[in] own Indicates whether this object should take ownership of the TFile containing the directory.
    void SetDirectory(TDirectory *dir, Bool_t own) {
       fDirectory = dir;
       fOwnsFile = own;
