@@ -2764,6 +2764,25 @@ void TBranch::SetCompressionSettings(ROOT::CompressionConfig &config)
    fCompConfig = new char[fNCompConfig];
    std::memcpy(fCompConfig, config.GetConfigArray(), fNCompConfig);
 
+   if (config.GetNPrecisionCascade())
+   {
+      if (!fTree->SetupPrecisionCascade(config.GetNPrecisionCascade())) {
+         Error("SetCompressionSettings", "Failed to setup the precision cascade for %s", GetName());
+         return;
+      }
+      if (!fPrecisionCascades) {
+         fPrecisionCascades = new std::vector<ROOT::Detail::TBranchPrecisionCascade *>;
+         fPrecisionCascades->push_back(nullptr);
+      }
+      fPrecisionCascades->reserve(config.GetNPrecisionCascade() + 1);
+      // We assumed there is no empty slots.
+      for(Int_t l = fPrecisionCascades->size(); l <= config.GetNPrecisionCascade(); ++l)
+      {
+         auto bpc = fTree->SetupPrecisionCascade(l, *this);
+         fPrecisionCascades->push_back(bpc);
+      }
+   }
+
    Int_t nb = fBranches.GetEntriesFast();
    for (Int_t i=0;i<nb;i++) {
       TBranch *branch = (TBranch*)fBranches.UncheckedAt(i);

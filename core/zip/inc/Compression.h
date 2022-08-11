@@ -135,7 +135,7 @@ class CompressionConfig
 protected:
    RCompressionSetting::EAlgorithm::EValues fAlgorithm = RCompressionSetting::EAlgorithm::kUseGlobal;  ///< Which compression alogrithm/library to use
    Int_t                           fLevel = 0;                                                         ///< Compression level (0 through 99) to pass to the algorithm
-   Bool_t                          fIsPrecisionCascade = kFALSE;                                       ///< Indicates whether this is a request for a Precision Cascade or not
+   Int_t                           fNPrecisionCascade = 0;                                             ///< Indicates the number of element in the Precision Cascade if any
    Int_t                           fNConfig = 0;                                                       ///< Number of bytes in compression algorithm configuration array.
    Char_t                         *fConfigArray = nullptr;                                             ///<[fNCompConfig] Compression configuration array (eg. compression dictionary)
 
@@ -178,13 +178,13 @@ public:
       return fConfigArray;
    }
 
-   Bool_t IsPrecisionCascade() {
-      return fIsPrecisionCascade;
+   Int_t GetNPrecisionCascade() {
+      return fNPrecisionCascade;
    }
 
 };
 
-class PrecisionCascadeCompressionConfig : CompressionConfig
+class PrecisionCascadeCompressionConfig : public CompressionConfig
 {
 public:
 PrecisionCascadeCompressionConfig(RCompressionSetting::EAlgorithm::EValues algo,
