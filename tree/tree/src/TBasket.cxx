@@ -1296,13 +1296,15 @@ Int_t TBasket::WriteBuffer()
          auto tree = fBranch->GetTree();
          auto basketnumber = fBranch->GetWriteBasket();
          for(auto brpc : *fBranch->GetPrecisionCascades()) {
+            if (!brpc)
+               continue; // Skip the first element.
             auto cascade_basket = brpc->GetBasketPC(*tree, basketnumber);
             auto cascade_buffer = cascade_basket->GetBufferRef();
             R__SizeBuffer(*cascade_buffer, buflen);
             cascade_buffer->SetWriteMode();
             precisionCascades.push_back( cascade_buffer->Buffer() + cascade_basket->GetKeylen() );
-            nouts.assign(precisionCascades.size(),0);
          }
+         nouts.assign(precisionCascades.size(),0);
       }
 
       for (Int_t i = 0; i < nbuffers; ++i) {
@@ -1374,6 +1376,8 @@ Int_t TBasket::WriteBuffer()
          }
          auto ratio = ((double) fObjlen) / nout_sum;
          for(auto brpc : *fBranch->GetPrecisionCascades()) {
+            if (!brpc)
+               continue;
             brpc->StoreCascade(*tree, basketnumber, nouts[i] ,  nouts[i] * ratio  /* estimate uncompressed sizes */);
             ++i;
          }
