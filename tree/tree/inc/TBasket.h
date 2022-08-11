@@ -99,7 +99,8 @@ public:
       // kSupported = kGenerateOffsetMap | kBasketClassMap
       kGenerateOffsetMap = BIT(0),
       // kBasketClassMap = BIT(1),
-      kSupported = kGenerateOffsetMap
+      kPrecisionCascade = BIT(2),
+      kSupported = kGenerateOffsetMap | kPrecisionCascade
    };
    // This enum covers IOBits that are known to this ROOT release but
    // not supported; provides a mechanism for us to have experimental

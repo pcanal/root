@@ -51,7 +51,7 @@ namespace Experimental {
 // usage of this mechanism somehow involves baskets currently.
 enum class EIOFeatures {
    kGenerateOffsetMap = BIT(0),
-   kPrecisionCascade = BIT(1),
+   kPrecisionCascade = BIT(2),
    kSupported = kGenerateOffsetMap | kPrecisionCascade // Union of all features in this enum.
 };
 
