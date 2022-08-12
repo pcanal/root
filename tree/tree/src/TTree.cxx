@@ -5316,6 +5316,12 @@ Int_t TTree::FlushBaskets(Bool_t create_cluster) const
 Int_t TTree::FlushBasketsImpl() const
 {
    if (!fDirectory) return 0;
+
+   if (fPrecisionCascades)
+      for(auto tpc : *fPrecisionCascades)
+         if (tpc)
+            tpc->WriteToDirectory();
+
    Int_t nbytes = 0;
    Int_t nerror = 0;
    TObjArray *lb = const_cast<TTree*>(this)->GetListOfBranches();

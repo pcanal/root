@@ -76,6 +76,7 @@ public:
    // Create a new TBranchPrecisionCascade
    TBranchPrecisionCascade *SetupPrecisionCascade(TBranch &branch);
 
+   Int_t WriteToDirectory() const;
 
    ClassDefOverride(TTreePrecisionCascade, 3); // TBranchPrecisionCascade holder
 };

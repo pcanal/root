@@ -24,6 +24,7 @@ supplemental parts of the precision cascades.
 #include <iostream>
 #include "TDirectory.h"
 #include "TFile.h"
+#include "TKey.h"
 
 namespace ROOT {
 namespace Detail {
@@ -42,8 +43,11 @@ TTreePrecisionCascade::TTreePrecisionCascade(TTree &tree, UInt_t level) :
 
 TTreePrecisionCascade::~TTreePrecisionCascade()
 {
-   if (fOwnsFile && fDirectory)
+   if (fOwnsFile && fDirectory) {
+      if (fDirectory->GetFile())
+         fDirectory->GetFile()->Write();
       delete fDirectory->GetFile();
+   }
 }
 
 TBranchPrecisionCascade *TTreePrecisionCascade::GetBranchPrecisionCascade(const char *fullname)
@@ -75,6 +79,24 @@ void TTreePrecisionCascade::RecursiveRemove(TObject *obj)
 {
    if (obj == fDirectory || (fDirectory && obj == fDirectory->GetFile()))
       fDirectory = nullptr;
+}
+
+// Write this object in its directory
+Int_t TTreePrecisionCascade::WriteToDirectory() const
+{
+   // Could do:
+   /*
+      if (opt.Contains("overwrite")) {
+         nbytes = fDirectory->WriteTObject(this,"","overwrite");
+      } else {
+   */
+   TKey *key = (TKey*)fDirectory->GetListOfKeys()->FindObject(GetName());
+   auto nbytes = fDirectory->WriteTObject(this); //nbytes will be 0 if Write failed (disk space exceeded)
+   if (nbytes && key && strcmp(ClassName(), key->GetClassName()) == 0) {
+      key->Delete();
+      delete key;
+   }
+   return 0;
 }
 
 } // Details
