@@ -3314,6 +3314,11 @@ namespace {
 /// Setup for incoming PrecisionCascade.
 Bool_t TTree::SetupPrecisionCascade(UInt_t nCascades)
 {
+   if (!fDirectory || !fDirectory->GetFile()) {
+      // In memory tree.
+      Error("SetupPrecisionCascade", "Not yet supported for in-memory tree %s", GetName());
+      return false;
+   }
    if (!fPrecisionCascades)
    {
       fPrecisionCascades = new std::vector<ROOT::Detail::TTreePrecisionCascade *>;
@@ -3343,15 +3348,21 @@ Bool_t TTree::SetupPrecisionCascade(UInt_t nCascades)
             cascadeName.Form("%s_pc%d", GetName(), l);
             url.SetFile(cascadeFilename.Data());
 
-            // We 'could' also first check:
-            // f = (TFile*)gROOT->GetListOfFiles()->FindObject(url.GetUrl());
-            // FIXME: do we need to open in RECREATE if the TTree's file open that way?
-            TFile *f = TFile::Open(url.GetUrl(),"UPDATE");
+            TFile *f = (TFile*)gROOT->GetListOfFiles()->FindObject(url.GetUrl());
+            bool owned = false;
+            if (!f) {
+               auto option = fDirectory->GetFile()->GetOption();
+               // We have no way to know if the use said RECREATE instead.
+               if (strcmp(option, "NEW") == 0 || strcmp(option, "CREATE") == 0)
+                  option = "RECREATE";
+               f = TFile::Open(url.GetUrl(), option);
+               owned = true;
+            }
             if (!f)
                return false;
             f->mkdir(directoryname, "", kTRUE);
             auto d = f->GetDirectory(directoryname); // mkdir only returns the top directory.
-            tpc->SetDirectory(d, true);
+            tpc->SetDirectory(d, owned);
          }
          fPrecisionCascades->push_back(tpc);
       }
