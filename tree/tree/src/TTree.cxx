@@ -3281,9 +3281,9 @@ void TTree::Register(UInt_t level, ROOT::Detail::TTreePrecisionCascade &precisio
    // To be moved to its own function
    for (auto brpc : ROOT::Detail::TRangeStaticCast<ROOT::Detail::TBranchPrecisionCascade>(precisionCascade.GetBranches()))
    {
-      TBranch *br = GetBranch(brpc->GetName());
-      if (br)
-         br->Register(level, *brpc);
+      if (brpc)
+         if (TBranch *br = GetBranch(brpc->GetName()))
+            br->Register(level, *brpc);
    }
 }
 

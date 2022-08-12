@@ -632,6 +632,8 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file, Int_t bas
          precisionCascades.push_back(rawCompressedObjectBuffer);
          auto tree = fBranch->GetTree();
          for(auto brpc : *fBranch->GetPrecisionCascades()) {
+            if (!brpc)
+               continue;
             precisionCascades.push_back((unsigned char*) brpc->RetrieveCascade(*tree, basketnumber) );
          }
          nins.assign(precisionCascades.size(),0);
