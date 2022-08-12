@@ -3407,7 +3407,7 @@ Int_t TTree::ConnectPrecisionCascade()
 
             if (! tpc->Verify(*this, level)) {
                Error("ConnectPrecisionCascade",
-                  "The TTreePrecisionCascade found in %s not correspond to the current TTree (name:%s id: %d) or level %d:",
+                  "The TTreePrecisionCascade found in %s does not correspond to the current TTree (name:%s id: %d) or level %d:",
                   fDirectory->GetName(), GetName(), GetUniqueID(), level);
                tpc->Print();
                return level - 1;
