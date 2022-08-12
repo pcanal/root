@@ -3459,6 +3459,7 @@ Int_t TTree::ConnectPrecisionCascade()
                   "The TTreePrecisionCascade found in %s not correspond to the current TTree (name:%s id: %d) or level %d:",
                   f->GetName(), GetName(), GetUniqueID(), level);
                tpc->Print();
+               delete tpc;
                return level - 1;
             }
 
