@@ -428,6 +428,7 @@ End_Macro
 #include "TFileMergeInfo.h"
 #include "ROOT/StringConv.hxx"
 #include "TVirtualMutex.h"
+#include "TProcessID.h"
 #include "strlcpy.h"
 #include "snprintf.h"
 
@@ -3406,9 +3407,15 @@ Int_t TTree::ConnectPrecisionCascade()
             tpc->SetDirectory(fDirectory, false);
 
             if (! tpc->Verify(*this, level)) {
+               bool isreferenced = this->TestBit(kHasUUID) || this->TestBit(kIsReferenced);
+               UInt_t pid = 0;
+               if(isreferenced) {
+                  TRef r(this);
+                  pid = r.GetPID()->GetUniqueID();
+               }
                Error("ConnectPrecisionCascade",
-                  "The TTreePrecisionCascade found in %s does not correspond to the current TTree (name:%s id: %d) or level %d:",
-                  fDirectory->GetName(), GetName(), GetUniqueID(), level);
+                  "The TTreePrecisionCascade found in %s does not correspond to the current TTree (name:%s id: 0x%x, pid: 0x%x) for level %d:",
+                  fDirectory->GetName(), GetName(), GetUniqueID() & 0xffffff, pid, level);
                tpc->Print();
                return level - 1;
             }
@@ -3455,9 +3462,15 @@ Int_t TTree::ConnectPrecisionCascade()
             tpc->SetDirectory(d, owned);
 
             if (! tpc->Verify(*this, level)) {
+               bool isreferenced = this->TestBit(kHasUUID) || this->TestBit(kIsReferenced);
+               UInt_t pid = 0;
+               if(isreferenced) {
+                  TRef r(this);
+                  pid = r.GetPID()->GetUniqueID();
+               }
                Error("ConnectPrecisionCascade",
-                  "The TTreePrecisionCascade found in %s not correspond to the current TTree (name:%s id: %d) or level %d:",
-                  f->GetName(), GetName(), GetUniqueID(), level);
+                  "The TTreePrecisionCascade found in %s does not correspond to the current TTree (name:%s id: 0x%x, pid: 0x%x) for level %d:",
+                  f->GetName(), GetName(), GetUniqueID() & 0xffffff, pid, level);
                tpc->Print();
                delete tpc;
                return level - 1;

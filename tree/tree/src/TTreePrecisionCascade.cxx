@@ -25,6 +25,7 @@ supplemental parts of the precision cascades.
 #include "TDirectory.h"
 #include "TFile.h"
 #include "TKey.h"
+#include "TProcessID.h"
 
 namespace ROOT {
 namespace Detail {
@@ -36,9 +37,9 @@ TTreePrecisionCascade::TTreePrecisionCascade(TTree &tree, UInt_t level) :
    if (!tree.TestBit(kIsReferenced)) {
       TProcessID::AssignID(&tree);
    }
-   fTreeUniqueID = tree.GetUniqueID();
+   fTreeRef = &tree;
    // See also TTree::ConnectPrecisionCascade where this pattern is used.
-   fName.Form("%s_pc%d", tree.GetName(),level);
+   fName.Form("%s_pc%d", tree.GetName(), level);
 }
 
 TTreePrecisionCascade::~TTreePrecisionCascade()
@@ -57,13 +58,16 @@ TBranchPrecisionCascade *TTreePrecisionCascade::GetBranchPrecisionCascade(const 
 
 /// Return false if the PrecisionCascade is not of the expected level for the given TTree.
 Bool_t TTreePrecisionCascade::Verify(TTree& tree, UInt_t level) const {
-   return tree.GetUniqueID() == fTreeUniqueID && level == fCascadeLevel;
+   return &tree == fTreeRef.GetObject() && level == fCascadeLevel;
 }
 
 /// Print the object's information.
 void TTreePrecisionCascade::Print(Option_t * /* option = "" */) const
 {
-   std::cout << "TTreePrecisionCascade: " << GetName() << "\tTTree uniqueID: " << fTreeUniqueID << "\tlevel: " << fCascadeLevel << std::endl;
+   std::cout << "TTreePrecisionCascade: " << GetName()
+             << "\tTTree uniqueID: " << fTreeRef.GetUniqueID()
+             << "\tTTree pid: " << fTreeRef.GetPID()->GetUniqueID()
+             << "\tlevel: " << fCascadeLevel << std::endl;
 }
 
 // Create a new TBranchPrecisionCascade

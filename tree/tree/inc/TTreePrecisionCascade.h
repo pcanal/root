@@ -24,6 +24,7 @@
 #include "Rtypes.h"
 #include "THashList.h"
 #include "TNamed.h"
+#include "TRef.h"
 
 class TBranch;
 class TTree;
@@ -39,7 +40,7 @@ class TTreePrecisionCascade : public TNamed
 private:
    THashList   fBranches;            ///< Collection of TBranchPrecisionCascade.
    UInt_t      fCascadeLevel = 0;    ///< Position in the precision cascade.
-   UInt_t      fTreeUniqueID = 0;    ///< TTree unique identifier
+   TRef        fTreeRef;             ///< TTree unique identifier
    TDirectory *fDirectory = nullptr; ///<! Pointer to directory holding this tree cascade
    Bool_t      fOwnsFile = kFALSE;   ///<! Indicates whether this object owns the TFile
 
