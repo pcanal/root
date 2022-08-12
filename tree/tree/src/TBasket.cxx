@@ -616,16 +616,6 @@ Int_t TBasket::ReadBasketBuffers(Long64_t pos, Int_t len, TFile *file, Int_t bas
       
       std::vector<unsigned char*> precisionCascades;
       std::vector<Int_t> nins;
-      struct Destructor {
-         std::vector<unsigned char*> &fValue;
-         Destructor(std::vector<unsigned char*> &cont) : fValue(cont) {} ;
-         ~Destructor() {
-            for(auto c : fValue) {
-               delete [] c;
-            }
-         }
-      };
-      Destructor dst(precisionCascades);
       auto doPrecisionCascades = (fBranch->GetPrecisionCascades() && !fBranch->GetPrecisionCascades()->empty());
       if (doPrecisionCascades)
       {
