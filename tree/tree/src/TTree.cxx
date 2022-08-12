@@ -5404,6 +5404,12 @@ Int_t TTree::FlushBasketsImpl() const
       const_cast<TTree*>(this)->AddTotBytes(fIMTTotBytes);
       const_cast<TTree*>(this)->AddZipBytes(fIMTZipBytes);
 
+      // FIXME: See if it is worse parallelizing this.
+      if (fPrecisionCascades)
+         for(auto tpc : *fPrecisionCascades)
+            if (tpc)
+               tpc->WriteToDirectory();
+
       return nerrpar ? -1 : nbpar.load();
    }
 #endif
@@ -5418,6 +5424,12 @@ Int_t TTree::FlushBasketsImpl() const
          }
       }
    }
+   // FIXME: How to record write error here?
+   if (fPrecisionCascades)
+      for(auto tpc : *fPrecisionCascades)
+         if (tpc)
+            tpc->WriteToDirectory();
+
    if (nerror) {
       return -1;
    } else {

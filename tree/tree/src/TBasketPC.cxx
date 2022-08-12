@@ -147,6 +147,7 @@ Int_t TBasketPC::WriteCascade(Int_t n, Int_t uncompressedSize, Int_t basketnumbe
    fObjlen = uncompressedSize;
    fCycle = basketnumber;
 
+   fBuffer = fBufferRef->Buffer();
    Create(n, file);
     
    fBufferRef->SetBufferOffset(0);
