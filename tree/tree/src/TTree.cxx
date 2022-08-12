@@ -3380,6 +3380,9 @@ Int_t TTree::ConnectPrecisionCascade()
    if (!fIOFeatures.Test(ROOT::Experimental::EIOFeatures::kPrecisionCascade))
       return 0;
 
+   if (!fPrecisionCascades)
+      fPrecisionCascades = new std::vector<ROOT::Detail::TTreePrecisionCascade *>;
+
    if (!fDirectory || !fDirectory->GetFile()) {
       // In memory tree.
       Error("ConnectPrecisionCascade", "Not supported for in-memory tree %s", GetName());
