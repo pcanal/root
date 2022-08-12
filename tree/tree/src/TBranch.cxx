@@ -455,6 +455,9 @@ void TBranch::Init(const char* name, const char* leaflist, Int_t compress)
 
 TBranch::~TBranch()
 {
+   delete fPrecisionCascades;
+   fPrecisionCascades = nullptr;
+
    delete fBrowsables;
    fBrowsables = 0;
 

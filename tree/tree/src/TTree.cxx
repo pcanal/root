@@ -1035,6 +1035,13 @@ TTree::~TTree()
       delete fTransientBuffer;
       fTransientBuffer = 0;
    }
+
+   if (fPrecisionCascades) {
+      for(auto tpc : *fPrecisionCascades)
+         delete tpc;
+      delete fPrecisionCascades;
+      fPrecisionCascades = 0;
+   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
