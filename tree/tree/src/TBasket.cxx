@@ -1058,6 +1058,7 @@ void TBasket::Streamer(TBuffer &b)
          // We currently believe that in all cases when offsets can be generated, then the
          // displacement array must be zero.
          assert(flag <= 40);
+         ResetEntryOffset();
          fEntryOffset = reinterpret_cast<Int_t *>(-1);
       }
       if (flag == 1 || flag > 10) {
