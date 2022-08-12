@@ -495,7 +495,8 @@ void R__unzipPrecisionCascade(int *srcsize, uch **srcs, int *tgtsize, uch *tgt, 
         isize = isize_temp;
       }
 
-      if (ibufcnt + HDRSIZE_BLAST > srcsize[src_idx]) {
+      // ibufcnt contains the 2 extra bits for the BLAST header.
+      if (ibufcnt + HDRSIZE > srcsize[src_idx]) {
          fprintf(stderr, "R__unzipPrecisionCascade: too small source\n");
          return;
       }
