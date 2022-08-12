@@ -50,6 +50,7 @@ TBranchPrecisionCascade::TBranchPrecisionCascade(UInt_t cascadelevel, TBranch &b
 
 TBranchPrecisionCascade::~TBranchPrecisionCascade()
 {
+   delete fBasket;
    delete [] fBasketBytes;
    delete [] fBasketSeek;
 }

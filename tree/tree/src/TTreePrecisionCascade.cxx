@@ -44,6 +44,7 @@ TTreePrecisionCascade::TTreePrecisionCascade(TTree &tree, UInt_t level) :
 
 TTreePrecisionCascade::~TTreePrecisionCascade()
 {
+   fBranches.Clear();
    if (fOwnsFile && fDirectory) {
       if (fDirectory->GetFile() && fDirectory->GetFile()->IsWritable())
          fDirectory->GetFile()->Write();
