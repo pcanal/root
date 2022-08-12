@@ -3334,6 +3334,7 @@ Bool_t TTree::SetupPrecisionCascade(UInt_t nCascades)
    }
    if (fPrecisionCascades->size() < (nCascades + 1)) /* 0 is this file */
    {
+      TDirectory::TContext ctxt;
       fPrecisionCascades->reserve(nCascades + 1);
       if (fPrecisionCascades->empty())
          fPrecisionCascades->push_back(nullptr);
@@ -3440,6 +3441,7 @@ Int_t TTree::ConnectPrecisionCascade()
       GetCascadeNames(fDirectory, url, thisfilename, directoryname);
       TString cascadeFilename;
       TString cascadeName;
+      TDirectory::TContext ctxt;
       for(UInt_t level = 1 /* 0 is this file */; ; ++level) {
          cascadeFilename.Form("%s_%s_%d.root", thisfilename.Data(), fPrecisionCascasdeSuffix.Data(), level);
          // See also TTreePrecisionCascade constructor where this pattern is used.
