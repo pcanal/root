@@ -3345,6 +3345,7 @@ Bool_t TTree::SetupPrecisionCascade(UInt_t nCascades)
 
             // We 'could' also first check:
             // f = (TFile*)gROOT->GetListOfFiles()->FindObject(url.GetUrl());
+            // FIXME: do we need to open in RECREATE if the TTree's file open that way?
             TFile *f = TFile::Open(url.GetUrl(),"UPDATE");
             if (!f)
                return false;
