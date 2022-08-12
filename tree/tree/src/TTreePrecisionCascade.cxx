@@ -45,7 +45,7 @@ TTreePrecisionCascade::TTreePrecisionCascade(TTree &tree, UInt_t level) :
 TTreePrecisionCascade::~TTreePrecisionCascade()
 {
    if (fOwnsFile && fDirectory) {
-      if (fDirectory->GetFile())
+      if (fDirectory->GetFile() && fDirectory->GetFile()->IsWritable())
          fDirectory->GetFile()->Write();
       delete fDirectory->GetFile();
    }
