@@ -2764,6 +2764,8 @@ void TBranch::SetCompressionSettings(ROOT::CompressionConfig &config)
    fCompConfig = new char[fNCompConfig];
    std::memcpy(fCompConfig, config.GetConfigArray(), fNCompConfig);
 
+   fCompress = config.GetCompressionSettings();
+
    if (config.GetNPrecisionCascade())
    {
       if (!fTree->SetupPrecisionCascade(config.GetNPrecisionCascade())) {
