@@ -188,9 +188,10 @@ void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int *tgtsize, char **tg
       // tgt[2] is set for each target buffer above
 
       // Include the 2 extra header byte into the out size.
-      tgt[3] = (char)((out_sizes[tgt_idx] + 2) & 0xff);
-      tgt[4] = (char)((out_sizes[tgt_idx] >> 8) & 0xff);
-      tgt[5] = (char)((out_sizes[tgt_idx] >> 16) & 0xff);
+      size_t out_size = out_sizes[tgt_idx] + 2;
+      tgt[3] = (char)(out_size & 0xff);
+      tgt[4] = (char)((out_size >> 8) & 0xff);
+      tgt[5] = (char)((out_size >> 16) & 0xff);
 
       tgt[6] = (char)(in_size & 0xff);         /* decompressed size */
       tgt[7] = (char)((in_size >> 8) & 0xff);
