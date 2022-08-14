@@ -132,7 +132,6 @@ void R__zipPrecisionCascade(int *srcsize, char *src, int *tgtsize, char **tgts, 
    }
 
    auto content = reinterpret_cast<ROOT::Internal::PrecisionCascadeConfigArrayContent*>(configarray);
-   (void) configsize;
    assert(content && (content->SizeOf() == (size_t)configsize));
    UChar_t *cxlevels = content->GetLevels();  // This an array of size `content->fLen`
 
