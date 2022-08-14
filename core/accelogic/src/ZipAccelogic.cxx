@@ -87,13 +87,13 @@ void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int *tgtsize, char **tg
       size_t float_number = *srcsize / elsize;
       // Use "absSens".
       int absSensLevels[MAX_ZIG_BUFFERS];
-      // We shift the request config from [1,71] to [-60, 10]
-      for (int tgt_idx=0; tgt_idx<tgt_number; tgt_idx++)
-         absSensLevels[tgt_idx] = cxlevels[tgt_idx] - 61;
       // blast1_compress needs to know whether to keep the residual, and does not count
       // the residual among the target buffers. Final buffer's cxlevel
       // is irrelevant if it will be the residual buffer.
       auto absSens_tgt_number = tgt_number - (storeResidual ? 1 : 0);
+      // We shift the request config from [1,71] to [-60, 10]
+      for (int tgt_idx=0; tgt_idx<absSens_tgt_number; tgt_idx++)
+         absSensLevels[tgt_idx] = cxlevels[tgt_idx] - 61;
       // Note: We need to check the source really start of a float boundary.
       // Note: We need to upgrade blast to avoid the memcpy (which is IN ADDITION to an internal copy already!!!)
       char *staging[MAX_ZIG_BUFFERS] = { nullptr };
