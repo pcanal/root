@@ -38,12 +38,12 @@ union IntegerTypes {
    ULong64_t *ull;
 };
 
-void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, EDataType datatype)
+void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, bool storeResidual, EDataType datatype)
 {
-   R__zipBLAST(&cxlevel,srcsize,src,tgtsize,&tgt,1,irep,datatype);
+   R__zipBLAST(&cxlevel,srcsize,src,tgtsize,&tgt,1,irep,storeResidual,datatype);
 }
 
-void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int *tgtsize, char **tgts, int tgt_number, int *irep, EDataType datatype)
+void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int *tgtsize, char **tgts, int tgt_number, int *irep, bool storeResidual, EDataType datatype)
 {
    memset(irep,0,tgt_number*sizeof(int)); // irep needs to point to an array of integers of size tgt_number (could just be a single integer)
    char *tgt = *tgts;
@@ -91,10 +91,9 @@ void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int *tgtsize, char **tg
       for (int tgt_idx=0; tgt_idx<tgt_number; tgt_idx++)
          absSensLevels[tgt_idx] = cxlevels[tgt_idx] - 61;
       // blast1_compress needs to know whether to keep the residual, and does not count
-      // the residual among the target buffers. We use cxlevel=0 for final buffer to
-      // indicate whether it will be the residual buffer.
-      auto needresidual = (cxlevels[tgt_number-1] == 0);
-      auto absSens_tgt_number = tgt_number - (needresidual ? 1 : 0);
+      // the residual among the target buffers. Final buffer's cxlevel
+      // is irrelevant if it will be the residual buffer.
+      auto absSens_tgt_number = tgt_number - (storeResidual ? 1 : 0);
       // Note: We need to check the source really start of a float boundary.
       // Note: We need to upgrade blast to avoid the memcpy (which is IN ADDITION to an internal copy already!!!)
       char *staging[MAX_ZIG_BUFFERS] = { nullptr };
@@ -102,9 +101,9 @@ void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int *tgtsize, char **tg
       source.c = src;
 
       if (isfloat)
-         blast1_compress<true>(absSensLevels, source.f, float_number, staging, out_sizes, absSens_tgt_number, needresidual);
+         blast1_compress<true>(absSensLevels, source.f, float_number, staging, out_sizes, absSens_tgt_number, storeResidual);
       else
-         blast1_compress<true>(absSensLevels, source.d, float_number, staging, out_sizes, absSens_tgt_number, needresidual);
+         blast1_compress<true>(absSensLevels, source.d, float_number, staging, out_sizes, absSens_tgt_number, storeResidual);
 
       auto excessive_size = false;
       for (int tgt_idx=0; tgt_idx<tgt_number && !excessive_size; tgt_idx++)

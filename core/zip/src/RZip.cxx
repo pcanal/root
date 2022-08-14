@@ -130,24 +130,24 @@ void R__zipPrecisionCascade(int *srcsize, char *src, int *tgtsize, char **tgts, 
       memset(irep,0,tgt_number*sizeof(int));
       return;
    }
-
    auto content = reinterpret_cast<ROOT::Internal::PrecisionCascadeConfigArrayContent*>(configarray);
    (void) configsize;
    assert(content && (content->SizeOf() == (size_t)configsize));
    Int_t *cxlevels = content->GetLevels();  // This an array of size `content->fLen`
 
-   for (int tgt_idx=0; tgt_idx<tgt_number; tgt_idx++) {
-      // can only be 0 for the last of multiple (not just one) targets
-      // otherwise must be a positive value
-      int cxlevel_min = (tgt_idx > 0 && tgt_idx == tgt_number-1  ? 0 : 1);
-      if (cxlevels[tgt_idx] < cxlevel_min) {
+   // do not accept negative levels, and only accept level 0 if it is the final level,
+   // as this is a proxy for storing the residual of a cascade
+   bool storeResidual = content->fStoreResidual || (tgt_number > 0 && cxlevels[tgt_number-1] == 0);
+   int tgt_checks = tgt_number - (storeResidual ? 1 : 0);
+   for (int tgt_idx=0; tgt_idx<tgt_checks; tgt_idx++) {
+      if (cxlevels[tgt_idx] < 1) {
          memset(irep,0,tgt_number*sizeof(int));
          return;
       }
    }
 
    if (compressionAlgorithm == ROOT::RCompressionSetting::EAlgorithm::kBLAST) {
-      R__zipBLAST(cxlevels, srcsize, src, tgtsize, tgts, tgt_number, irep, datatype);
+      R__zipBLAST(cxlevels, srcsize, src, tgtsize, tgts, tgt_number, irep, storeResidual, datatype);
    }
 }
 

@@ -14,7 +14,7 @@
 
 #include "EDataType.h"
 
-void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int *tgtsize, char **tgts, int tgt_number, int *irep, EDataType datatype = EDataType::kNoType_t);
+void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int *tgtsize, char **tgts, int tgt_number, int *irep, bool storeResidual, EDataType datatype = EDataType::kNoType_t);
 
 void R__unzipBLAST(int *srcsize, unsigned char **srcs, int *tgtsize, unsigned char *tgt, int src_number, int *irep);
 
@@ -24,7 +24,7 @@ void R__unzipBLAST(int *srcsize, unsigned char **srcs, int *tgtsize, unsigned ch
 extern "C" {
 #endif
 
-void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, EDataType datatype = EDataType::kNoType_t);
+void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, bool storeResidual, EDataType datatype = EDataType::kNoType_t);
 
 void R__unzipBLAST(int *srcsize, unsigned char *src, int *tgtsize, unsigned char *tgt, int *irep);
 
