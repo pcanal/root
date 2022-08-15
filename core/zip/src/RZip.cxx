@@ -110,7 +110,7 @@ void R__zipMultipleAlgorithm(int cxlevel, int *srcsize, char *src, int *tgtsize,
   } else if (compressionAlgorithm == ROOT::RCompressionSetting::EAlgorithm::kZSTD) {
      R__zipZSTD(cxlevel, srcsize, src, tgtsize, tgt, irep);
   } else if (compressionAlgorithm == ROOT::RCompressionSetting::EAlgorithm::kBLAST) {
-     R__zipBLAST(&cxlevel, srcsize, src, tgtsize, &tgt, 1, irep, datatype);
+     R__zipBLAST(cxlevel, srcsize, src, tgtsize, tgt, irep, datatype);
   } else if (compressionAlgorithm == ROOT::RCompressionSetting::EAlgorithm::kOldCompressionAlgo || compressionAlgorithm == ROOT::RCompressionSetting::EAlgorithm::kUseGlobal) {
      R__zipOld(cxlevel, srcsize, src, tgtsize, tgt, irep);
   } else {
@@ -134,7 +134,7 @@ void R__zipPrecisionCascade(int *srcsize, char *src, int *tgtsize, char **tgts, 
    auto content = reinterpret_cast<ROOT::Internal::PrecisionCascadeConfigArrayContent*>(configarray);
    (void) configsize;
    assert(content && (content->SizeOf() == (size_t)configsize));
-   Int_t *cxlevels = content->GetLevels();  // This an array of size `content->fLen`
+   UChar_t *cxlevels = content->GetLevels();  // This an array of size `content->fLen`
 
    for (int tgt_idx=0; tgt_idx<tgt_number; tgt_idx++) {
       // can only be 0 for the last of multiple (not just one) targets

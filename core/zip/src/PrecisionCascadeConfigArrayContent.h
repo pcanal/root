@@ -18,9 +18,10 @@ namespace Internal {
 
 struct PrecisionCascadeConfigArrayContent
 {
-   Bool_t fStoreResidual = kFALSE; ///< Whether the user requested keeping the last cascade element
    size_t fLen = 0;                ///< Number of expressed compression level.
-   Int_t  fLevels = 0;             ///< Actually a "Int_t fLevels[fLen]"
+   UChar_t  fLevels = 0;           ///< Actually a "Int_t fLevels[fLen]"
+   /// If the last level is 0 then the user is requesting to keep the last cascade element (residuals)
+
 
    size_t SizeOf()
    {
@@ -29,16 +30,16 @@ struct PrecisionCascadeConfigArrayContent
 
    static size_t SizeOf(size_t len)
    {
-   return sizeof(PrecisionCascadeConfigArrayContent) + sizeof(Int_t) * (len - 1);
+   return sizeof(PrecisionCascadeConfigArrayContent) + sizeof(UChar_t) * (len - 1);
    }
 
    ///< The size of the returned array in fLen.
-   Int_t *GetLevels()
+   UChar_t *GetLevels()
    {
       return &fLevels;
    }
 
-   Int_t GetLevel(size_t i) {
+   UChar_t GetLevel(size_t i) {
       return (&fLevels)[i];
    }
 };

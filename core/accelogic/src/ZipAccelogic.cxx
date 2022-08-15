@@ -38,12 +38,12 @@ union IntegerTypes {
    ULong64_t *ull;
 };
 
-void R__zipBLAST(int cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, EDataType datatype)
+void R__zipBLAST(unsigned char cxlevel, int *srcsize, char *src, int *tgtsize, char *tgt, int *irep, EDataType datatype)
 {
    R__zipBLAST(&cxlevel,srcsize,src,tgtsize,&tgt,1,irep,datatype);
 }
 
-void R__zipBLAST(int *cxlevels, int *srcsize, char *src, int *tgtsize, char **tgts, int tgt_number, int *irep, EDataType datatype)
+void R__zipBLAST(unsigned char *cxlevels, int *srcsize, char *src, int *tgtsize, char **tgts, int tgt_number, int *irep, EDataType datatype)
 {
    memset(irep,0,tgt_number*sizeof(int)); // irep needs to point to an array of integers of size tgt_number (could just be a single integer)
    char *tgt = *tgts;

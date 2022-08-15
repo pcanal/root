@@ -44,9 +44,16 @@ namespace ROOT {
       const std::vector<Int_t> &levels, bool storeResidual /* = false */)
   {
     if (algo != RCompressionSetting::EAlgorithm::kBLAST) {
-      std::string msg("Requestion compression algorithm does not support Precision Cascade: ");
+      std::string msg("Requested compression algorithm does not support Precision Cascade: ");
       msg += algo;
       throw std::runtime_error(msg);
+    }
+    for(auto l : levels) {
+      if (l <= 0) {
+        std::string msg("Requested compression level is not supported for  Precision Cascade: ");
+        msg += l;
+        throw std::runtime_error(msg);
+      }
     }
     fNPrecisionCascade = (levels.empty() ? 0 : levels.size() - 1) + storeResidual;
     fAlgorithm = algo;
@@ -54,12 +61,16 @@ namespace ROOT {
       fLevel = levels[0];
     if (fNPrecisionCascade) {
       using ROOT::Internal::PrecisionCascadeConfigArrayContent;
-      fNConfig = PrecisionCascadeConfigArrayContent::SizeOf(levels.size());
+      fNConfig = PrecisionCascadeConfigArrayContent::SizeOf(levels.size() + storeResidual);
       fConfigArray = new char[fNConfig];
       auto content = reinterpret_cast<PrecisionCascadeConfigArrayContent*>(fConfigArray);
-      content->fStoreResidual = storeResidual;
-      content->fLen = levels.size();
-      memcpy(&(content->fLevels), levels.data(), levels.size() * sizeof(Int_t));
+      content->fLen = levels.size() + storeResidual;
+      UChar_t *levelArray = &(content->fLevels);
+      for(size_t i = 0; i < levels.size(); ++i) {
+        levelArray[i] = levels[i];
+      }
+      if (storeResidual)
+        levelArray[levels.size()] = 0;
     }
   }
 }
