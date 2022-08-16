@@ -74,7 +74,7 @@ void R__zipBLAST(unsigned char *cxlevels, int *srcsize, char *src, int *tgtsize,
 
    int rawtype = datatype % EDataType::kOffsetL;
 
-   int isfloat = (rawtype == EDataType::kFloat_t);
+   bool isfloat = (rawtype == EDataType::kFloat_t);
    bool isdouble = (rawtype == EDataType::kDouble_t);
 
    size_t out_sizes[MAX_ZIG_BUFFERS];
@@ -232,7 +232,7 @@ void R__unzipBLAST(int *srcsize, unsigned char **srcs, int *tgtsize, unsigned ch
 
    int rawtype = datatype % EDataType::kOffsetL;
 
-   int isfloat = (rawtype == EDataType::kFloat_t);
+   bool isfloat = (rawtype == EDataType::kFloat_t);
    bool isdouble = (rawtype == EDataType::kDouble_t);
 
    if (isfloat || isdouble) {
