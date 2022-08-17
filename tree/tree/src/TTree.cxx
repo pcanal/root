@@ -7230,6 +7230,15 @@ void TTree::Print(Option_t* option) const
    if (!option)
       option = "";
 
+   if (strncmp(option, "tree", 4) == 0) {
+      TIter next(const_cast<TTree*>(this)->GetListOfBranches());
+      TBranch::ResetCount();
+      TBranch *br = nullptr;
+      while ((br = (TBranch*)next())) {
+         br->Print(option);
+      }
+      return;
+   }
    if (strncmp(option,"clusters",strlen("clusters"))==0) {
       Printf("%-16s %-16s %-16s %8s %20s",
              "Cluster Range #", "Entry Start", "Last Entry", "Size", "Number of clusters");
