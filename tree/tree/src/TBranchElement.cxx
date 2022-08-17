@@ -48,6 +48,8 @@ A Branch for the case of an object.
 #include "TStreamerInfoActions.h"
 #include "TSchemaRuleSet.h"
 
+#include <iostream>
+
 ClassImp(TBranchElement);
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3841,6 +3843,19 @@ static void PrintElements(const TStreamerInfo *info, const TStreamerInfoActions:
 void TBranchElement::Print(Option_t* option) const
 {
    Int_t nbranches = fBranches.GetEntriesFast();
+
+   if (strncmp(option,"tree", 4) == 0) {
+      for (int i = 0; i < fgCount; i++)
+         std::cout.put(' ').put(' ');
+      std::cout << GetName() << ' ' << "(" << GetType() << ")\n";
+      ++fgCount;
+      for (Int_t i = 0; i < nbranches; ++i) {
+         TBranchElement* subbranch = (TBranchElement*)fBranches.At(i);
+         subbranch->Print("tree");
+      }
+      --fgCount;
+      return;
+   }
    if (strncmp(option,"debugAddress",strlen("debugAddress"))==0) {
       if (strlen(option)==strlen("debugAddress")) {
          Printf("%-24s %-16s %2s %4s %-16s %-16s %8s %8s %s %s\n",
