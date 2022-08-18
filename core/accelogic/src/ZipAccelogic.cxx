@@ -87,9 +87,6 @@ void R__zipBLAST(unsigned char *cxlevels, int *srcsize, char *src, int *tgtsize,
       const size_t float_number = *srcsize / elsize;
       // Use "absSens".
       int absSensLevels[MAX_ZIG_BUFFERS];
-      // We shift the request config from [1,71] to [-60, 10]
-      for (int tgt_idx=0; tgt_idx<tgt_number; tgt_idx++)
-         absSensLevels[tgt_idx] = cxlevels[tgt_idx] - 61;
       // blast1_compress needs to know whether to keep the residual, and does not count
       // the residual among the target buffers. We use cxlevel=0 for final buffer to
       // indicate whether it will be the residual buffer.
