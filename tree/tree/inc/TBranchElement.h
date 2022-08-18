@@ -115,6 +115,7 @@ protected:
    virtual void             InitializeOffsets();
    virtual void             InitInfo();
    Bool_t                   IsMissingCollection() const;
+   TStreamerInfo           *FindBaseOnfileInfo(const TObjArray &branches) const;
    TStreamerInfo           *FindOnfileInfo(TClass *valueClass, const TObjArray &branches) const;
    TClass                  *GetParentClass(); // Class referenced by fParentName
    TStreamerInfo           *GetInfoImp() const;
