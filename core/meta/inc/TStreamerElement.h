@@ -216,7 +216,7 @@ public:
    virtual       ~TStreamerBasicPointer();
    TClass        *GetClassPointer() const override { return nullptr; }
    const char    *GetCountClass()   const {return fCountClass.Data();}
-   TStreamerBasicType *GetCounterElement() const { return fCounter; }
+   TStreamerBasicType *GetCounterElement() const override { return fCounter; };
    const char    *GetCountName()    const {return fCountName.Data();}
    Int_t          GetCountVersion() const {return fCountVersion;}
    ULongptr_t     GetMethod() const override;
@@ -252,7 +252,7 @@ public:
    TStreamerLoop(const char *name, const char *title, Int_t offset, const char *countName, const char *countClass, Int_t version, const char *typeName);
    virtual       ~TStreamerLoop();
    const char    *GetCountClass()   const {return fCountClass.Data();}
-   TStreamerBasicType *GetCounterElement() const { return fCounter; }
+   TStreamerBasicType *GetCounterElement() const override { return fCounter; }
    const char    *GetCountName()    const {return fCountName.Data();}
    Int_t          GetCountVersion() const {return fCountVersion;}
    const char    *GetInclude() const override;
