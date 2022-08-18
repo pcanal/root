@@ -73,7 +73,7 @@ TBasketPC *TBranchPrecisionCascade::GetBasketPC(TTree &tree, UInt_t /* basketnum
 
 Int_t TBranchPrecisionCascade::StoreCascade(TTree &tree, Int_t basketnumber, Long64_t nbytes, Int_t uncompressedSize)
 {
-   if (basketnumber > fMaxBaskets) {
+   if (basketnumber >= fMaxBaskets) {
       Int_t newsize = TMath::Max(10,Int_t(1.5*basketnumber));
       fBasketBytes  = (Long64_t*)TStorage::ReAlloc(fBasketBytes, newsize*sizeof(Long64_t), fMaxBaskets*sizeof(Long64_t));
       fBasketSeek   = (Long64_t*)TStorage::ReAlloc(fBasketSeek,
