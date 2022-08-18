@@ -1929,7 +1929,7 @@ char* TBranchElement::GetAddress() const
 }
 
 
-// For a mother branch of type 3 or 4, find the 'correct' StreamerInfo for the
+// For a mother branch of type 3 or 4 (or 1), find the 'correct' StreamerInfo for the
 // content of the collection by find a sub-branch corresponding to a direct data member
 // of the containee class (valueClass)
 // Default to the current StreamerInfo if none are found.
@@ -1983,6 +1983,19 @@ TStreamerInfo *TBranchElement::FindOnfileInfo(TClass *valueClass, const TObjArra
       }
    }
    return localInfo;
+}
+
+// For a mother branch of type 1 (base class), find the 'correct' StreamerInfo for the
+// content of the collection by find a sub-branch corresponding to a direct data member
+// of the containee class (valueClass)
+// Default to the current StreamerInfo if none are found.
+TStreamerInfo *TBranchElement::FindBaseOnfileInfo(const TObjArray &branches) const
+{
+   TStreamerElement* se = fInfo->GetElement(fID);
+   if (se && se->GetClassPointer())
+      return FindOnfileInfo(se->GetClassPointer(), branches);
+   else
+      return fInfo;
 }
 
 namespace {
@@ -2478,9 +2491,7 @@ void TBranchElement::InitInfo()
                // Search for the correct version.
                localInfo = FindOnfileInfo(fClonesClass, fBranches);
             } else if (fType == 1) {
-               TStreamerElement* se = fInfo->GetElement(fID);
-               if (se && se->GetClassPointer())
-                  localInfo = FindOnfileInfo(se->GetClassPointer(), fBranches);
+               localInfo = FindBaseOnfileInfo(fBranches);
             }
 
             TString prefix(GetFullName());
@@ -3895,10 +3906,7 @@ void TBranchElement::Print(Option_t* option) const
             // Search for the correct version.
             localInfo = FindOnfileInfo(fClonesClass, fBranches);
          } else if (fType == 1) {
-            // Move this inside FIndOnfileInfo?
-            TStreamerElement* se = fInfo->GetElement(fID);
-            if (se && se->GetClassPointer())
-               localInfo = FindOnfileInfo(se->GetClassPointer(), fBranches);
+            localInfo = FindBaseOnfileInfo(fBranches);
          }
          Printf("   With elements:");
          if (fType != 3 && fType != 4)
@@ -3914,10 +3922,7 @@ void TBranchElement::Print(Option_t* option) const
             // Search for the correct version.
             localInfo = FindOnfileInfo(fClonesClass, fBranches);
          } else if (fType == 1) {
-            // Move this inside FIndOnfileInfo?
-            TStreamerElement* se = fInfo->GetElement(fID);
-            if (se && se->GetClassPointer())
-               localInfo = FindOnfileInfo(se->GetClassPointer(), fBranches);
+            localInfo = FindBaseOnfileInfo(fBranches);
          }
          PrintElements(localInfo, fNewIDs);
          Printf("   with read actions:");
@@ -5724,10 +5729,7 @@ void TBranchElement::SetReadActionSequence()
    } else if (fType == 31) {
       create = TStreamerInfoActions::TActionSequence::ReadMemberWiseActionsCollectionGetter;
    } else if ( fType == 1 && !fNewIDs.empty()) {
-      // Move this inside FIndOnfileInfo?
-      TStreamerElement* se = fInfo->GetElement(fID);
-      if (se && se->GetClassPointer())
-         localInfo = FindOnfileInfo(se->GetClassPointer(), fBranches);
+      localInfo = FindBaseOnfileInfo(fBranches);
       create = TStreamerInfoActions::TActionSequence::ReadMemberWiseActionsGetter;
    } else if (0<=fType && fType<=2) {
       // Note: this still requires the ObjectWise sequence to not be optimized!
@@ -5830,10 +5832,7 @@ void TBranchElement::SetFillActionSequence()
    } else if (fType == 31) {
       create = TStreamerInfoActions::TActionSequence::WriteMemberWiseActionsCollectionGetter;
    } else if ( fType == 1 && !fNewIDs.empty()) {
-      // Move this inside FIndOnfileInfo?
-      TStreamerElement* se = fInfo->GetElement(fID);
-      if (se && se->GetClassPointer())
-         localInfo = FindOnfileInfo(se->GetClassPointer(), fBranches);
+      localInfo = FindBaseOnfileInfo(fBranches);
       create = TStreamerInfoActions::TActionSequence::WriteMemberWiseActionsGetter;
    } else if (0<=fType && fType<=2) {
       // Note: this still requires the ObjectWise sequence to not be optimized!
