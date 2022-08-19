@@ -69,6 +69,8 @@ void TTreePrecisionCascade::Print(Option_t * /* option = "" */) const
              << "\tTTree uniqueID: " << fTreeRef.GetUniqueID()
              << "\tTTree pid: " << fTreeRef.GetPID()->GetUniqueID()
              << "\tlevel: " << fCascadeLevel << std::endl;
+   for (auto b : fBranches)
+      if (b) b->Print();
 }
 
 // Create a new TBranchPrecisionCascade
