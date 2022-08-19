@@ -54,6 +54,8 @@ public:
 
    char *RetrieveCascade(TTree &tree, Int_t basketnumber);
 
+   void Print(Option_t *option="") const;
+
    ClassDef(TBranchPrecisionCascade, 3);
 };
 

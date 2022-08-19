@@ -23,6 +23,7 @@ supplemental parts of the precision cascades for a specific branch.
 #include "TStorage.h"
 #include "TTree.h"
 #include "TFile.h"
+#include <iostream>
 
 namespace ROOT {
 namespace Detail {
@@ -114,6 +115,15 @@ char *TBranchPrecisionCascade::RetrieveCascade(TTree &tree, Int_t basketnumber)
 
    // Do we need to also return fBasketBytes[fBasketSeek] ?
    return basket->GetBuffer();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Print the object's information.
+void TBranchPrecisionCascade::Print(Option_t * /* option = "" */) const
+{
+   std::cout << "TBranchPrecisionCascade: " << GetName()
+             << "\tlevel: " << fCascadeLevel
+             << "\tBasket Size: " << (fBasketBytes ? *fBasketBytes : 0) << std::endl;
 }
 
 } // Details
