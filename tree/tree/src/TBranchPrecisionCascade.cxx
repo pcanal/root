@@ -123,7 +123,7 @@ void TBranchPrecisionCascade::Print(Option_t * /* option = "" */) const
 {
    std::cout << "TBranchPrecisionCascade: " << GetName()
              << "\tlevel: " << fCascadeLevel
-             << "\tBasket Size: " << (fBasketBytes ? *fBasketBytes : 0) << std::endl;
+             << "\tBasket Size (approx): " << (fBasketBytes ? *fBasketBytes : 0) << std::endl;
 }
 
 } // Details
