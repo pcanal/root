@@ -77,7 +77,7 @@ void R__zipBLAST(unsigned char *cxlevels, int *srcsize, char *src, int *tgtsize,
    bool isfloat = (rawtype == EDataType::kFloat_t);
    bool isdouble = (rawtype == EDataType::kDouble_t);
 
-   size_t out_sizes[MAX_ZIG_BUFFERS] = { 0 };
+   size_t out_sizes[MAX_ZIG_BUFFERS] = { };
 
    if (isfloat || isdouble) {
       const size_t elsize = isfloat ? sizeof(float) : sizeof(double);
@@ -110,16 +110,11 @@ void R__zipBLAST(unsigned char *cxlevels, int *srcsize, char *src, int *tgtsize,
       for (int tgt_idx=0; tgt_idx<tgt_number && !excessive_size; tgt_idx++)
          excessive_size |= ( ( out_sizes[tgt_idx] + kHeaderSize) > (size_t)tgtsize[tgt_idx] );
 
-      if (excessive_size) {
-         for (int tgt_idx=0; tgt_idx<tgt_number; tgt_idx++)
-           delete [] (staging[tgt_idx]);
-         return;
-      }
-
       for (int tgt_idx=0; tgt_idx<tgt_number; tgt_idx++) {
-         memcpy(tgts[tgt_idx] + kHeaderSize, staging[tgt_idx], out_sizes[tgt_idx]);
-         delete [] (staging[tgt_idx]);         irep[tgt_idx] = out_sizes[tgt_idx] + kHeaderSize;
+         if (!excessive_size) memcpy(tgts[tgt_idx] + kHeaderSize, staging[tgt_idx], out_sizes[tgt_idx]);
+         delete [] (staging[tgt_idx]);
       }
+      if (excessive_size) return;
    } else {
       // Use "RLE".
       // Note: We need to check the source really start of a boundary.
