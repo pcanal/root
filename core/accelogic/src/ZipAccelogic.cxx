@@ -106,6 +106,7 @@ void R__zipBLAST(unsigned char *cxlevels, int *srcsize, char *src, int *tgtsize,
       else
          blast1_compress<true>(absSensLevels, source.d, float_number, staging, out_sizes, absSens_tgt_number, needresidual);
 
+      // Skip transfer any of the buffers to their targets if any one of them is over-sized, and return
       auto excessive_size = false;
       for (int tgt_idx=0; tgt_idx<tgt_number && !excessive_size; tgt_idx++)
          excessive_size |= ( ( out_sizes[tgt_idx] + kHeaderSize) > (size_t)tgtsize[tgt_idx] );
@@ -192,7 +193,7 @@ void R__zipBLAST(unsigned char *cxlevels, int *srcsize, char *src, int *tgtsize,
       tgt[10] = tgt_number;
 
       // irep points to an array of all buffer sizes
-      irep[tgt_idx] = out_sizes[tgt_idx] + kHeaderSize; // out_sizes will be 0 for RLE secondary targets
+      irep[tgt_idx] = out_sizes[tgt_idx] + kHeaderSize; // out_sizes will be 0 for RLE auxiliary targets
    }
 }
 
