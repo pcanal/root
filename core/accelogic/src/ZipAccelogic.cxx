@@ -77,7 +77,7 @@ void R__zipBLAST(unsigned char *cxlevels, int *srcsize, char *src, int *tgtsize,
    bool isfloat = (rawtype == EDataType::kFloat_t);
    bool isdouble = (rawtype == EDataType::kDouble_t);
 
-   size_t out_sizes[MAX_ZIG_BUFFERS];
+   size_t out_sizes[MAX_ZIG_BUFFERS] = { 0 };
 
    if (isfloat || isdouble) {
       const size_t elsize = isfloat ? sizeof(float) : sizeof(double);
@@ -118,10 +118,7 @@ void R__zipBLAST(unsigned char *cxlevels, int *srcsize, char *src, int *tgtsize,
 
       for (int tgt_idx=0; tgt_idx<tgt_number; tgt_idx++) {
          memcpy(tgts[tgt_idx] + kHeaderSize, staging[tgt_idx], out_sizes[tgt_idx]);
-         tgts[tgt_idx][2] = cxlevels[tgt_idx];
-         delete [] (staging[tgt_idx]);
-         // irep points to an array of all buffer sizes
-         irep[tgt_idx] = out_sizes[tgt_idx] + kHeaderSize;
+         delete [] (staging[tgt_idx]);         irep[tgt_idx] = out_sizes[tgt_idx] + kHeaderSize;
       }
    } else {
       // Use "RLE".
@@ -174,9 +171,7 @@ void R__zipBLAST(unsigned char *cxlevels, int *srcsize, char *src, int *tgtsize,
          return;
       }
       memcpy(tgt + kHeaderSize, staging, out_size);
-      tgt[2] = *cxlevels; // inconsequential with RLE, which has no levels
       delete [] staging;
-      *irep = out_size + kHeaderSize;
    }
 
    unsigned in_size   = (unsigned) (*srcsize);
@@ -185,7 +180,7 @@ void R__zipBLAST(unsigned char *cxlevels, int *srcsize, char *src, int *tgtsize,
 
       tgt[0] = 'B';  /* Signature of Accelogic BLAST */
       tgt[1] = 'L';
-      // tgt[2] is set for each target buffer above
+      tgt[2] = cxlevels[tgt_idx]; // inconsequential with RLE, which has no levels
 
       // Include the 2 extra header byte into the out size.
       const size_t out_size = out_sizes[tgt_idx] + 2;
@@ -200,6 +195,9 @@ void R__zipBLAST(unsigned char *cxlevels, int *srcsize, char *src, int *tgtsize,
       // Blast specific
       tgt[9] = datatype;
       tgt[10] = tgt_number;
+
+      // irep points to an array of all buffer sizes
+      irep[tgt_idx] = out_sizes[tgt_idx] + kHeaderSize; // out_sizes will be 0 for RLE secondary targets
    }
 }
 
