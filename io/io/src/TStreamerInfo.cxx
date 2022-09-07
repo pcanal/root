@@ -1738,6 +1738,12 @@ namespace {
 
 void TStreamerInfo::BuildOld()
 {
+   // Those will becomes parameter
+   TClass *actualClass = nullptr; // Used to get data member 'move down' in the hierarchy.
+   THashList assignedBases;       // pointer or reference?
+   THashList assignedElements;    //
+   std::vector<TBaseClass *> matchedBases;
+
    R__LOCKGUARD(gInterpreterMutex);
 
    if ( TestBit(kBuildOldUsed) ) return;
@@ -1831,6 +1837,8 @@ void TStreamerInfo::BuildOld()
    fNVirtualInfoLoc = 0;
    delete [] fVirtualInfoLoc;
    fVirtualInfoLoc = 0;
+   Bool_t missingBase = kFALSE;
+   Bool_t missingElement = kFALSE;
 
    while ((element = (TStreamerElement*) next())) {
       if (element->IsA()==TStreamerArtificial::Class()
@@ -1926,7 +1934,8 @@ void TStreamerInfo::BuildOld()
                         if (!baserule.empty()) {
                            base->SetNewBaseClass(in_memory_bcl);
                            baseOffset = bc->GetDelta();
-
+                           matchedBases.push_back(bc);
+                           assignedBases.Add(bc);
                         }
                      }
                   }
@@ -1975,6 +1984,7 @@ void TStreamerInfo::BuildOld()
 
             {
                if (baseOffset < 0) {
+                  missingBase = kTRUE;
                   element->SetNewType(-1);
                }
             }
@@ -2020,6 +2030,8 @@ void TStreamerInfo::BuildOld()
                }
                baseOffset = bc->GetDelta();
                asize = bc->GetClassPointer()->Size();
+               matchedBases.push_back(bc);
+               assignedBases.Add(bc);
 
             } else if (fClass->TestBit( TClass::kIsEmulation )) {
                // Do a search for the classname and some of its alternatives spelling.
@@ -2047,6 +2059,9 @@ void TStreamerInfo::BuildOld()
                   }
                   baseOffset = newElement->GetOffset();
                   asize = newElement->GetSize();
+                  // FIXME do we need to add something to matchedBases given
+                  // the change in spelling?
+                  assignedBases.Add(newElement);
                }
             }
             if (baseOffset == -1) {
@@ -2071,7 +2086,6 @@ void TStreamerInfo::BuildOld()
          } // if element is of type TStreamerBase or not.
       } // if (element->IsBase())
 
-      // If we get here, this means that we looked at all the base classes.
       if (shouldHaveInfoLoc && fNVirtualInfoLoc==0) {
          fNVirtualInfoLoc = 1;
          fVirtualInfoLoc = new ULong_t[1]; // To allow for a single delete statement.
@@ -2156,6 +2170,8 @@ void TStreamerInfo::BuildOld()
             // We did not find it, let's look for it in the base classes via TRealData
             TRealData* rd = fClass->GetRealData(element->GetName());
             if (rd && rd->GetDataMember()) {
+               // FIX ME: we need to veto this, if 'rd' is already
+               // associated-to/used-by/set-from its class StreamerInfo.
                element->SetOffset(rd->GetThisOffset());
                element->Init(this);
                dm = rd->GetDataMember();
@@ -2599,6 +2615,10 @@ void TStreamerInfo::BuildOld()
       fVirtualInfoLoc = new ULong_t[1]; // To allow for a single delete statement.
       fVirtualInfoLoc[0] = offset;
       offset += sizeof(TStreamerInfo*);
+   }
+
+   // If we get here, this means that we looked at all the base classes.
+   if (missingBase) {
    }
 
    // change order , move "bazes" to the end. Workaround old bug
