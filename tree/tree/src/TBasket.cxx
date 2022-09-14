@@ -1363,14 +1363,12 @@ Int_t TBasket::WriteBuffer()
          auto basketnumber = fBranch->GetWriteBasket();
          auto tree = fBranch->GetTree();
          int i = 1;
-         auto nout_sum = 0;
-         for(auto single : nouts) {
-            nout_sum += single;
-         }
-         auto ratio = ((double) fObjlen) / nout_sum;
+         auto nout_sum = nouts[0];
          for(auto brpc : *fBranch->GetPrecisionCascades()) {
             if (!brpc)
                continue;
+            nout_sum += nouts[i];
+            auto ratio = ((double) fObjlen) / nout_sum;
             brpc->StoreCascade(*tree, basketnumber, nouts[i] ,  nouts[i] * ratio  /* estimate uncompressed sizes */);
             ++i;
          }

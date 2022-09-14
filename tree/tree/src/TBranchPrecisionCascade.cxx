@@ -95,6 +95,11 @@ Int_t TBranchPrecisionCascade::StoreCascade(TTree &tree, Int_t basketnumber, Lon
    }
    fBasketBytes[basketnumber] = basket->GetNbytes();
    fBasketSeek[basketnumber] = basket->GetSeekKey();
+   fTotBytes += basket->GetObjlen() + basket->GetKeylen();
+   fZipBytes += basket->GetNbytes();
+   //   fPrecisionCascadeTree->AddTotBytes(basket->GetObjlen() + basket->GetKeylen());
+   //   fPrecisionCascadeTree->AddZipBytes(basket->GetNbytes());
+
    // FIXME: Need to update some statistics in the TTree or the in TTreePrecisionCascade.
 
    return nout;
@@ -123,7 +128,10 @@ void TBranchPrecisionCascade::Print(Option_t * /* option = "" */) const
 {
    std::cout << "TBranchPrecisionCascade: " << GetName()
              << "\tlevel: " << fCascadeLevel
-             << "\tBasket Size (approx): " << (fBasketBytes ? *fBasketBytes : 0) << std::endl;
+             << "\tBasket Size (approx): " << (fBasketBytes ? *fBasketBytes : 0) << std::endl
+             << "\tEstimated size: " << fTotBytes
+             << "\tFile size: " << fZipBytes << '\n';
+
 }
 
 } // Details

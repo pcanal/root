@@ -38,6 +38,8 @@ class TBranchPrecisionCascade : public TNamed
    Int_t       fMaxBaskets   = 0;       ///< Maximum number of Baskets so far
    Long64_t   *fBasketBytes  = nullptr; ///<[fMaxBaskets] Length of baskets on file
    Long64_t   *fBasketSeek   = nullptr; ///<[fMaxBaskets] Addresses of baskets on file
+   Long64_t    fTotBytes = 0;           ///< Estimate Total number of bytes in all leaves before compression
+   Long64_t    fZipBytes     = 0;       ///< Total number of bytes in all leaves after compressionß
 
    TBasketPC  *fBasket = nullptr;   ///<! Current basket to read or write the Precision Cascade element.
 
@@ -50,13 +52,19 @@ public:
 
    UInt_t GetCascadeLevel() const { return fCascadeLevel; }
 
+   // Return the estimated total uncompressed size of the cascade buffers
+   Long64_t  GetTotBytes() const { return fTotBytes; };
+
+   // Return the total compressed size of the cascade buffers
+   Long64_t  GetZipBytes() const { return fZipBytes; }
+
    Int_t StoreCascade(TTree &tree, Int_t basketnumber, Long64_t nbytes, Int_t uncompressedSize);
 
    char *RetrieveCascade(TTree &tree, Int_t basketnumber);
 
    void Print(Option_t *option="") const;
 
-   ClassDef(TBranchPrecisionCascade, 3);
+   ClassDef(TBranchPrecisionCascade, 4);
 };
 
 } // Details

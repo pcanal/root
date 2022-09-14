@@ -52,6 +52,7 @@
 #include "TBranchIMTHelper.h"
 
 #include "ROOT/TIOFeatures.hxx"
+#include "TBranchPrecisionCascade.h"
 
 #include <atomic>
 #include <cstddef>
@@ -2354,7 +2355,15 @@ void TBranch::Print(Option_t *option) const
       }
    }
    Printf("*Baskets :%9d : Basket Size=%11d bytes  Compression= %6.2f     *",fWriteBasket,fBasketSize,cx);
-
+   if (fPrecisionCascades) {
+      for(size_t l = 0 ; l < fPrecisionCascades->size(); ++l)
+      {
+         auto bpc = (*fPrecisionCascades)[l];
+         if (bpc)
+            Printf("*Precision Cascade %3ld: Estimated size = %11lld  File size = %10lld *",
+                  l, bpc->GetTotBytes(), bpc->GetZipBytes());
+      }
+   }
    if (strncmp(option,"basketsInfo",strlen("basketsInfo"))==0) {
       Int_t nbaskets = fWriteBasket;
       for (Int_t i=0;i<nbaskets;i++) {
