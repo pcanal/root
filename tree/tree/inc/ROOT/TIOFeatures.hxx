@@ -81,6 +81,7 @@ public:
    bool Set(EIOFeatures bits);
    bool Set(Experimental::EIOFeatures bits);
    bool Set(const std::string &);
+   TIOFeatures Set(TIOFeatures bits);
    bool Test(EIOFeatures bits) const;
    bool Test(Experimental::EIOFeatures bits) const;
    bool Test(Experimental::EIOUnsupportedFeatures bits) const;

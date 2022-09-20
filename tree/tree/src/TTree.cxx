@@ -9344,15 +9344,7 @@ ROOT::TIOFeatures TTree::SetIOFeatures(const ROOT::TIOFeatures &features)
 {
    // Purposely ignore all unsupported bits; TIOFeatures implementation already warned the user about the
    // error of their ways; this is just a safety check.
-   UChar_t featuresRequested = features.GetFeatures() & static_cast<UChar_t>(TBasket::EIOBits::kSupported);
-
-   UChar_t curFeatures = fIOFeatures.GetFeatures();
-   UChar_t newFeatures = ~curFeatures & featuresRequested;
-   curFeatures |= newFeatures;
-   fIOFeatures.Set(curFeatures);
-
-   ROOT::TIOFeatures newSettings(newFeatures);
-   return newSettings;
+   return fIOFeatures.Set(features);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

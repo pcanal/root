@@ -191,6 +191,30 @@ bool TIOFeatures::Set(const std::string &value)
 }
 
 ////////////////////////////////////////////////////////////////////////////
+/// \brief Set a specific IO feature.
+/// \param[in] features The specific feature to enable.
+///
+/// Sets a feature in the `TIOFeatures` object.
+/// Purposely ignore all unsupported bits; TIOFeatures implementation already
+/// warned the user about the error of their ways; this is just a safety check.
+///
+/// Returns all the newly-set IO settings.
+TIOFeatures TIOFeatures::Set(TIOFeatures features)
+{
+   // Purposely ignore all unsupported bits; TIOFeatures implementation already warned the user about the
+   // error of their ways; this is just a safety check.
+   UChar_t featuresRequested = features.GetFeatures() & static_cast<UChar_t>(TBasket::EIOBits::kSupported);
+
+   UChar_t curFeatures = GetFeatures();
+   UChar_t newFeatures = ~curFeatures & featuresRequested;
+   curFeatures |= newFeatures;
+   Set(curFeatures);
+
+   ROOT::TIOFeatures newSettings(newFeatures);
+   return newSettings;
+}
+
+////////////////////////////////////////////////////////////////////////////
 /// \brief Print a human-readable representation of the TIOFeatures to stdout
 ///
 /// Prints a string with the names of all enabled IO features.
