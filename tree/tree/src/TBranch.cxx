@@ -2355,13 +2355,20 @@ void TBranch::Print(Option_t *option) const
       }
    }
    Printf("*Baskets :%9d : Basket Size=%11d bytes  Compression= %6.2f     *",fWriteBasket,fBasketSize,cx);
+   if (fIOFeatures.Test(ROOT::Experimental::EIOFeatures::kPrecisionCascade)
+       && !fPrecisionCascades)
+      fTree->ConnectPrecisionCascade();
    if (fPrecisionCascades) {
+      Long64_t cumulZipBytes = fZipBytes;
       for(size_t l = 0 ; l < fPrecisionCascades->size(); ++l)
       {
          auto bpc = (*fPrecisionCascades)[l];
-         if (bpc)
-            Printf("*Precision Cascade %3ld: Estimated size = %11lld  File size = %10lld *",
-                  l, bpc->GetTotBytes(), bpc->GetZipBytes());
+         if (bpc) {
+            cumulZipBytes += bpc->GetZipBytes();
+            cx = (fTotBytes + 0.00001) / cumulZipBytes;
+            Printf("*Precision Cascade %2ld: File size = %10lld Cumulative Compression= %6.2f *",
+                  l, bpc->GetZipBytes(), cx );
+         }
       }
    }
    if (strncmp(option,"basketsInfo",strlen("basketsInfo"))==0) {

@@ -214,6 +214,7 @@ protected:
    // So that the index class can use TFriendLock:
    friend class TTreeIndex;
    friend class TChainIndex;
+   friend class TBranch;
    // So that the TTreeCloner can access the protected interfaces
    friend class TTreeCloner;
 
