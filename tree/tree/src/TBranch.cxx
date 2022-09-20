@@ -2437,8 +2437,10 @@ void TBranch::ReadLeaves2Impl(TBuffer& b)
 
 void TBranch::Register(UInt_t level, ROOT::Detail::TBranchPrecisionCascade &precisionCascade)
 {
-   if (!fPrecisionCascades)
+   if (!fPrecisionCascades) {
+      fIOFeatures.Set(ROOT::Experimental::EIOFeatures::kPrecisionCascade);
       fPrecisionCascades = new std::vector<ROOT::Detail::TBranchPrecisionCascade *>;
+   }
    // CHECK: should we require registration in incremental order?
    fPrecisionCascades->resize(level + 1);
    (*fPrecisionCascades)[level] = &precisionCascade;
@@ -2785,6 +2787,7 @@ void TBranch::SetCompressionSettings(ROOT::CompressionConfig &config)
          return;
       }
       if (!fPrecisionCascades) {
+         fIOFeatures.Set(ROOT::Experimental::EIOFeatures::kPrecisionCascade);
          fPrecisionCascades = new std::vector<ROOT::Detail::TBranchPrecisionCascade *>;
          fPrecisionCascades->push_back(nullptr);
       }
