@@ -290,7 +290,7 @@ public:
    virtual void      SetFirstEntry( Long64_t entry );
    virtual void      SetFile(TFile *file=0);
    virtual void      SetFile(const char *filename);
-   void              SetIOFeatures(TIOFeatures &features) {fIOFeatures = features;}
+   void              SetIOFeatures(TIOFeatures &features) { fIOFeatures.Set(features); }
    virtual Bool_t    SetMakeClass(Bool_t decomposeObj = kTRUE);
    virtual void      SetOffset(Int_t offset=0) {fOffset=offset;}
    virtual void      SetStatus(Bool_t status=1);
