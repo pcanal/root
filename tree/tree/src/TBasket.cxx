@@ -1318,6 +1318,8 @@ Int_t TBasket::WriteBuffer()
          if (doPrecisionCascades) {
             bufmaxs.assign(precisionCascades.size(),bufmax);  // assuming bufmax is the same for each of the precisionCascade buffers
             R__zipPrecisionCascade(&bufmax, objbuf, bufmaxs.data(), precisionCascades.data(), precisionCascades.size(), nouts.data(), cxAlgorithm, datatype, configArraySize, configArray);
+            // We keep the compression as long as the first buffer/file is smaller,
+            // even if the cumulutative size is larger.
             nout = nouts[0];
          } else {
             R__zipMultipleAlgorithm(cxlevel, &bufmax, objbuf, &bufmax, bufcur, &nout, cxAlgorithm, datatype, configArraySize, configArray);
