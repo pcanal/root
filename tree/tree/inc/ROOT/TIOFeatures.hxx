@@ -51,7 +51,7 @@ namespace Experimental {
 // usage of this mechanism somehow involves baskets currently.
 enum class EIOFeatures {
    kGenerateOffsetMap = BIT(0),
-   kPrecisionCascade = BIT(2),
+   kPrecisionCascade = BIT(1),
    kSupported = kGenerateOffsetMap | kPrecisionCascade // Union of all features in this enum.
 };
 
@@ -86,8 +86,9 @@ public:
    bool Test(Experimental::EIOUnsupportedFeatures bits) const;
    void Print() const;
 
+
    // The number of known, defined IO features (supported / unsupported / experimental).
-   static constexpr int kIOFeatureCount = 1;
+   static constexpr int kIOFeatureCount = 2;
 
 private:
    // These methods allow access to the raw bitset underlying
