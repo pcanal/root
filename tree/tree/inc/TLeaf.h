@@ -123,6 +123,8 @@ public:
 
    virtual const Counts_t *GetLeafCountValues(Long64_t start, Long64_t len);
 
+   virtual TString GetDescriptor() const;
+
    virtual Int_t    GetLen() const;
    /// Return the fixed length of this leaf.
    /// If the leaf stores a fixed-length array, this is the size of the array.

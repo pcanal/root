@@ -41,6 +41,7 @@ of elements
 #include "TLeaf.h"
 #include "TBranch.h"
 #include "TBuffer.h"
+#include "TROOT.h"
 #include "TTree.h"
 #include "TVirtualPad.h"
 #include "TBrowser.h"
@@ -217,6 +218,35 @@ Int_t *TLeaf::GenerateOffsetArrayBase(Int_t base, Int_t events) const
    return retval;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// Return the leaf descriptor (can be used in the 'leaflist' branch creation)
+TString TLeaf::GetDescriptor() const
+{
+   TString descriptor;
+
+   const char *colTypeCStr = GetTypeName();
+   auto datatype = gROOT->GetType(colTypeCStr);
+   if (!datatype)
+      return colTypeCStr;
+   const char type = TTree::DataTypeToChar((EDataType)datatype->GetType());
+
+   auto leafcount = GetLeafCount();
+   if (leafcount != nullptr && GetLenStatic() == 1) {
+      // this is a variable-sized array
+      descriptor.Form("%s[%s]/%c", GetName(), leafcount->GetName(), type);
+   } else if (leafcount == nullptr && GetLenStatic() > 1) {
+      // this is a fixed-sized array
+      descriptor.Form("%s[%d]/%c", GetName(), GetLenStatic(), type);
+   } else if (leafcount != nullptr && GetLenStatic() > 1) {
+      // this is a variable size array of fixed size array.
+      descriptor.Form("%s[%s][%d]/%c", GetName(), leafcount->GetName(), GetLenStatic(), type);
+   } else {
+      // this is a regular leaf.
+      descriptor.Form("%s/%c", GetName(), type);
+   }
+
+   return descriptor;
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Return the full name (including the parent's branch names) of the leaf.
