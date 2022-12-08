@@ -427,6 +427,7 @@ public:
    virtual TBasket        *CreateBasket(TBranch*);
    virtual void            DirectoryAutoAdd(TDirectory *);
            Int_t           Debug() const { return fDebug; }
+   static  char            DataTypeToChar(EDataType datatype);
            void            Delete(Option_t* option = "") override; // *MENU*
            void            Draw(Option_t* opt) override { Draw(opt, "", "", kMaxEntries, 0); }
    virtual Long64_t        Draw(const char* varexp, const TCut& selection, Option_t* option = "", Long64_t nentries = kMaxEntries, Long64_t firstentry = 0);

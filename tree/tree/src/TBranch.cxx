@@ -2340,15 +2340,22 @@ void TBranch::Print(Option_t *option) const
    }
 
    if (fLeaves.GetEntries() == 1) {
-      if (titleContent.Length()>=2 && titleContent[titleContent.Length()-2]=='/' && isalpha(titleContent[titleContent.Length()-1])) {
+      TLeaf *leaf = (TLeaf*)fLeaves.UncheckedAt(0);
+      TString descriptor = leaf->GetDescriptor();
+      if (titleContent == descriptor) {
          // The type is already encoded.  Nothing to do.
+      } else if (titleContent.Length()>=2 && titleContent[titleContent.Length()-2]=='/'
+                 && isalpha(titleContent[titleContent.Length()-1])
+                 && titleContent.Index("][") != TString::kNPOS) {
+         // The type seems to already be encoded and we have a multi-dimensional
+         // array, the TLeaf does not have enough information to rebuild it.
+         // So keep the title, hoping the user did not change it (in way that
+         // still matches the above pattern)
       } else {
-         TLeaf *leaf = (TLeaf*)fLeaves.UncheckedAt(0);
          if (titleContent.Length()) {
             titleContent.Prepend(" ");
          }
-         // titleContent.Append("type: ");
-         titleContent.Prepend(leaf->GetTypeName());
+         titleContent.Prepend(descriptor);
       }
    }
    Int_t titleLength = titleContent.Length();
