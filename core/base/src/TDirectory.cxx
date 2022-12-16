@@ -281,7 +281,7 @@ void TDirectory::CleanTargets()
       for(auto ptr : fGDirectories) {
          if (ptr.fCurrent->load() == this) {
             ROOT::Internal::TSpinLockGuard(*(ptr.fLock));
-            (*ptr.fCurrent) = nullptr;
+            (*ptr.fCurrent) = gROOT;
          }
       }
    }
