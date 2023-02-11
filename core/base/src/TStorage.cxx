@@ -101,6 +101,9 @@ void TStorage::EnterStat(size_t size, void *p)
 
    if (!gMemStatistics) return;
 
+   // Needs to be protected by global mutex
+   R__LOCKGUARD(gGlobalMutex);
+
    if ((Int_t)size == gMemSize) {
       if (gTraceIndex == gMemIndex)
          Fatal("EnterStat", "trapped allocation %d", gMemIndex);
@@ -128,6 +131,9 @@ void TStorage::EnterStat(size_t size, void *p)
 void TStorage::RemoveStat(void *vp)
 {
    if (!gMemStatistics) return;
+
+   // Needs to be protected by global mutex
+   R__LOCKGUARD(gGlobalMutex);
 
    size_t size = storage_size(vp);
    if ((Int_t)size == gMemSize) {
@@ -182,12 +188,8 @@ void TStorage::Dealloc(void *ptr)
 void *TStorage::ReAlloc(void *ovp, size_t size, size_t oldsize)
 {
    // Needs to be protected by global mutex
-   {
-      R__LOCKGUARD(gGlobalMutex);
-
-      if (fgReAllocCHook && fgHasCustomNewDelete)
-         return (*fgReAllocCHook)(ovp, size, oldsize);
-   }
+   if (fgReAllocCHook && fgHasCustomNewDelete)
+      return (*fgReAllocCHook)(ovp, size, oldsize);
 
    static const char *where = "TStorage::ReAlloc";
 
@@ -366,13 +368,13 @@ void TStorage::SetReAllocHooks(ReAllocFun_t, ReAllocCFun_t rh2)
 
 void TStorage::PrintStatistics()
 {
-   // Needs to be protected by global mutex
-   R__LOCKGUARD(gGlobalMutex);
-
 #if defined(MEM_DEBUG) && defined(MEM_STAT)
 
    if (!gMemStatistics || !HasCustomNewDelete())
       return;
+
+   // Needs to be protected by global mutex
+   R__LOCKGUARD(gGlobalMutex);
 
    //Printf("");
    Printf("Heap statistics");
