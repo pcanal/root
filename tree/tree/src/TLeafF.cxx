@@ -135,8 +135,23 @@ void TLeafF::ReadBasket(TBuffer &b)
 
 // Deserialize N events from an input buffer.
 bool TLeafF::ReadBasketFast(TBuffer &input_buf, Long64_t N) {
-  if (R__unlikely(fLeafCount)) {return false;}
-  return input_buf.ByteSwapBuffer(fLen*N, kFloat_t);
+#if 0
+  auto size;
+  if (fLeafCount) {
+   fix me, we need the start of the current buffer ...
+    Long64_t entry = fBranch->GetReadEntry();
+    size = 0;
+    for(Long64_t e = 0; e < N; ++e) {
+      fLeafCount->GetBranch()->GetEntry(entry + e);
+      size += Int_t(fLeafCount->GetValue());
+    }
+  } else {
+    size = N;
+  }
+#else
+   auto size = N;
+#endif
+  return input_buf.ByteSwapBuffer(fLen * size, kFloat_t);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
