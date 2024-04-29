@@ -57,8 +57,8 @@ End_Macro
 ### Color transparency
 `SetLineColorAlpha()`, allows to set a transparent color.
 In the following example the line color of the histogram `histo`
-is set to blue with a transparency of 35%. The color `kBlue`
-itself remains fully opaque.
+is set to blue with an opacity of 35% (i.e. a transparency of 65%).
+(The color `kBlue` itself is internally stored as fully opaque.)
 
 ~~~ {.cpp}
 histo->SetLineColorAlpha(kBlue, 0.35);
@@ -68,6 +68,8 @@ The transparency is available on all platforms when the flag `OpenGL.CanvasPrefe
 in `$ROOTSYS/etc/system.rootrc`, or on Mac with the Cocoa backend. On the file output
 it is visible with PDF, PNG, Gif, JPEG, SVG, TeX ... but not PostScript.
 
+Alternatively, you can call at the top of your script `gSytle->SetCanvasPreferGL();`.
+Or if you prefer to activate GL for a single canvas `c`, then use `c->SetSupportGL(true);`.
 
 \anchor ATTLINE2
 ## Line Width
@@ -273,10 +275,9 @@ void TAttLine::ResetAttLine(Option_t *)
 void TAttLine::SaveLineAttributes(std::ostream &out, const char *name, Int_t coldef, Int_t stydef, Int_t widdef)
 {
    if (fLineColor != coldef) {
-      if (fLineColor > 228) {
-         TColor::SaveColor(out, fLineColor);
+      if (TColor::SaveColor(out, fLineColor))
          out<<"   "<<name<<"->SetLineColor(ci);" << std::endl;
-      } else
+      else
          out<<"   "<<name<<"->SetLineColor("<<fLineColor<<");"<<std::endl;
    }
    if (fLineStyle != stydef) {
@@ -296,8 +297,10 @@ void TAttLine::SetLineAttributes()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Set a transparent line color. lalpha defines the percentage of
-/// the color opacity from 0. (fully transparent) to 1. (fully opaque).
+/// Set a transparent line color. 
+/// \param lcolor defines the line color
+/// \param lalpha defines the percentage of opacity from 0. (fully transparent) to 1. (fully opaque).
+/// \note lalpha is ignored (treated as 1) if the TCanvas has no GL support activated.
 
 void TAttLine::SetLineColorAlpha(Color_t lcolor, Float_t lalpha)
 {

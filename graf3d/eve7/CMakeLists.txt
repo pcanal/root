@@ -4,6 +4,11 @@
 # For the licensing terms see $ROOTSYS/LICENSE.
 # For the list of contributors see $ROOTSYS/README/CREDITS.
 
+set (EXTRA_DICT_OPTS)
+if (runtime_cxxmodules AND WIN32)
+  set (EXTRA_DICT_OPTS NO_CXXMODULE)
+endif()
+
 ROOT_STANDARD_LIBRARY_PACKAGE(ROOTEve
   HEADERS
     ROOT/REveChunkManager.hxx
@@ -24,8 +29,6 @@ ROOT_STANDARD_LIBRARY_PACKAGE(ROOTEve
     ROOT/REveGeoPolyShape.hxx
     ROOT/REveGeoShapeExtract.hxx
     ROOT/REveGeoShape.hxx
-    ROOT/REveGeomData.hxx
-    ROOT/REveGeomViewer.hxx
     ROOT/REveGluTess.hxx
     ROOT/REveJetCone.hxx
     ROOT/REveEllipsoid.hxx
@@ -88,8 +91,6 @@ ROOT_STANDARD_LIBRARY_PACKAGE(ROOTEve
     src/REveGeoPolyShape.cxx
     src/REveGeoShape.cxx
     src/REveGeoShapeExtract.cxx
-    src/REveGeomData.cxx
-    src/REveGeomViewer.cxx
     src/REveGluTess.cxx
     src/REveJetCone.cxx
     src/REveEllipsoid.cxx
@@ -131,28 +132,13 @@ ROOT_STANDARD_LIBRARY_PACKAGE(ROOTEve
     TreePlayer
     RCsg
     ROOTWebDisplay
-    ROOTBrowserv7
+  ${EXTRA_DICT_OPTS}
 )
 
 if(builtin_nlohmannjson)
    target_include_directories(ROOTEve PRIVATE ${CMAKE_SOURCE_DIR}/builtins)
-   target_compile_definitions(ROOTEve INTERFACE NLOHMANN_JSON_PROVIDES_FWD_HPP)
 else()
    target_link_libraries(ROOTEve PUBLIC nlohmann_json::nlohmann_json)
-
-   get_target_property(inc_dirs nlohmann_json::nlohmann_json INTERFACE_INCLUDE_DIRECTORIES)
-   foreach(dir ${inc_dirs})
-      if(EXISTS "${dir}/nlohmann/json_fwd.hpp")
-         set(found_fwd true)
-      endif()
-   endforeach()
-
-   if(found_fwd)
-      target_compile_definitions(ROOTEve INTERFACE NLOHMANN_JSON_PROVIDES_FWD_HPP)
-   else()
-      message("-- missing nlohmann/json_fwd.hpp required by eve7")
-   endif()
-
 endif()
 
 # this is required for glew

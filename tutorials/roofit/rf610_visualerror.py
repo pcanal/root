@@ -3,7 +3,9 @@
 ## \notebook
 ## Likelihood and minimization: visualization of errors from a covariance matrix
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -30,10 +32,10 @@ model = ROOT.RooAddPdf("model", "model", [sig, bkg], [fsig])
 
 # Create binned dataset
 x.setBins(25)
-d = model.generateBinned(ROOT.RooArgSet(x), 1000)
+d = model.generateBinned({x}, 1000)
 
 # Perform fit and save fit result
-r = model.fitTo(d, Save=True)
+r = model.fitTo(d, Save=True, PrintLevel=-1)
 
 # Visualize fit error
 # -------------------------------------
@@ -66,7 +68,7 @@ model.plotOn(frame, VisualizeError=(r, 1), FillColor="kOrange")
 # In self method a number of curves is calculated with variations of the parameter values, sampled
 # from a multi-variate Gaussian pdf that is constructed from the fit results covariance matrix.
 # The error(x) is determined by calculating a central interval that capture N% of the variations
-# for each valye of x, N% is controlled by Z (i.e. Z=1 gives N=68%). The number of sampling curves
+# for each value of x, N% is controlled by Z (i.e. Z=1 gives N=68%). The number of sampling curves
 # is chosen to be such that at least 100 curves are expected to be outside the N% interval, is minimally
 # 100 (e.g. Z=1.Ncurve=356, Z=2.Ncurve=2156)) Intervals from the sampling method can be asymmetric,
 # and may perform better in the presence of strong correlations, may take
@@ -111,8 +113,8 @@ frame2 = x.frame(Bins=40, Title="Visualization of 2-sigma partial error from (m,
 
 # Propagate partial error due to shape parameters (m,m2) using linear and
 # sampling method
-model.plotOn(frame2, VisualizeError=(r, ROOT.RooArgSet(m, m2), 2), FillColor="c")
-model.plotOn(frame2, Components="bkg", VisualizeError=(r, ROOT.RooArgSet(m, m2), 2), FillColor="c")
+model.plotOn(frame2, VisualizeError=(r, {m, m2}, 2), FillColor="c")
+model.plotOn(frame2, Components="bkg", VisualizeError=(r, {m, m2}, 2), FillColor="c")
 
 model.plotOn(frame2)
 model.plotOn(frame2, Components="bkg", LineStyle="--")
@@ -123,8 +125,8 @@ frame3 = x.frame(Bins=40, Title="Visualization of 2-sigma partial error from (s,
 
 # Propagate partial error due to yield parameter using linear and sampling
 # method
-model.plotOn(frame3, VisualizeError=(r, ROOT.RooArgSet(s, s2), 2), FillColor="g")
-model.plotOn(frame3, Components="bkg", VisualizeError=(r, ROOT.RooArgSet(fsig), 2), FillColor="g")
+model.plotOn(frame3, VisualizeError=(r, {s, s2}, 2), FillColor="g")
+model.plotOn(frame3, Components="bkg", VisualizeError=(r, {fsig}, 2), FillColor="g")
 
 model.plotOn(frame3)
 model.plotOn(frame3, Components="bkg", LineStyle="--")
@@ -135,8 +137,8 @@ frame4 = x.frame(Bins=40, Title="Visualization of 2-sigma partial error from fsi
 
 # Propagate partial error due to yield parameter using linear and sampling
 # method
-model.plotOn(frame4, VisualizeError=(r, ROOT.RooArgSet(fsig), 2), FillColor="m")
-model.plotOn(frame4, Components="bkg", VisualizeError=(r, ROOT.RooArgSet(fsig), 2), FillColor="m")
+model.plotOn(frame4, VisualizeError=(r, {fsig}, 2), FillColor="m")
+model.plotOn(frame4, Components="bkg", VisualizeError=(r, {fsig}, 2), FillColor="m")
 
 model.plotOn(frame4)
 model.plotOn(frame4, Components="bkg", LineStyle="--")

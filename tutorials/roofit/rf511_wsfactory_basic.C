@@ -4,8 +4,8 @@
 /// Organization and simultaneous fits: basic use of the 'object factory' associated with
 /// a workspace to rapidly build pdfs functions and their parameter components
 ///
-/// \macro_output
 /// \macro_code
+/// \macro_output
 ///
 /// \date July 2009
 /// \author Wouter Verkerke
@@ -21,7 +21,7 @@
 #include "TAxis.h"
 using namespace RooFit;
 
-void rf511_wsfactory_basic(Bool_t compact = kFALSE)
+void rf511_wsfactory_basic(bool compact = false)
 {
    RooWorkspace *w = new RooWorkspace("w");
 
@@ -59,13 +59,13 @@ void rf511_wsfactory_basic(Bool_t compact = kFALSE)
    //
    // P.d.f. constructor arguments may by any type of RooAbsArg, but also
    //
-   // Double_t --> converted to RooConst(...)
+   // double --> converted to RooConst(...)
    // {a,b,c} --> converted to RooArgSet() or RooArgList() depending on required ctor arg
    // dataset name --> converted to RooAbsData reference for any dataset residing in the workspace
    // enum --> Any enum label that belongs to an enum defined in the (base) class
 
    // Make a dummy dataset pdf 'model' and import it in the workspace
-   RooDataSet *data = w->pdf("model")->generate(*w->var("x"), 1000);
+   std::unique_ptr<RooDataSet> data{w->pdf("model")->generate(*w->var("x"), 1000)};
    w->import(*data, Rename("data"));
 
    // Construct a KEYS pdf passing a dataset name and an enum type defining the

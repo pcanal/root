@@ -13,13 +13,9 @@
 // Functionality, interface, and data format is still subject to changes.
 // Do not use for real data!
 
-// Until C++ runtime modules are universally used, we explicitly load the ntuple library.  Otherwise
-// triggering autoloading from the use of templated types would require an exhaustive enumeration
-// of "all" template instances in the LinkDef file.
-R__LOAD_LIBRARY(ROOTNTuple)
-
-#include <ROOT/RNTuple.hxx>
 #include <ROOT/RNTupleModel.hxx>
+#include <ROOT/RNTupleReader.hxx>
+#include <ROOT/RNTupleWriter.hxx>
 
 #include <TCanvas.h>
 #include <TH1F.h>
@@ -81,8 +77,8 @@ void ntpl006_friends()
    auto c = new TCanvas("c", "", 200, 10, 700, 500);
    TH1F h("h", "pz {pt > 3.}", 100, -15, 35);
 
-   auto viewPz = ntuple->GetView<float>("data.pz.float");
-   auto viewPt = ntuple->GetView<float>("reco.pt.float");
+   auto viewPz = ntuple->GetView<float>("data.pz._0");
+   auto viewPt = ntuple->GetView<float>("reco.pt._0");
    for (auto i : viewPt.GetFieldRange()) {
       if (viewPt(i) > 3.)
          h.Fill(viewPz(i));

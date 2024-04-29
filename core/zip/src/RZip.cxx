@@ -87,14 +87,18 @@ void R__zipMultipleAlgorithm(int cxlevel, int *srcsize, char *src, int *tgtsize,
                              EDataType datatype /* = kNoType_t */,
                              int /* configsize = 0 */, char * /* configarray = nullptr */)
 {
+  *irep = 0;
 
+  // Performance optimization: avoid compressing tiny source buffers.
   if (*srcsize < 1 + HDRSIZE + 1) {
-     *irep = 0;
+     return;
+  }
+  // Correctness check: we need at least enough bytes to prepend the header!
+  if (*tgtsize <= HDRSIZE) {
      return;
   }
 
   if (cxlevel <= 0) {
-    *irep = 0;
     return;
   }
 
@@ -238,7 +242,7 @@ static void R__zipZLIB(int cxlevel, int *srcsize, char *src, int *tgtsize, char 
     stream.avail_in  = (uInt)(*srcsize);
 
     stream.next_out  = (Bytef*)(&tgt[HDRSIZE]);
-    stream.avail_out = (uInt)(*tgtsize);
+    stream.avail_out = (uInt)(*tgtsize) - HDRSIZE;
 
     stream.zalloc    = (alloc_func)0;
     stream.zfree     = (free_func)0;

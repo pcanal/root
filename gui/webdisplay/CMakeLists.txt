@@ -22,7 +22,20 @@ ROOT_STANDARD_LIBRARY_PACKAGE(ROOTWebDisplay
     DEPENDENCIES
        Core
        RHTTP
+       Net
        MathCore
 )
 
 ROOT_ADD_TEST_SUBDIRECTORY(test)
+
+if(qt5web)
+   target_compile_definitions(ROOTWebDisplay PRIVATE -DWITH_QT5WEB)
+endif()
+
+if(qt6web)
+   target_compile_definitions(ROOTWebDisplay PRIVATE -DWITH_QT6WEB)
+endif()
+
+if(cefweb)
+   target_compile_definitions(ROOTWebDisplay PRIVATE -DWITH_CEFWEB)
+endif()

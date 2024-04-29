@@ -38,7 +38,6 @@ namespace ROOT {
     return algo * 100 + compressionLevel;
   }
 
-
   PrecisionCascadeCompressionConfig::PrecisionCascadeCompressionConfig(
       RCompressionSetting::EAlgorithm::EValues algo,
       const std::vector<Int_t> &levels, bool storeResidual /* = false */)
@@ -72,5 +71,17 @@ namespace ROOT {
       if (storeResidual)
         levelArray[levels.size()] = 0;
     }
+  }
+
+  std::string RCompressionSetting::AlgorithmToString(RCompressionSetting::EAlgorithm::EValues algorithm)
+  {
+     switch (algorithm) {
+     case EAlgorithm::EValues::kZLIB: return "zlib"; break;
+     case EAlgorithm::EValues::kLZMA: return "LZMA"; break;
+     case EAlgorithm::EValues::kOldCompressionAlgo: return "Old compression algorithm"; break;
+     case EAlgorithm::EValues::kLZ4: return "lz4"; break;
+     case EAlgorithm::EValues::kZSTD: return "zstd"; break;
+     default: return "Undefined compression algorithm";
+     }
   }
 }

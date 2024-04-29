@@ -880,6 +880,38 @@ void TGraphMultiErrors::SwapPoints(Int_t pos1, Int_t pos2)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// Update the fX, fY, fExL, fExH, fEyL and fEyH arrays with the sorted values.
+
+void TGraphMultiErrors::UpdateArrays(const std::vector<Int_t> &sorting_indices, Int_t numSortedPoints, Int_t low)
+{
+   std::vector<Double_t> fExLSorted(numSortedPoints);
+   std::vector<Double_t> fExHSorted(numSortedPoints);
+
+   std::generate(fExLSorted.begin(), fExLSorted.end(),
+                 [begin = low, &sorting_indices, this]() mutable { return fExL[sorting_indices[begin++]]; });
+   std::generate(fExHSorted.begin(), fExHSorted.end(),
+                 [begin = low, &sorting_indices, this]() mutable { return fExH[sorting_indices[begin++]]; });
+
+   std::copy(fExLSorted.begin(), fExLSorted.end(), fExL + low);
+   std::copy(fExHSorted.begin(), fExHSorted.end(), fExH + low);
+
+   for (Int_t j = 0; j < fNYErrors; j++) {
+      std::vector<Double_t> fEyLSorted(numSortedPoints);
+      std::vector<Double_t> fEyHSorted(numSortedPoints);
+
+      std::generate(fEyLSorted.begin(), fEyLSorted.end(),
+                  [begin = low, &sorting_indices, &j, this]() mutable { return fEyL[j].GetArray()[sorting_indices[begin++]]; });
+      std::generate(fEyHSorted.begin(), fEyHSorted.end(),
+                  [begin = low, &sorting_indices, &j, this]() mutable { return fEyL[j].GetArray()[sorting_indices[begin++]]; });
+
+      std::copy(fEyLSorted.begin(), fEyLSorted.end(), fEyL[j].GetArray() + low);
+      std::copy(fEyHSorted.begin(), fEyHSorted.end(), fEyL[j].GetArray() + low);
+   }
+
+   TGraph::UpdateArrays(sorting_indices, numSortedPoints, low);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// Add a new y error to the graph and fill it with the values from `eyL` and `eyH`
 
 void TGraphMultiErrors::AddYError(Int_t np, const Double_t *eyL, const Double_t *eyH)
@@ -1696,8 +1728,9 @@ void TGraphMultiErrors::Print(Option_t *) const
 
 void TGraphMultiErrors::SavePrimitive(std::ostream &out, Option_t *option)
 {
-   char quote = '"';
    out << "   " << std::endl;
+   static Int_t frameNumber = 5000;
+   frameNumber++;
 
    if (gROOT->ClassSaved(TGraphMultiErrors::Class()))
       out << "   ";
@@ -1705,16 +1738,10 @@ void TGraphMultiErrors::SavePrimitive(std::ostream &out, Option_t *option)
       out << "   TGraphMultiErrors* ";
 
    out << "tgme = new TGraphMultiErrors(" << fNpoints << ", " << fNYErrors << ");" << std::endl;
-   out << "   tgme->SetName(" << quote << GetName() << quote << ");" << std::endl;
-   out << "   tgme->SetTitle(" << quote << GetTitle() << quote << ");" << std::endl;
-
-   SaveFillAttributes(out, "tgme", 0, 1001);
-   SaveLineAttributes(out, "tgme", 1, 1, 1);
-   SaveMarkerAttributes(out, "tgme", 1, 1, 1);
 
    for (Int_t j = 0; j < fNYErrors; j++) {
-      fAttFill[j].SaveFillAttributes(out, Form("tgme->GetAttFill(%d)", j), 0, 1001);
-      fAttLine[j].SaveLineAttributes(out, Form("tgme->GetAttLine(%d)", j), 1, 1, 1);
+      fAttFill[j].SaveFillAttributes(out, TString::Format("tgme->GetAttFill(%d)", j).Data(), 0, 1001);
+      fAttLine[j].SaveLineAttributes(out, TString::Format("tgme->GetAttLine(%d)", j).Data(), 1, 1, 1);
    }
 
    for (Int_t i = 0; i < fNpoints; i++) {
@@ -1726,34 +1753,36 @@ void TGraphMultiErrors::SavePrimitive(std::ostream &out, Option_t *option)
              << std::endl;
    }
 
-   static Int_t frameNumber = 0;
-   if (fHistogram) {
-      frameNumber++;
-      TString hname = fHistogram->GetName();
-      hname += frameNumber;
-      fHistogram->SetName(Form("Graph_%s", hname.Data()));
-      fHistogram->SavePrimitive(out, "nodraw");
-      out << "   tgme->SetHistogram(" << fHistogram->GetName() << ");" << std::endl;
-      out << "   " << std::endl;
-   }
+   SaveHistogramAndFunctions(out, "tgme", frameNumber, option);
+}
 
-   // save list of functions
-   TIter next(fFunctions);
-   TObject *obj;
-   while ((obj = next())) {
-      obj->SavePrimitive(out, "nodraw");
-      if (obj->InheritsFrom("TPaveStats")) {
-         out << "   tgme->GetListOfFunctions()->Add(ptstats);" << std::endl;
-         out << "   ptstats->SetParent(tgme->GetListOfFunctions());" << std::endl;
-      } else
-         out << "   tgme->GetListOfFunctions()->Add(" << obj->GetName() << ");" << std::endl;
-   }
+////////////////////////////////////////////////////////////////////////////////
+/// Multiply the values and errors of a TGraphMultiErrors by a constant c1.
+///
+/// If option contains "x" the x values and errors are scaled
+/// If option contains "y" the y values and (multiple) errors are scaled
+/// If option contains "xy" both x and y values and (multiple) errors are scaled
 
-   const char *l = strstr(option, "multigraph");
-   if (l)
-      out << "   multigraph->Add(tgme, " << quote << l + 10 << quote << ");" << std::endl;
-   else
-      out << "   tgme->Draw(" << quote << option << quote << ");" << std::endl;
+void TGraphMultiErrors::Scale(Double_t c1, Option_t *option)
+{
+   TGraph::Scale(c1, option);
+   TString opt = option; opt.ToLower();
+   if (opt.Contains("x") && GetEXlow()) {
+      for (Int_t i=0; i<GetN(); i++)
+         GetEXlow()[i] *= c1;
+   }
+   if (opt.Contains("x") && GetEXhigh()) {
+      for (Int_t i=0; i<GetN(); i++)
+         GetEXhigh()[i] *= c1;
+   }
+   if (opt.Contains("y")) {
+      for (size_t d=0; d<fEyL.size(); d++)
+         for (Int_t i=0; i<fEyL[d].GetSize(); i++)
+            fEyL[d][i] *= c1;
+      for (size_t d=0; d<fEyH.size(); d++)
+         for (Int_t i=0; i<fEyH[d].GetSize(); i++)
+            fEyH[d][i] *= c1;
+   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1764,14 +1793,18 @@ void TGraphMultiErrors::SavePrimitive(std::ostream &out, Option_t *option)
 void TGraphMultiErrors::SetPointError(Double_t exL, Double_t exH, Double_t eyL1, Double_t eyH1, Double_t eyL2,
                                       Double_t eyH2, Double_t eyL3, Double_t eyH3)
 {
+   if (!gPad) {
+      Error("SetPointError", "Cannot be used without gPad, requires last mouse position");
+      return;
+   }
+
    Int_t px = gPad->GetEventX();
    Int_t py = gPad->GetEventY();
 
    // localize point to be deleted
    Int_t ipoint = -2;
-   Int_t i;
    // start with a small window (in case the mouse is very close to one point)
-   for (i = 0; i < fNpoints; i++) {
+   for (Int_t i = 0; i < fNpoints; i++) {
       Int_t dpx = px - gPad->XtoAbsPixel(gPad->XtoPad(fX[i]));
       Int_t dpy = py - gPad->YtoAbsPixel(gPad->YtoPad(fY[i]));
 

@@ -2,9 +2,8 @@
 // Date: 2017-06-29
 // Warning: This is part of the ROOT 7 prototype! It will change without notice. It might trigger earthquakes. Feedback is welcome!
 
-
 /*************************************************************************
- * Copyright (C) 1995-2019, Rene Brun and Fons Rademakers.               *
+ * Copyright (C) 1995-2023, Rene Brun and Fons Rademakers.               *
  * All rights reserved.                                                  *
  *                                                                       *
  * For the licensing terms see $ROOTSYS/LICENSE.                         *
@@ -15,6 +14,7 @@
 #include "rooturlschemehandler.h"
 
 #include "rootwebpage.h" // only because of logger channel
+#include <cstring>
 
 #include <QBuffer>
 #include <QByteArray>
@@ -85,7 +85,7 @@ public:
    /** provide WS kind  */
    const char *GetWSKind() const override { return "rawlongpoll"; }
 
-   /** provide WS platform */
+   /** provide WS platform, intentionally keep qt5 here while it only used on client side */
    const char *GetWSPlatform() const override { return "qt5"; }
 
    void SendFile(const char *fname)
@@ -97,7 +97,7 @@ public:
       QFile file(fname);
       buffer->open(QIODevice::WriteOnly);
       if (file.open(QIODevice::ReadOnly)) {
-         QByteArray arr = file.readAll();
+         auto arr = file.readAll();
          buffer->write(arr);
       }
       file.close();
@@ -109,6 +109,8 @@ public:
          buffer->connect(req, &QObject::destroyed, buffer, &QObject::deleteLater);
          req->reply(mime, buffer);
          fRequest.reset();
+      } else {
+         delete buffer;
       }
    }
 
@@ -117,12 +119,12 @@ public:
       QWebEngineUrlRequestJob *req = fRequest.req();
 
       if (!req) {
-         R__LOG_ERROR(QtWebDisplayLog()) << "Qt5 request already processed path " << GetPathName() << " file " << GetFileName();
+         R__LOG_ERROR(QtWebDisplayLog()) << "Qt " << QT_VERSION_STR << " request already processed path " << GetPathName() << " file " << GetFileName();
          return;
       }
 
       if (Is404()) {
-         R__LOG_ERROR(QtWebDisplayLog()) << "Qt5 request FAIL path " << GetPathName() << " file " << GetFileName();
+         R__LOG_ERROR(QtWebDisplayLog()) << "Qt " << QT_VERSION_STR << " request FAIL path " << GetPathName() << " file " << GetFileName();
 
          req->fail(QWebEngineUrlRequestJob::UrlNotFound);
          // abort request

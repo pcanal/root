@@ -25,6 +25,7 @@ the trees in the chain.
 */
 
 #include "TChain.h"
+#include "ROOT/InternalTreeUtils.hxx"
 
 #include <iostream>
 #include <cfloat>
@@ -68,38 +69,32 @@ ClassImp(TChain);
 ////////////////////////////////////////////////////////////////////////////////
 /// Default constructor.
 
-TChain::TChain()
-: TTree()
-, fTreeOffsetLen(100)
-, fNtrees(0)
-, fTreeNumber(-1)
-, fTreeOffset(0)
-, fCanDeleteRefs(kFALSE)
-, fTree(0)
-, fFile(0)
-, fFiles(0)
-, fStatus(0)
-, fProofChain(0)
+TChain::TChain(Mode mode)
+   : TTree(), fTreeOffsetLen(100), fNtrees(0), fTreeNumber(-1), fTreeOffset(nullptr), fCanDeleteRefs(false), fTree(nullptr),
+     fFile(nullptr), fFiles(nullptr), fStatus(nullptr), fProofChain(nullptr), fGlobalRegistration(mode == kWithGlobalRegistration)
 {
    fTreeOffset = new Long64_t[fTreeOffsetLen];
    fFiles = new TObjArray(fTreeOffsetLen);
    fStatus = new TList();
    fTreeOffset[0]  = 0;
-   if (gDirectory) gDirectory->Remove(this);
-   gROOT->GetListOfSpecials()->Add(this);
-   fFile = 0;
-   fDirectory = 0;
+   if (fGlobalRegistration) {
+      gROOT->GetListOfSpecials()->Add(this);
+   }
+   fFile = nullptr;
+   fDirectory = nullptr;
 
    // Reset PROOF-related bits
    ResetBit(kProofUptodate);
    ResetBit(kProofLite);
 
-   // Add to the global list
-   gROOT->GetListOfDataSets()->Add(this);
+   if (fGlobalRegistration) {
+      // Add to the global list
+      gROOT->GetListOfDataSets()->Add(this);
 
-   // Make sure we are informed if the TFile is deleted.
-   R__LOCKGUARD(gROOTMutex);
-   gROOT->GetListOfCleanups()->Add(this);
+      // Make sure we are informed if the TFile is deleted.
+      R__LOCKGUARD(gROOTMutex);
+      gROOT->GetListOfCleanups()->Add(this);
+   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -142,18 +137,10 @@ TChain::TChain()
 ///     }
 /// ~~~
 
-TChain::TChain(const char* name, const char* title)
-:TTree(name, title, /*splitlevel*/ 99, nullptr)
-, fTreeOffsetLen(100)
-, fNtrees(0)
-, fTreeNumber(-1)
-, fTreeOffset(0)
-, fCanDeleteRefs(kFALSE)
-, fTree(0)
-, fFile(0)
-, fFiles(0)
-, fStatus(0)
-, fProofChain(0)
+TChain::TChain(const char *name, const char *title, Mode mode)
+   : TTree(name, title, /*splitlevel*/ 99, nullptr), fTreeOffsetLen(100), fNtrees(0), fTreeNumber(-1), fTreeOffset(nullptr),
+     fCanDeleteRefs(false), fTree(nullptr), fFile(nullptr), fFiles(nullptr), fStatus(nullptr), fProofChain(nullptr),
+     fGlobalRegistration(mode == kWithGlobalRegistration)
 {
    //
    //*-*
@@ -162,20 +149,22 @@ TChain::TChain(const char* name, const char* title)
    fFiles = new TObjArray(fTreeOffsetLen);
    fStatus = new TList();
    fTreeOffset[0]  = 0;
-   fFile = 0;
+   fFile = nullptr;
 
    // Reset PROOF-related bits
    ResetBit(kProofUptodate);
    ResetBit(kProofLite);
 
-   R__LOCKGUARD(gROOTMutex);
+   if (fGlobalRegistration) {
+      R__LOCKGUARD(gROOTMutex);
 
-   // Add to the global lists
-   gROOT->GetListOfSpecials()->Add(this);
-   gROOT->GetListOfDataSets()->Add(this);
+      // Add to the global lists
+      gROOT->GetListOfSpecials()->Add(this);
+      gROOT->GetListOfDataSets()->Add(this);
 
-   // Make sure we are informed if the TFile is deleted.
-   gROOT->GetListOfCleanups()->Add(this);
+      // Make sure we are informed if the TFile is deleted.
+      gROOT->GetListOfCleanups()->Add(this);
+   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -185,7 +174,7 @@ TChain::~TChain()
 {
    bool rootAlive = gROOT && !gROOT->TestBit(TObject::kInvalidObject);
 
-   if (rootAlive) {
+   if (rootAlive && fGlobalRegistration) {
       R__LOCKGUARD(gROOTMutex);
       gROOT->GetListOfCleanups()->Remove(this);
    }
@@ -193,34 +182,34 @@ TChain::~TChain()
    SafeDelete(fProofChain);
    fStatus->Delete();
    delete fStatus;
-   fStatus = 0;
+   fStatus = nullptr;
    fFiles->Delete();
    delete fFiles;
-   fFiles = 0;
+   fFiles = nullptr;
 
    //first delete cache if exists
    auto tc = fFile && fTree ? fTree->GetReadCache(fFile) : nullptr;
    if (tc) {
       delete tc;
-      fFile->SetCacheRead(0, fTree);
+      fFile->SetCacheRead(nullptr, fTree);
    }
 
    delete fFile;
-   fFile = 0;
+   fFile = nullptr;
    // Note: We do *not* own the tree.
-   fTree = 0;
+   fTree = nullptr;
    delete[] fTreeOffset;
-   fTreeOffset = 0;
+   fTreeOffset = nullptr;
 
    // Remove from the global lists
-   if (rootAlive) {
+   if (rootAlive && fGlobalRegistration) {
       R__LOCKGUARD(gROOTMutex);
       gROOT->GetListOfSpecials()->Remove(this);
       gROOT->GetListOfDataSets()->Remove(this);
    }
 
    // This is the same as fFile, don't delete it a second time.
-   fDirectory = 0;
+   fDirectory = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -244,7 +233,7 @@ Int_t TChain::Add(TChain* chain)
    chain->GetEntries(); //to force the computation of nentries
    TIter next(chain->GetListOfFiles());
    Int_t nf = 0;
-   TChainElement* element = 0;
+   TChainElement* element = nullptr;
    while ((element = (TChainElement*) next())) {
       Long64_t nentries = element->GetEntries();
       if (fTreeOffset[fNtrees] == TTree::kMaxEntries) {
@@ -298,7 +287,7 @@ Int_t TChain::Add(TChain* chain)
 /// - Tagging the name of the tree with a slash (e.g. \p /tree_name ) is only
 ///   supported for backward compatibility; it requires the file name to contain
 ///   the string '.root' and its use is deprecated. Instead, use the form
-///   \p ?#tree_name (that is an "?" followed by an empty query), for example:
+///   \p ?#%tree_name (that is an "?" followed by an empty query), for example:
 ///   ~~~{.cpp}
 ///   TChain c;
 ///   // DO NOT DO THIS
@@ -307,8 +296,10 @@ Int_t TChain::Add(TChain* chain)
 ///   c.Add("myfile.root?#treename");
 ///   ~~~
 /// - Wildcard treatment is triggered by any of the special characters:
-///   <b>[]*?</b> which may be used in the file name, eg. specifying "xxx*.root"
-///   adds all files starting with xxx in the current file system directory.
+///   <b>[]*?</b> which may be used in the file name or subdirectory name,
+///   eg. specifying "xxx*.root" adds all files starting with xxx in the
+///   current file system directory and "*/*.root" adds all the files in the
+///   current subdirectories (but not in the subsubdirectories).
 ///
 /// The second format accepted for \p name may have the form of a URL, e.g.:
 ///
@@ -371,10 +362,32 @@ Int_t TChain::Add(TChain* chain)
 /// \note To add all the files of a another \p TChain to this one, use
 ///       TChain::Add(TChain* chain).
 
-Int_t TChain::Add(const char* name, Long64_t nentries /* = TTree::kMaxEntries */)
+Int_t TChain::Add(const char *name, Long64_t nentries /* = TTree::kMaxEntries */)
 {
    TString basename, treename, query, suffix;
-   ParseTreeFilename(name, basename, treename, query, suffix, kTRUE);
+   ParseTreeFilename(name, basename, treename, query, suffix);
+
+   // Special case: ? used for query string AND as wildcard in the filename.
+   // In this case, everything after the first ? is parsed as query/suffix
+   // string in ParseTreeFilename. We assume that everything until the last
+   // occurence of .root should be part of the basename so we remove it
+   // from the suffix and add it back to the basename.
+   // See: https://github.com/root-project/root/issues/10239
+   static const char *dotr = ".root";
+   static Ssiz_t dotrl = strlen(dotr);
+   // Find the last one
+   Ssiz_t lastDotrIdx = kNPOS;
+   Ssiz_t dotrIdx = suffix.Index(dotr);
+   while (dotrIdx != kNPOS) {
+      lastDotrIdx = dotrIdx;
+      dotrIdx = suffix.Index(dotr, dotrIdx + 1);
+   }
+   if (lastDotrIdx != kNPOS) {
+      // Add the part up until '.root' to the basename for globbing
+      basename.Append(suffix, lastDotrIdx + dotrl);
+      // Remove the part up until '.root' from the suffix
+      suffix.Replace(0, lastDotrIdx + dotrl, "");
+   }
 
    // case with one single file
    if (!basename.MaybeWildcard()) {
@@ -383,41 +396,32 @@ Int_t TChain::Add(const char* name, Long64_t nentries /* = TTree::kMaxEntries */
 
    // wildcarding used in name
    Int_t nf = 0;
-
-   Int_t slashpos = basename.Last('/');
-   TString directory;
-   if (slashpos>=0) {
-      directory = basename(0,slashpos); // Copy the directory name
-      basename.Remove(0,slashpos+1);      // and remove it from basename
-   } else {
-      directory = gSystem->UnixPathName(gSystem->WorkingDirectory());
+   std::vector<std::string> expanded_glob;
+   try {
+      expanded_glob = ROOT::Internal::TreeUtils::ExpandGlob(std::string(basename));
+   } catch (const std::runtime_error &) {
+      // The 'ExpandGlob' function may throw in case the directory from the glob
+      // cannot be opened. We return 0 to signify no files were added.
+      return nf;
    }
 
-   const char *file;
-   const char *epath = gSystem->ExpandPathName(directory.Data());
-   void *dir = gSystem->OpenDirectory(epath);
-   delete [] epath;
-   if (dir) {
-      //create a TList to store the file names (not yet sorted)
-      TList l;
-      TRegexp re(basename,kTRUE);
-      while ((file = gSystem->GetDirEntry(dir))) {
-         if (!strcmp(file,".") || !strcmp(file,"..")) continue;
-         TString s = file;
-         if ( (basename!=file) && s.Index(re) == kNPOS) continue;
-         l.Add(new TObjString(file));
+   const TString hashMarkTreeName{"#" + treename};
+   for (const auto &path : expanded_glob) {
+      if (suffix == hashMarkTreeName) {
+         // See https://github.com/root-project/root/issues/11483
+         // In case the input parameter 'name' contains both a glob and the
+         // '?#' token to identify the tree name, the call to
+         // `ParseTreeFileName` will produce a 'suffix' string of the form
+         // '#treename'. Passing this to the `AddFile` call produces a bogus
+         // file name that TChain won't be able to open afterwards. Thus,
+         // we do not pass the 'suffix' as part of the file name, instead we
+         // directly pass 'treename' to `AddFile`.
+         nf += AddFile(path.c_str(), nentries, treename);
+      } else {
+         nf += AddFile(TString::Format("%s%s", path.c_str(), suffix.Data()), nentries);
       }
-      gSystem->FreeDirectory(dir);
-      //sort the files in alphanumeric order
-      l.Sort();
-      TIter next(&l);
-      TObjString *obj;
-      while ((obj = (TObjString*)next())) {
-         file = obj->GetName();
-         nf += AddFile(TString::Format("%s/%s%s",directory.Data(),file,suffix.Data()),nentries);
-      }
-      l.Delete();
    }
+
    if (fProofChain)
       // This updates the proxy chain when we will really use PROOF
       ResetBit(kProofUptodate);
@@ -451,9 +455,13 @@ Int_t TChain::Add(const char* name, Long64_t nentries /* = TTree::kMaxEntries */
 ///
 /// B. If nentries > 0, the file is not opened, and nentries is assumed
 ///    to be the number of entries in the file. In this case, no check
-///    is made that the file exists nor that the tree exists in the file.
+///    is made that the file exists nor that the tree exists in the file,
+///    nor that the real TTree entries match with the input argument.
 ///    This second mode is interesting in case the number of entries in
 ///    the file is already stored in a run database for example.
+///    \warning If you pass `nentries` > `tree_entries`, this may lead to silent
+///    data corruption in your analysis or undefined behavior in your program.
+///    Use the other options if unsure.
 ///
 /// C. If nentries == TTree::kMaxEntries (default), the file is not opened.
 ///    The number of entries in each file will be read only when the file
@@ -485,7 +493,7 @@ Int_t TChain::Add(const char* name, Long64_t nentries /* = TTree::kMaxEntries */
 
 Int_t TChain::AddFile(const char* name, Long64_t nentries /* = TTree::kMaxEntries */, const char* tname /* = "" */)
 {
-   if(name==0 || name[0]=='\0') {
+   if(name==nullptr || name[0]=='\0') {
       Error("AddFile", "No file name; no files connected");
       return 0;
    }
@@ -494,7 +502,7 @@ Int_t TChain::AddFile(const char* name, Long64_t nentries /* = TTree::kMaxEntrie
    if (tname && strlen(tname) > 0) treename = tname;
 
    TString basename, tn, query, suffix;
-   ParseTreeFilename(name, basename, tn, query, suffix, kFALSE);
+   ParseTreeFilename(name, basename, tn, query, suffix);
 
    if (!tn.IsNull()) {
       treename = tn.Data();
@@ -520,13 +528,14 @@ Int_t TChain::AddFile(const char* name, Long64_t nentries /* = TTree::kMaxEntrie
       TFile* file;
       {
          TDirectory::TContext ctxt;
-         file = TFile::Open(filename);
+         const char *option = fGlobalRegistration ? "READ" : "READ_WITHOUT_GLOBALREGISTRATION";
+         file = TFile::Open(filename, option);
       }
       if (!file || file->IsZombie()) {
          delete file;
-         file = 0;
+         file = nullptr;
          delete[] filename;
-         filename = 0;
+         filename = nullptr;
          return 0;
       }
 
@@ -536,9 +545,9 @@ Int_t TChain::AddFile(const char* name, Long64_t nentries /* = TTree::kMaxEntrie
       if (!obj || !obj->InheritsFrom(TTree::Class())) {
          Error("AddFile", "cannot find tree with name %s in file %s", treename, filename);
          delete file;
-         file = 0;
+         file = nullptr;
          delete[] filename;
-         filename = 0;
+         filename = nullptr;
          return 0;
       }
       TTree* tree = (TTree*) obj;
@@ -546,7 +555,7 @@ Int_t TChain::AddFile(const char* name, Long64_t nentries /* = TTree::kMaxEntrie
       pksize = tree->GetPacketSize();
       // Note: This deletes the tree we fetched.
       delete file;
-      file = 0;
+      file = nullptr;
    }
 
    if (nentries > 0) {
@@ -586,15 +595,15 @@ Int_t TChain::AddFileInfoList(TCollection* filelist, Long64_t nfiles /* = TTree:
       return 0;
    TIter next(filelist);
 
-   TObject *o = 0;
+   TObject *o = nullptr;
    Long64_t cnt=0;
    while ((o = next())) {
       // Get the url
       TString cn = o->ClassName();
-      const char *url = 0;
+      const char *url = nullptr;
       if (cn == "TFileInfo") {
          TFileInfo *fi = (TFileInfo *)o;
-         url = (fi->GetCurrentUrl()) ? fi->GetCurrentUrl()->GetUrl() : 0;
+         url = (fi->GetCurrentUrl()) ? fi->GetCurrentUrl()->GetUrl() : nullptr;
          if (!url) {
             Warning("AddFileInfoList", "found TFileInfo with empty Url - ignoring");
             continue;
@@ -726,7 +735,7 @@ TFriendElement* TChain::AddFriend(const char* chain, TFile* dummy)
 ////////////////////////////////////////////////////////////////////////////////
 /// Add the whole chain or tree as a friend of this chain.
 
-TFriendElement* TChain::AddFriend(TTree* chain, const char* alias, Bool_t /* warn = kFALSE */)
+TFriendElement* TChain::AddFriend(TTree* chain, const char* alias, bool /* warn = false */)
 {
    if (!chain) return nullptr;
    if (!fFriends) fFriends = new TList();
@@ -747,7 +756,6 @@ TFriendElement* TChain::AddFriend(TTree* chain, const char* alias, Bool_t /* war
    if (!t) {
       Warning("AddFriend","Unknown TChain %s",chain->GetName());
    }
-   chain->RegisterExternalFriend(fe);
    return fe;
 }
 
@@ -761,8 +769,8 @@ void TChain::Browse(TBrowser* b)
 
 ////////////////////////////////////////////////////////////////////////////////
 /// When closing a file during the chain processing, the file
-/// may be closed with option "R" if flag is set to kTRUE.
-/// by default flag is kTRUE.
+/// may be closed with option "R" if flag is set to true.
+/// by default flag is true.
 /// When closing a file with option "R", all TProcessIDs referenced by this
 /// file are deleted.
 /// Calling TFile::Close("R") might be necessary in case one reads a long list
@@ -772,7 +780,7 @@ void TChain::Browse(TBrowser* b)
 /// of the TProcessID data structures in memory by forcing a delete of
 /// the unused TProcessID.
 
-void TChain::CanDeleteRefs(Bool_t flag /* = kTRUE */)
+void TChain::CanDeleteRefs(bool flag /* = true */)
 {
    fCanDeleteRefs = flag;
 }
@@ -783,7 +791,7 @@ void TChain::CanDeleteRefs(Bool_t flag /* = kTRUE */)
 void TChain::CreatePackets()
 {
    TIter next(fFiles);
-   TChainElement* element = 0;
+   TChainElement* element = nullptr;
    while ((element = (TChainElement*) next())) {
       element->CreatePackets();
    }
@@ -814,7 +822,7 @@ Long64_t TChain::Draw(const char* varexp, const TCut& selection,
    if (fProofChain) {
       // Make sure the element list is up to date
       if (!TestBit(kProofUptodate))
-         SetProof(kTRUE, kTRUE);
+         SetProof(true, true);
       fProofChain->SetEventList(fEventList);
       fProofChain->SetEntryList(fEntryList);
       return fProofChain->Draw(varexp, selection, option, nentries, firstentry);
@@ -834,7 +842,7 @@ Long64_t TChain::Draw(const char* varexp, const char* selection,
    if (fProofChain) {
       // Make sure the element list is up to date
       if (!TestBit(kProofUptodate))
-         SetProof(kTRUE, kTRUE);
+         SetProof(true, true);
       fProofChain->SetEventList(fEventList);
       fProofChain->SetEntryList(fEntryList);
       return fProofChain->Draw(varexp, selection, option, nentries, firstentry);
@@ -852,7 +860,7 @@ TBranch* TChain::FindBranch(const char* branchname)
    if (fProofChain && !(fProofChain->TestBit(kProofLite))) {
       // Make sure the element list is up to date
       if (!TestBit(kProofUptodate))
-         SetProof(kTRUE, kTRUE);
+         SetProof(true, true);
       return fProofChain->FindBranch(branchname);
    }
    if (fTree) {
@@ -862,7 +870,7 @@ TBranch* TChain::FindBranch(const char* branchname)
    if (fTree) {
       return fTree->FindBranch(branchname);
    }
-   return 0;
+   return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -873,7 +881,7 @@ TLeaf* TChain::FindLeaf(const char* searchname)
    if (fProofChain && !(fProofChain->TestBit(kProofLite))) {
       // Make sure the element list is up to date
       if (!TestBit(kProofUptodate))
-         SetProof(kTRUE, kTRUE);
+         SetProof(true, true);
       return fProofChain->FindLeaf(searchname);
    }
    if (fTree) {
@@ -883,7 +891,7 @@ TLeaf* TChain::FindLeaf(const char* searchname)
    if (fTree) {
       return fTree->FindLeaf(searchname);
    }
-   return 0;
+   return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -902,7 +910,7 @@ const char* TChain::GetAlias(const char* aliasName) const
    if (fTree) {
       return fTree->GetAlias(aliasName);
    }
-   return 0;
+   return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -913,7 +921,7 @@ TBranch* TChain::GetBranch(const char* name)
    if (fProofChain && !(fProofChain->TestBit(kProofLite))) {
       // Make sure the element list is up to date
       if (!TestBit(kProofUptodate))
-         SetProof(kTRUE, kTRUE);
+         SetProof(true, true);
       return fProofChain->GetBranch(name);
    }
    if (fTree) {
@@ -923,19 +931,19 @@ TBranch* TChain::GetBranch(const char* name)
    if (fTree) {
       return fTree->GetBranch(name);
    }
-   return 0;
+   return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// See TTree::GetReadEntry().
 
-Bool_t TChain::GetBranchStatus(const char* branchname) const
+bool TChain::GetBranchStatus(const char* branchname) const
 {
    if (fProofChain && !(fProofChain->TestBit(kProofLite))) {
       // Make sure the element list is up to date
       if (!TestBit(kProofUptodate))
          Warning("GetBranchStatus", "PROOF proxy not up-to-date:"
-                                    " run TChain::SetProof(kTRUE, kTRUE) first");
+                                    " run TChain::SetProof(true, true) first");
       return fProofChain->GetBranchStatus(branchname);
    }
    return TTree::GetBranchStatus(branchname);
@@ -948,7 +956,7 @@ Bool_t TChain::GetBranchStatus(const char* branchname) const
 
 TTree::TClusterIterator TChain::GetClusterIterator(Long64_t /* firstentry */)
 {
-   Fatal("GetClusterIterator","Not support for TChain object");
+   Fatal("GetClusterIterator","TChain objects are not supported");
    return TTree::GetClusterIterator(-1);
 }
 
@@ -973,7 +981,7 @@ Long64_t TChain::GetEntries() const
       // Make sure the element list is up to date
       if (!TestBit(kProofUptodate))
          Warning("GetEntries", "PROOF proxy not up-to-date:"
-                               " run TChain::SetProof(kTRUE, kTRUE) first");
+                               " run TChain::SetProof(true, true) first");
       return fProofChain->GetEntries();
    }
    if (fEntries == TTree::kMaxEntries) {
@@ -1072,7 +1080,7 @@ TLeaf* TChain::GetLeaf(const char* branchname, const char *leafname)
    if (fProofChain && !(fProofChain->TestBit(kProofLite))) {
       // Make sure the element list is up to date
       if (!TestBit(kProofUptodate))
-         SetProof(kTRUE, kTRUE);
+         SetProof(true, true);
       return fProofChain->GetLeaf(branchname, leafname);
    }
    if (fTree) {
@@ -1082,7 +1090,7 @@ TLeaf* TChain::GetLeaf(const char* branchname, const char *leafname)
    if (fTree) {
       return fTree->GetLeaf(branchname, leafname);
    }
-   return 0;
+   return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1093,7 +1101,7 @@ TLeaf* TChain::GetLeaf(const char* name)
    if (fProofChain && !(fProofChain->TestBit(kProofLite))) {
       // Make sure the element list is up to date
       if (!TestBit(kProofUptodate))
-         SetProof(kTRUE, kTRUE);
+         SetProof(true, true);
       return fProofChain->GetLeaf(name);
    }
    if (fTree) {
@@ -1103,7 +1111,7 @@ TLeaf* TChain::GetLeaf(const char* name)
    if (fTree) {
       return fTree->GetLeaf(name);
    }
-   return 0;
+   return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1119,7 +1127,7 @@ TObjArray* TChain::GetListOfBranches()
    if (fProofChain && !(fProofChain->TestBit(kProofLite))) {
       // Make sure the element list is up to date
       if (!TestBit(kProofUptodate))
-         SetProof(kTRUE, kTRUE);
+         SetProof(true, true);
       return fProofChain->GetListOfBranches();
    }
    if (fTree) {
@@ -1129,7 +1137,7 @@ TObjArray* TChain::GetListOfBranches()
    if (fTree) {
       return fTree->GetListOfBranches();
    }
-   return 0;
+   return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1142,7 +1150,7 @@ TObjArray* TChain::GetListOfLeaves()
    if (fProofChain && !(fProofChain->TestBit(kProofLite))) {
       // Make sure the element list is up to date
       if (!TestBit(kProofUptodate))
-         SetProof(kTRUE, kTRUE);
+         SetProof(true, true);
       return fProofChain->GetListOfLeaves();
    }
    if (fTree) {
@@ -1152,7 +1160,7 @@ TObjArray* TChain::GetListOfLeaves()
    if (fTree) {
       return fTree->GetListOfLeaves();
    }
-   return 0;
+   return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1215,7 +1223,7 @@ Long64_t TChain::GetReadEntry() const
       // Make sure the element list is up to date
       if (!TestBit(kProofUptodate))
          Warning("GetBranchStatus", "PROOF proxy not up-to-date:"
-                                    " run TChain::SetProof(kTRUE, kTRUE) first");
+                                    " run TChain::SetProof(true, true) first");
       return fProofChain->GetReadEntry();
    }
    return TTree::GetReadEntry();
@@ -1248,7 +1256,7 @@ Double_t TChain::GetWeight() const
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Move content to a new file. (NOT IMPLEMENTED for TChain)
-Bool_t TChain::InPlaceClone(TDirectory * /* new directory */, const char * /* options */)
+bool TChain::InPlaceClone(TDirectory * /* new directory */, const char * /* options */)
 {
    Error("InPlaceClone", "not implemented");
    return false;
@@ -1276,7 +1284,7 @@ void TChain::InvalidateCurrentTree()
       }
    }
    fTreeNumber = -1;
-   fTree = 0;
+   fTree = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1308,9 +1316,11 @@ Int_t TChain::LoadBaskets(Long64_t /*maxmemory*/)
 ///       as a ROOT issue.
 ///   * -6: An error occurred within the notify callback.
 ///
-/// Note: This is the only routine which sets the value of fTree to
-///       a non-zero pointer.
-
+/// Calls fNotify->Notify() (if fNotify is not null) when starting the processing of a new sub-tree.
+/// See TNotifyLink for more information on the notification mechanism.
+///
+/// \note This is the only routine which sets the value of fTree to a non-zero pointer.
+///
 Long64_t TChain::LoadTree(Long64_t entry)
 {
    // We already have been visited while recursively looking
@@ -1356,12 +1366,13 @@ Long64_t TChain::LoadTree(Long64_t entry)
       // (the friends of the chain will be updated in the
       // next loop).
       fTree->LoadTree(treeReadEntry);
+
       if (fFriends) {
          // The current tree has not changed but some of its friends might.
          //
          TIter next(fFriends);
          TFriendLock lock(this, kLoadTree);
-         TFriendElement* fe = 0;
+         TFriendElement* fe = nullptr;
          while ((fe = (TFriendElement*) next())) {
             TTree* at = fe->GetTree();
             // If the tree is a
@@ -1370,11 +1381,11 @@ Long64_t TChain::LoadTree(Long64_t entry)
             // number (treeReadEntry) hence we do:
             at->LoadTreeFriend(entry, this);
          }
-         Bool_t needUpdate = kFALSE;
+         bool needUpdate = false;
          if (fTree->GetListOfFriends()) {
             for(auto fetree : ROOT::Detail::TRangeStaticCast<TFriendElement>(*fTree->GetListOfFriends())) {
                if (fetree->IsUpdated()) {
-                  needUpdate = kTRUE;
+                  needUpdate = true;
                   fetree->ResetUpdated();
                }
             }
@@ -1407,16 +1418,16 @@ Long64_t TChain::LoadTree(Long64_t entry)
                         Int_t res = CheckBranchAddressType(br, TClass::GetClass(frelement->GetBaddressClassName()),
                                                          (EDataType) frelement->GetBaddressType(), frelement->GetBaddressIsPtr());
                         if ((res & kNeedEnableDecomposedObj) && !br->GetMakeClass()) {
-                           br->SetMakeClass(kTRUE);
+                           br->SetMakeClass(true);
                         }
                         frelement->SetDecomposedObj(br->GetMakeClass());
-                        frelement->SetCheckedType(kTRUE);
+                        frelement->SetCheckedType(true);
                      }
                      // FIXME: We may have to tell the branch it should
                      //        not be an owner of the object pointed at.
                      br->SetAddress(addr);
                      if (TestBit(kAutoDelete)) {
-                        br->SetAutoDelete(kTRUE);
+                        br->SetAutoDelete(true);
                      }
                   }
                }
@@ -1440,7 +1451,7 @@ Long64_t TChain::LoadTree(Long64_t entry)
    }
 
    // Delete the current tree and open the new tree.
-   TTreeCache* tpf = 0;
+   TTreeCache* tpf = nullptr;
    // Delete file unless the file owns this chain!
    // FIXME: The "unless" case here causes us to leak memory.
    if (fFile) {
@@ -1458,7 +1469,7 @@ Long64_t TChain::LoadTree(Long64_t entry)
                tpf->ResetCache();
             }
 
-            fFile->SetCacheRead(0, fTree);
+            fFile->SetCacheRead(nullptr, fTree);
             // If the tree has clones, copy them into the chain
             // clone list so we can change their branch addresses
             // when necessary.
@@ -1477,7 +1488,7 @@ Long64_t TChain::LoadTree(Long64_t entry)
             fFile->Close("R");
          }
          delete fFile;
-         fFile = 0;
+         fFile = nullptr;
       } else {
          // If the tree has clones, copy them into the chain
          // clone list so we can change their branch addresses
@@ -1507,8 +1518,10 @@ Long64_t TChain::LoadTree(Long64_t entry)
    //        if we did not delete it above.
    {
       TDirectory::TContext ctxt;
-      fFile = TFile::Open(element->GetTitle());
-      if (fFile) fFile->SetBit(kMustCleanup);
+      const char *option = fGlobalRegistration ? "READ" : "READ_WITHOUT_GLOBALREGISTRATION";
+      fFile = TFile::Open(element->GetTitle(), option);
+      if (fFile && fGlobalRegistration)
+         fFile->SetBit(kMustCleanup);
    }
 
    // ----- Begin of modifications by MvL
@@ -1516,10 +1529,10 @@ Long64_t TChain::LoadTree(Long64_t entry)
    if (!fFile || fFile->IsZombie()) {
       if (fFile) {
          delete fFile;
-         fFile = 0;
+         fFile = nullptr;
       }
       // Note: We do *not* own fTree.
-      fTree = 0;
+      fTree = nullptr;
       returnCode = -3;
    } else {
       if (fPerfStats)
@@ -1531,10 +1544,16 @@ Long64_t TChain::LoadTree(Long64_t entry)
          // Now that we do not check during the addition, we need to check here!
          Error("LoadTree", "Cannot find tree with name %s in file %s", element->GetName(), element->GetTitle());
          delete fFile;
-         fFile = 0;
+         fFile = nullptr;
          // We do not return yet so that 'fEntries' can be updated with the
          // sum of the entries of all the other trees.
          returnCode = -4;
+      } else if (!fGlobalRegistration) {
+         fTree->ResetBit(kMustCleanup);
+      }
+      // Propagate the IMT settings
+      if (fTree) {
+         fTree->SetImplicitMT(fIMTEnabled);
       }
    }
 
@@ -1555,7 +1574,7 @@ Long64_t TChain::LoadTree(Long64_t entry)
          // we have no place to hold the pointer to the
          // TTreeCache.
          delete tpf;
-         tpf = 0;
+         tpf = nullptr;
       }
    } else {
       if (fCacheUserSet) {
@@ -1643,12 +1662,12 @@ Long64_t TChain::LoadTree(Long64_t entry)
       // calling LoadTree (and to overload a few more).
       TIter next(fFriends);
       TFriendLock lock(this, kLoadTree);
-      TFriendElement* fe = 0;
+      TFriendElement* fe = nullptr;
       while ((fe = (TFriendElement*) next())) {
          TTree* t = fe->GetTree();
          if (!t) continue;
          if (t->GetTreeIndex()) {
-            t->GetTreeIndex()->UpdateFormulaLeaves(0);
+            t->GetTreeIndex()->UpdateFormulaLeaves(nullptr);
          }
          if (t->GetTree() && t->GetTree()->GetTreeIndex()) {
             t->GetTree()->GetTreeIndex()->UpdateFormulaLeaves(GetTree());
@@ -1671,6 +1690,7 @@ Long64_t TChain::LoadTree(Long64_t entry)
    fTree->SetMaxVirtualSize(fMaxVirtualSize);
 
    SetChainOffset(fTreeOffset[fTreeNumber]);
+   fTree->SetChainOffset(GetChainOffset());
 
    // Set the branch statuses for the newly opened file.
    TIter next(fStatus);
@@ -1695,16 +1715,16 @@ Long64_t TChain::LoadTree(Long64_t entry)
                Int_t res = CheckBranchAddressType(br, TClass::GetClass(element->GetBaddressClassName()),
                                                   (EDataType) element->GetBaddressType(), element->GetBaddressIsPtr());
                if ((res & kNeedEnableDecomposedObj) && !br->GetMakeClass()) {
-                  br->SetMakeClass(kTRUE);
+                  br->SetMakeClass(true);
                }
                element->SetDecomposedObj(br->GetMakeClass());
-               element->SetCheckedType(kTRUE);
+               element->SetCheckedType(true);
             }
             // FIXME: We may have to tell the branch it should
             //        not be an owner of the object pointed at.
             br->SetAddress(addr);
             if (TestBit(kAutoDelete)) {
-               br->SetAutoDelete(kTRUE);
+               br->SetAutoDelete(true);
             }
          }
       }
@@ -1735,24 +1755,24 @@ Long64_t TChain::LoadTree(Long64_t entry)
 ////////////////////////////////////////////////////////////////////////////////
 /// Check / locate the files in the chain.
 /// By default only the files not yet looked up are checked.
-/// Use force = kTRUE to check / re-check every file.
+/// Use force = true to check / re-check every file.
 
-void TChain::Lookup(Bool_t force)
+void TChain::Lookup(bool force)
 {
    TIter next(fFiles);
-   TChainElement* element = 0;
+   TChainElement* element = nullptr;
    Int_t nelements = fFiles->GetEntries();
    printf("\n");
    printf("TChain::Lookup - Looking up %d files .... \n", nelements);
    Int_t nlook = 0;
-   TFileStager *stg = 0;
+   TFileStager *stg = nullptr;
    while ((element = (TChainElement*) next())) {
       // Do not do it more than needed
       if (element->HasBeenLookedUp() && !force) continue;
       // Count
       nlook++;
       // Get the Url
-      TUrl elemurl(element->GetTitle(), kTRUE);
+      TUrl elemurl(element->GetTitle(), true);
       // Save current options and anchor
       TString anchor = elemurl.GetAnchor();
       TString options = elemurl.GetOptions();
@@ -1855,7 +1875,7 @@ void TChain::ls(Option_t* option) const
 {
    TObject::ls(option);
    TIter next(fFiles);
-   TChainElement* file = 0;
+   TChainElement* file = nullptr;
    TROOT::IncreaseDirLevel();
    while ((file = (TChainElement*)next())) {
       file->ls(option);
@@ -1881,7 +1901,7 @@ void TChain::ls(Option_t* option) const
 /// ~~~ {.cpp}
 ///     TFile* file = TFile::Open("newfile.root", "RECREATE");
 ///     file->mkdir("mydir")->cd();
-///     ch.Merge(file);
+///     ch.Merge(file, 0);
 /// ~~~
 
 Long64_t TChain::Merge(const char* name, Option_t* option)
@@ -1946,7 +1966,7 @@ Long64_t TChain::Merge(TCollection* /* list */, TFileMergeInfo *)
 /// ~~~ {.cpp}
 ///     TFile* file = TFile::Open("newfile.root", "RECREATE");
 ///     file->mkdir("mydir")->cd();
-///     ch.Merge(file);
+///     ch.Merge(file, 0);
 /// ~~~
 /// If 'option' contains the word 'fast' the merge will be done without
 /// unzipping or unstreaming the baskets (i.e., a direct copy of the raw
@@ -2020,11 +2040,11 @@ Long64_t TChain::Merge(TFile* file, Int_t basketsize, Option_t* option)
    }
 
    // Options
-   Bool_t fastClone = kFALSE;
+   bool fastClone = false;
    TString opt = option;
    opt.ToLower();
    if (opt.Contains("fast")) {
-      fastClone = kTRUE;
+      fastClone = true;
    }
 
    // The chain tree must have a list of branches
@@ -2069,7 +2089,7 @@ Long64_t TChain::Merge(TFile* file, Int_t basketsize, Option_t* option)
 
    // Reset the compression level of the branches.
    if (opt.Contains("c")) {
-      TBranch* branch = 0;
+      TBranch* branch = nullptr;
       TIter nextb(newTree->GetListOfBranches());
       while ((branch = (TBranch*) nextb())) {
          branch->SetCompressionSettings(file->GetCompressionSettings());
@@ -2078,7 +2098,7 @@ Long64_t TChain::Merge(TFile* file, Int_t basketsize, Option_t* option)
 
    // Reset the basket size of the branches.
    if (basketsize > 1000) {
-      TBranch* branch = 0;
+      TBranch* branch = nullptr;
       TIter nextb(newTree->GetListOfBranches());
       while ((branch = (TBranch*) nextb())) {
          branch->SetBasketSize(basketsize);
@@ -2134,27 +2154,23 @@ Long64_t TChain::Merge(TFile* file, Int_t basketsize, Option_t* option)
 ///     [xxx://host]/a/path/file#treename
 /// ~~~
 /// i.e. anchor but no options (query), the filename will be the full path, as
-/// the anchor may be the internal file name of an archive. Use '?#treename' to
+/// the anchor may be the internal file name of an archive. Use '?#%treename' to
 /// pass the treename if the query field is empty.
 ///
 /// \param[in] name        is the original name
-/// \param[in] wildcards   indicates if the resulting filename will be treated for
-///                        wildcards. For backwards compatibility, with most protocols
-///                        this flag suppresses the search for the url fragment
-///                        identifier and limits the query identifier search to cases
-///                        where the tree name is given as a trailing slash-separated
-///                        string at the end of the file name.
 /// \param[out] filename   the url or filename to be opened or matched
 /// \param[out] treename   the treename, which may be found in a url fragment section
 ///                        as a trailing part of the name (deprecated).
 ///                        If not found this will be empty.
+///                        Exception: a fragment containing the '=' character is _not_
+///                        interpreted as a treename
 /// \param[out] query      is the url query section, including the leading question
 ///                        mark. If not found or the query section is only followed by
 ///                        a fragment this will be empty.
 /// \param[out] suffix     the portion of name which was removed to from filename.
 
-void TChain::ParseTreeFilename(const char *name, TString &filename, TString &treename, TString &query, TString &suffix,
-                               Bool_t) const
+void TChain::ParseTreeFilename(const char *name, TString &filename, TString &treename, TString &query,
+                               TString &suffix) const
 {
    Ssiz_t pIdx = kNPOS;
    filename.Clear();
@@ -2163,7 +2179,7 @@ void TChain::ParseTreeFilename(const char *name, TString &filename, TString &tre
    suffix.Clear();
 
    // General case
-   TUrl url(name, kTRUE);
+   TUrl url(name, true);
    filename = (strcmp(url.GetProtocol(), "file")) ? url.GetUrl() : url.GetFileAndOptions();
 
    TString fn = url.GetFile();
@@ -2171,11 +2187,19 @@ void TChain::ParseTreeFilename(const char *name, TString &filename, TString &tre
    if (url.GetOptions() && (strlen(url.GetOptions()) > 0))
       query.Form("?%s", url.GetOptions());
    // The treename can be passed as anchor
-   if (url.GetAnchor() && (strlen(url.GetAnchor()) > 0)) {
+   const char *anchor = url.GetAnchor();
+   if (anchor && anchor[0] != '\0') {
       // Support "?#tree_name" and "?query#tree_name"
       // "#tree_name" (no '?' is for tar archives)
+      // If the treename would contain a '=', treat the anchor as part of the query instead. This makes sure
+      // that Davix parameters are passed.
       if (!query.IsNull() || strstr(name, "?#")) {
-         treename = url.GetAnchor();
+         if (strstr(anchor, "=")) {
+            query.Append("#");
+            query.Append(anchor);
+         } else {
+            treename = anchor;
+         }
       } else {
          // The anchor is part of the file name
          fn = url.GetFileAndOptions();
@@ -2243,7 +2267,7 @@ Long64_t TChain::Process(const char *filename, Option_t *option, Long64_t nentri
    if (fProofChain) {
       // Make sure the element list is up to date
       if (!TestBit(kProofUptodate))
-         SetProof(kTRUE, kTRUE);
+         SetProof(true, true);
       fProofChain->SetEventList(fEventList);
       fProofChain->SetEntryList(fEntryList);
       return fProofChain->Process(filename, option, nentries, firstentry);
@@ -2265,7 +2289,7 @@ Long64_t TChain::Process(TSelector* selector, Option_t* option, Long64_t nentrie
    if (fProofChain) {
       // Make sure the element list is up to date
       if (!TestBit(kProofUptodate))
-         SetProof(kTRUE, kTRUE);
+         SetProof(true, true);
       fProofChain->SetEventList(fEventList);
       fProofChain->SetEntryList(fEntryList);
       return fProofChain->Process(selector, option, nentries, firstentry);
@@ -2281,16 +2305,16 @@ Long64_t TChain::Process(TSelector* selector, Option_t* option, Long64_t nentrie
 void TChain::RecursiveRemove(TObject *obj)
 {
    if (fFile == obj) {
-      fFile = 0;
-      fDirectory = 0;
-      fTree = 0;
+      fFile = nullptr;
+      fDirectory = nullptr;
+      fTree = nullptr;
    }
    if (fDirectory == obj) {
-      fDirectory = 0;
-      fTree = 0;
+      fDirectory = nullptr;
+      fTree = nullptr;
    }
    if (fTree == obj) {
-      fTree = 0;
+      fTree = nullptr;
    }
 }
 
@@ -2323,17 +2347,17 @@ void TChain::RemoveFriend(TTree* oldFriend)
 void TChain::Reset(Option_t*)
 {
    delete fFile;
-   fFile = 0;
+   fFile = nullptr;
    fNtrees         = 0;
    fTreeNumber     = -1;
-   fTree           = 0;
-   fFile           = 0;
+   fTree           = nullptr;
+   fFile           = nullptr;
    fFiles->Delete();
    fStatus->Delete();
    fTreeOffset[0]  = 0;
    TChainElement* element = new TChainElement("*", "");
    fStatus->Add(element);
-   fDirectory = 0;
+   fDirectory = nullptr;
 
    TTree::Reset();
 }
@@ -2346,8 +2370,8 @@ void TChain::ResetAfterMerge(TFileMergeInfo *info)
 {
    fNtrees         = 0;
    fTreeNumber     = -1;
-   fTree           = 0;
-   fFile           = 0;
+   fTree           = nullptr;
+   fFile           = nullptr;
    fFiles->Delete();
    fTreeOffset[0]  = 0;
 
@@ -2406,19 +2430,7 @@ void TChain::SavePrimitive(std::ostream &out, Option_t *option)
    }
    out << std::endl;
 
-   if (GetMarkerColor() != 1) {
-      if (GetMarkerColor() > 228) {
-         TColor::SaveColor(out, GetMarkerColor());
-         out << "   " << chName.Data() << "->SetMarkerColor(ci);" << std::endl;
-      } else
-         out << "   " << chName.Data() << "->SetMarkerColor(" << GetMarkerColor() << ");" << std::endl;
-   }
-   if (GetMarkerStyle() != 1) {
-      out << "   " << chName.Data() << "->SetMarkerStyle(" << GetMarkerStyle() << ");" << std::endl;
-   }
-   if (GetMarkerSize() != 1) {
-      out << "   " << chName.Data() << "->SetMarkerSize(" << GetMarkerSize() << ");" << std::endl;
-   }
+   SaveMarkerAttributes(out, chName.Data(), 1, 1, 1);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2443,12 +2455,12 @@ Long64_t TChain::Scan(const char* varexp, const char* selection, Option_t* optio
 /// the address is set will have the option AutoDelete set
 /// For more details on AutoDelete, see TBranch::SetAutoDelete.
 
-void TChain::SetAutoDelete(Bool_t autodelete)
+void TChain::SetAutoDelete(bool autodelete)
 {
    if (autodelete) {
-      SetBit(kAutoDelete, 1);
+      SetBit(kAutoDelete, true);
    } else {
-      SetBit(kAutoDelete, 0);
+      SetBit(kAutoDelete, false);
    }
 }
 
@@ -2462,7 +2474,7 @@ Int_t TChain::SetCacheSize(Long64_t cacheSize)
    Int_t res = 0;
 
    // remember user has requested this cache setting
-   fCacheUserSet = kTRUE;
+   fCacheUserSet = true;
 
    if (fTree) {
       res = fTree->SetCacheSize(cacheSize);
@@ -2481,7 +2493,7 @@ void TChain::ResetBranchAddress(TBranch *branch)
 {
    TChainElement* element = (TChainElement*) fStatus->FindObject(branch->GetName());
    if (element) {
-      element->SetBaddress(0);
+      element->SetBaddress(nullptr);
    }
    if (fTree) {
       fTree->ResetBranchAddress(branch);
@@ -2494,9 +2506,9 @@ void TChain::ResetBranchAddress(TBranch *branch)
 void TChain::ResetBranchAddresses()
 {
    TIter next(fStatus);
-   TChainElement* element = 0;
+   TChainElement* element = nullptr;
    while ((element = (TChainElement*) next())) {
-      element->SetBaddress(0);
+      element->SetBaddress(nullptr);
    }
    if (fTree) {
       fTree->ResetBranchAddresses();
@@ -2543,10 +2555,10 @@ Int_t TChain::SetBranchAddress(const char *bname, void* add, TBranch** ptr)
       if (branch) {
          res = CheckBranchAddressType(branch, TClass::GetClass(element->GetBaddressClassName()), (EDataType) element->GetBaddressType(), element->GetBaddressIsPtr());
          if ((res & kNeedEnableDecomposedObj) && !branch->GetMakeClass()) {
-            branch->SetMakeClass(kTRUE);
+            branch->SetMakeClass(true);
          }
          element->SetDecomposedObj(branch->GetMakeClass());
-         element->SetCheckedType(kTRUE);
+         element->SetCheckedType(true);
          if (fClones) {
             void* oldAdd = branch->GetAddress();
             for (TObjLink* lnk = fClones->FirstLink(); lnk; lnk = lnk->Next()) {
@@ -2556,7 +2568,7 @@ Int_t TChain::SetBranchAddress(const char *bname, void* add, TBranch** ptr)
                   // the clone's branch is still pointing to us
                   cloneBr->SetAddress(add);
                   if ((res & kNeedEnableDecomposedObj) && !cloneBr->GetMakeClass()) {
-                     cloneBr->SetMakeClass(kTRUE);
+                     cloneBr->SetMakeClass(true);
                   }
                }
             }
@@ -2569,7 +2581,7 @@ Int_t TChain::SetBranchAddress(const char *bname, void* add, TBranch** ptr)
       }
    } else {
       if (ptr) {
-         *ptr = 0;
+         *ptr = nullptr;
       }
    }
    return res;
@@ -2582,9 +2594,9 @@ Int_t TChain::SetBranchAddress(const char *bname, void* add, TBranch** ptr)
 /// Note: See the comments in TBranchElement::SetAddress() for a more
 /// detailed discussion of the meaning of the add parameter.
 
-Int_t TChain::SetBranchAddress(const char* bname, void* add, TClass* realClass, EDataType datatype, Bool_t isptr)
+Int_t TChain::SetBranchAddress(const char* bname, void* add, TClass* realClass, EDataType datatype, bool isptr)
 {
-   return SetBranchAddress(bname, add, 0, realClass, datatype, isptr);
+   return SetBranchAddress(bname, add, nullptr, realClass, datatype, isptr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2594,7 +2606,7 @@ Int_t TChain::SetBranchAddress(const char* bname, void* add, TClass* realClass, 
 /// Note: See the comments in TBranchElement::SetAddress() for a more
 /// detailed discussion of the meaning of the add parameter.
 
-Int_t TChain::SetBranchAddress(const char* bname, void* add, TBranch** ptr, TClass* realClass, EDataType datatype, Bool_t isptr)
+Int_t TChain::SetBranchAddress(const char* bname, void* add, TBranch** ptr, TClass* realClass, EDataType datatype, bool isptr)
 {
    TChainElement* element = (TChainElement*) fStatus->FindObject(bname);
    if (!element) {
@@ -2624,7 +2636,7 @@ Int_t TChain::SetBranchAddress(const char* bname, void* add, TBranch** ptr, TCla
 ///  expression is returned in *found AND the error message 'unknown branch'
 ///  is suppressed.
 
-void TChain::SetBranchStatus(const char* bname, Bool_t status, UInt_t* found)
+void TChain::SetBranchStatus(const char* bname, bool status, UInt_t* found)
 {
    // FIXME: We never explicitly set found to zero!
 
@@ -2660,7 +2672,7 @@ void TChain::SetDirectory(TDirectory* dir)
       fDirectory->Append(this);
       fFile = fDirectory->GetFile();
    } else {
-      fFile = 0;
+      fFile = nullptr;
    }
 }
 
@@ -2696,20 +2708,20 @@ void TChain::SetEntryList(TEntryList *elist, Option_t *opt)
       //TEventList in SetEventList() function)
       if (fEntryList->TestBit(kCanDelete)) {
          TEntryList *tmp = fEntryList;
-         fEntryList = 0; // Avoid problem with RecursiveRemove.
+         fEntryList = nullptr; // Avoid problem with RecursiveRemove.
          delete tmp;
       } else {
-         fEntryList = 0;
+         fEntryList = nullptr;
       }
    }
    if (!elist){
-      fEntryList = 0;
-      fEventList = 0;
+      fEntryList = nullptr;
+      fEventList = nullptr;
       return;
    }
    if (!elist->TestBit(kCanDelete)){
       //this is a direct call to SetEntryList, not via SetEventList
-      fEventList = 0;
+      fEventList = nullptr;
    }
    if (elist->GetN() == 0){
       fEntryList = elist;
@@ -2718,7 +2730,7 @@ void TChain::SetEntryList(TEntryList *elist, Option_t *opt)
    if (fProofChain){
       //for processing on proof, event list and entry list can't be
       //set at the same time.
-      fEventList = 0;
+      fEventList = nullptr;
       fEntryList = elist;
       return;
    }
@@ -2727,7 +2739,7 @@ void TChain::SetEntryList(TEntryList *elist, Option_t *opt)
    Int_t listfound=0;
    TString treename, filename;
 
-   TEntryList *templist = 0;
+   TEntryList *templist = nullptr;
 
    const auto *subentrylists = elist->GetLists();
    if(strcmp(opt, "sync") == 0){
@@ -2791,19 +2803,19 @@ void TChain::SetEntryList(TEntryList *elist, Option_t *opt)
 
    if (listfound == 0){
       Error("SetEntryList", "No list found for the trees in this chain");
-      fEntryList = 0;
+      fEntryList = nullptr;
       return;
    }
    fEntryList = elist;
    TList *elists = elist->GetLists();
-   Bool_t shift = kFALSE;
+   bool shift = false;
    TIter next(elists);
 
    //check, if there are sub-lists in the entry list, that don't
    //correspond to any trees in the chain
    while((templist = (TEntryList*)next())){
       if (templist->GetTreeNumber() < 0){
-         shift = kTRUE;
+         shift = true;
          break;
       }
    }
@@ -2842,14 +2854,14 @@ void TChain::SetEntryListFile(const char *filename, Option_t * /*opt*/)
       //TEventList in SetEventList() function)
       if (fEntryList->TestBit(kCanDelete)) {
          TEntryList *tmp = fEntryList;
-         fEntryList = 0; // Avoid problem with RecursiveRemove.
+         fEntryList = nullptr; // Avoid problem with RecursiveRemove.
          delete tmp;
       } else {
-         fEntryList = 0;
+         fEntryList = nullptr;
       }
    }
 
-   fEventList = 0;
+   fEventList = nullptr;
 
    TString basename(filename);
 
@@ -2862,8 +2874,8 @@ void TChain::SetEntryListFile(const char *filename, Option_t * /*opt*/)
       basename.Remove(dotslashpos+5);
    }
    fEntryList = new TEntryListFromFile(basename.Data(), behind_dot_root.Data(), fNtrees);
-   fEntryList->SetBit(kCanDelete, kTRUE);
-   fEntryList->SetDirectory(0);
+   fEntryList->SetBit(kCanDelete, true);
+   fEntryList->SetDirectory(nullptr);
    ((TEntryListFromFile*)fEntryList)->SetFileNames(fFiles);
 }
 
@@ -2885,16 +2897,16 @@ void TChain::SetEventList(TEventList *evlist)
    if (fEntryList) {
       if (fEntryList->TestBit(kCanDelete)) {
          TEntryList *tmp = fEntryList;
-         fEntryList = 0; // Avoid problem with RecursiveRemove.
+         fEntryList = nullptr; // Avoid problem with RecursiveRemove.
          delete tmp;
       } else {
-         fEntryList = 0;
+         fEntryList = nullptr;
       }
    }
 
    if (!evlist) {
-      fEntryList = 0;
-      fEventList = 0;
+      fEntryList = nullptr;
+      fEventList = nullptr;
       return;
    }
 
@@ -2906,10 +2918,10 @@ void TChain::SetEventList(TEventList *evlist)
          //TEventList in SetEventList() function)
          if (fEntryList->TestBit(kCanDelete)){
             TEntryList *tmp = fEntryList;
-            fEntryList = 0; // Avoid problem with RecursiveRemove.
+            fEntryList = nullptr; // Avoid problem with RecursiveRemove.
             delete tmp;
          } else {
-            fEntryList = 0;
+            fEntryList = nullptr;
          }
       }
       return;
@@ -2918,7 +2930,7 @@ void TChain::SetEventList(TEventList *evlist)
    char enlistname[100];
    snprintf(enlistname,100, "%s_%s", evlist->GetName(), "entrylist");
    TEntryList *enlist = new TEntryList(enlistname, evlist->GetTitle());
-   enlist->SetDirectory(0);
+   enlist->SetDirectory(nullptr);
 
    Int_t nsel = evlist->GetN();
    Long64_t globalentry, localentry;
@@ -2946,7 +2958,7 @@ void TChain::SetEventList(TEventList *evlist)
       enlist->SetTree(treename, filename);
       enlist->Enter(localentry);
    }
-   enlist->SetBit(kCanDelete, kTRUE);
+   enlist->SetBit(kCanDelete, true);
    enlist->SetReapplyCut(evlist->GetReapplyCut());
    SetEntryList(enlist);
 }
@@ -2956,7 +2968,7 @@ void TChain::SetEventList(TEventList *evlist)
 
 void TChain::SetName(const char* name)
 {
-   {
+   if (fGlobalRegistration) {
       // Should this be extended to include the call to TTree::SetName?
       R__WRITE_LOCKGUARD(ROOT::gCoreMutex); // Take the lock once rather than 3 times.
       gROOT->GetListOfCleanups()->Remove(this);
@@ -2964,14 +2976,13 @@ void TChain::SetName(const char* name)
       gROOT->GetListOfDataSets()->Remove(this);
    }
    TTree::SetName(name);
-   {
+   if (fGlobalRegistration) {
       // Should this be extended to include the call to TTree::SetName?
       R__WRITE_LOCKGUARD(ROOT::gCoreMutex); // Take the lock once rather than 3 times.
       gROOT->GetListOfCleanups()->Add(this);
       gROOT->GetListOfSpecials()->Add(this);
       gROOT->GetListOfDataSets()->Add(this);
    }
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2991,14 +3002,14 @@ void TChain::SetPacketSize(Int_t size)
 /// Enable/Disable PROOF processing on the current default Proof (gProof).
 ///
 /// "Draw" and "Processed" commands will be handled by PROOF.
-/// The refresh and gettreeheader are meaningful only if on == kTRUE.
-/// If refresh is kTRUE the underlying fProofChain (chain proxy) is always
+/// The refresh and gettreeheader are meaningful only if on == true.
+/// If refresh is true the underlying fProofChain (chain proxy) is always
 /// rebuilt (even if already existing).
-/// If gettreeheader is kTRUE the header of the tree will be read from the
+/// If gettreeheader is true the header of the tree will be read from the
 /// PROOF cluster: this is only needed for browsing and should be used with
 /// care because it may take a long time to execute.
 
-void TChain::SetProof(Bool_t on, Bool_t refresh, Bool_t gettreeheader)
+void TChain::SetProof(bool on, bool refresh, bool gettreeheader)
 {
    if (!on) {
       // Disable

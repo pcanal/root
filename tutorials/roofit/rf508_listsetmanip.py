@@ -7,10 +7,10 @@
 ## RooArgSet and RooArgList tools and tricks
 ##
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
-## \author Clemens Lange
-## \author Wouter Verkerke (C version)
+## \authors Clemens Lange, Wouter Verkerke (C version)
 
 from __future__ import print_function
 import ROOT

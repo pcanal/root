@@ -4,6 +4,7 @@
 ## Numeric algorithm tuning: configuration and customization of how numeric (partial) integrals are executed
 ##
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -36,17 +37,18 @@ ROOT.RooAbsReal.defaultIntegratorConfig().setEpsRel(1e-6)
 # N u m e r i c   i n t e g r a t i o n   o f   l a n d a u   p d f
 # ------------------------------------------------------------------
 
-# Construct pdf without support for analytical integrator for
-# demonstration purposes
 x = ROOT.RooRealVar("x", "x", -10, 10)
-landau = ROOT.RooLandau("landau", "landau", x, ROOT.RooFit.RooConst(0), ROOT.RooFit.RooConst(0.1))
+landau = ROOT.RooLandau("landau", "landau", x, 0.0, 0.1)
+
+# Disable analytic integration from demonstration purposes
+landau.forceNumInt(True)
 
 # Activate debug-level messages for topic integration to be able to follow
 # actions below
 ROOT.RooMsgService.instance().addStream(ROOT.RooFit.DEBUG, Topic=ROOT.RooFit.Integration)
 
 # Calculate integral over landau with default choice of numeric integrator
-intLandau = landau.createIntegral(ROOT.RooArgSet(x))
+intLandau = landau.createIntegral({x})
 val = intLandau.getVal()
 print(" [1] int_dx landau(x) = ", val)  # setprecision(15)
 
@@ -61,7 +63,7 @@ if integratorGKNotExisting:
     print("WARNING: RooAdaptiveGaussKronrodIntegrator is not existing because ROOT is built without Mathmore support")
 
 # Calculate integral over landau with custom integral specification
-intLandau2 = landau.createIntegral(ROOT.RooArgSet(x), NumIntConfig=customConfig)
+intLandau2 = landau.createIntegral({x}, NumIntConfig=customConfig)
 val2 = intLandau2.getVal()
 print(" [2] int_dx landau(x) = ", val2)
 
@@ -74,7 +76,7 @@ landau.setIntegratorConfig(customConfig)
 
 # Calculate integral over landau custom numeric integrator specified as
 # object default
-intLandau3 = landau.createIntegral(ROOT.RooArgSet(x))
+intLandau3 = landau.createIntegral({x})
 val3 = intLandau3.getVal()
 print(" [3] int_dx landau(x) = ", val3)
 
@@ -83,7 +85,7 @@ print(" [3] int_dx landau(x) = ", val3)
 if not integratorGKNotExisting:
     ROOT.RooAbsReal.defaultIntegratorConfig().method1D().setLabel("RooAdaptiveGaussKronrodIntegrator1D")
 
-    # Adjusting parameters of a speficic technique
+    # Adjusting parameters of a specific technique
     # ---------------------------------------------------------------------------------------
 
     # Adjust maximum number of steps of ROOT.RooIntegrator1D in the global

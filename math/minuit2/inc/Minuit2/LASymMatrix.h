@@ -45,26 +45,24 @@ int Invert(LASymMatrix &);
 class LASymMatrix {
 
 private:
-   LASymMatrix() : fSize(0), fNRow(0), fData(0) {}
+   LASymMatrix() : fSize(0), fNRow(0), fData(nullptr) {}
 
 public:
    typedef sym Type;
 
    LASymMatrix(unsigned int n)
-      : fSize(n * (n + 1) / 2), fNRow(n),
-        fData((double *)StackAllocatorHolder::Get().Allocate(sizeof(double) * n * (n + 1) / 2))
+      : fSize(n * (n + 1) / 2),
+        fNRow(n),
+        fData( (n> 0) ? (double *)StackAllocatorHolder::Get().Allocate(sizeof(double) * n * (n + 1) / 2)
+                      : nullptr )
    {
       //     assert(fSize>0);
-      std::memset(fData, 0, fSize * sizeof(double));
-      //     std::cout<<"LASymMatrix(unsigned int n), n= "<<n<<std::endl;
+      if (fData)
+         std::memset(fData, 0, fSize * sizeof(double));
    }
 
    ~LASymMatrix()
    {
-      //     std::cout<<"~LASymMatrix()"<<std::endl;
-      //     if(fData) std::cout<<"deleting "<<fSize<<std::endl;
-      //     else std::cout<<"no delete"<<std::endl;
-      //     if(fData) delete [] fData;
       if (fData)
          StackAllocatorHolder::Get().Deallocate(fData);
    }
@@ -73,16 +71,18 @@ public:
       : fSize(v.size()), fNRow(v.Nrow()),
         fData((double *)StackAllocatorHolder::Get().Allocate(sizeof(double) * v.size()))
    {
-      //     std::cout<<"LASymMatrix(const LASymMatrix& v)"<<std::endl;
       std::memcpy(fData, v.Data(), fSize * sizeof(double));
    }
 
    LASymMatrix &operator=(const LASymMatrix &v)
    {
-      //     std::cout<<"LASymMatrix& operator=(const LASymMatrix& v)"<<std::endl;
-      //     std::cout<<"fSize= "<<fSize<<std::endl;
-      //     std::cout<<"v.size()= "<<v.size()<<std::endl;
-      assert(fSize == v.size());
+      if (fSize < v.size()) {
+         if (fData)
+          StackAllocatorHolder::Get().Deallocate(fData);
+         fSize = v.size();
+         fNRow = v.Nrow();
+         fData = (double *)StackAllocatorHolder::Get().Allocate(sizeof(double) * fSize);
+      }
       std::memcpy(fData, v.Data(), fSize * sizeof(double));
       return *this;
    }
@@ -100,7 +100,7 @@ public:
    }
 
    template <class A, class B, class T>
-   LASymMatrix(const ABObj<sym, ABSum<ABObj<sym, A, T>, ABObj<sym, B, T>>, T> &sum) : fSize(0), fNRow(0), fData(0)
+   LASymMatrix(const ABObj<sym, ABSum<ABObj<sym, A, T>, ABObj<sym, B, T>>, T> &sum) : fSize(0), fNRow(0), fData(nullptr)
    {
       //     std::cout<<"template<class A, class B, class T> LASymMatrix(const ABObj<sym, ABSum<ABObj<sym, A, T>,
       //     ABObj<sym, B, T> > >& sum)"<<std::endl; recursive construction
@@ -111,7 +111,7 @@ public:
 
    template <class A, class T>
    LASymMatrix(const ABObj<sym, ABSum<ABObj<sym, LASymMatrix, T>, ABObj<sym, A, T>>, T> &sum)
-      : fSize(0), fNRow(0), fData(0)
+      : fSize(0), fNRow(0), fData(nullptr)
    {
       //     std::cout<<"template<class A, class T> LASymMatrix(const ABObj<sym, ABSum<ABObj<sym, LASymMatrix, T>,
       //     ABObj<sym, A, T> >,T>& sum)"<<std::endl;
@@ -126,7 +126,7 @@ public:
    }
 
    template <class A, class T>
-   LASymMatrix(const ABObj<sym, ABObj<sym, A, T>, T> &something) : fSize(0), fNRow(0), fData(0)
+   LASymMatrix(const ABObj<sym, ABObj<sym, A, T>, T> &something) : fSize(0), fNRow(0), fData(nullptr)
    {
       //     std::cout<<"template<class A, class T> LASymMatrix(const ABObj<sym, ABObj<sym, A, T>, T>&
       //     something)"<<std::endl;
@@ -151,7 +151,7 @@ public:
    LASymMatrix(
       const ABObj<sym, ABSum<ABObj<sym, MatrixInverse<sym, ABObj<sym, LASymMatrix, T>, T>, T>, ABObj<sym, A, T>>, T>
          &sum)
-      : fSize(0), fNRow(0), fData(0)
+      : fSize(0), fNRow(0), fData(nullptr)
    {
       //     std::cout<<"template<class A, class T> LASymMatrix(const ABObj<sym, ABSum<ABObj<sym, MatrixInverse<sym,
       //     ABObj<sym, LASymMatrix, T>, T>, T>, ABObj<sym, A, T> >, T>& sum)"<<std::endl;
@@ -168,7 +168,7 @@ public:
    template <class A, class T>
    LASymMatrix(
       const ABObj<sym, ABSum<ABObj<sym, VectorOuterProduct<ABObj<vec, LAVector, T>, T>, T>, ABObj<sym, A, T>>, T> &sum)
-      : fSize(0), fNRow(0), fData(0)
+      : fSize(0), fNRow(0), fData(nullptr)
    {
       //     std::cout<<"template<class A, class T> LASymMatrix(const ABObj<sym, ABSum<ABObj<sym,
       //     VectorOuterProduct<ABObj<vec, LAVector, T>, T>, T> ABObj<sym, A, T> >,T>& sum)"<<std::endl;
@@ -285,7 +285,7 @@ public:
    LASymMatrix &operator=(const ABObj<sym, LASymMatrix, T> &v)
    {
       // std::cout<<"template<class T> LASymMatrix& operator=(ABObj<sym, LASymMatrix, T>& v)"<<std::endl;
-      if (fSize == 0 && fData == 0) {
+      if (fSize == 0 && !fData) {
          fSize = v.Obj().size();
          fNRow = v.Obj().Nrow();
          fData = (double *)StackAllocatorHolder::Get().Allocate(sizeof(double) * fSize);
@@ -303,7 +303,7 @@ public:
    {
       // std::cout<<"template<class A, class T> LASymMatrix& operator=(const ABObj<sym, ABObj<sym, A, T>, T>&
       // something)"<<std::endl;
-      if (fSize == 0 && fData == 0) {
+      if (fSize == 0 && fData == nullptr) {
          (*this) = something.Obj();
          (*this) *= something.f();
       } else {
@@ -323,7 +323,7 @@ public:
       // std::cout<<"template<class A, class B, class T> LASymMatrix& operator=(const ABObj<sym, ABSum<ABObj<sym, A, T>,
       // ABObj<sym, B, T> >,T>& sum)"<<std::endl;
       // recursive construction
-      if (fSize == 0 && fData == 0) {
+      if (fSize == 0 && fData == nullptr) {
          (*this) = sum.Obj().A();
          (*this) += sum.Obj().B();
          (*this) *= sum.f();
@@ -343,7 +343,7 @@ public:
       // std::cout<<"template<class A, class T> LASymMatrix& operator=(const ABObj<sym, ABSum<ABObj<sym, LASymMatrix,
       // T>, ABObj<sym, A, T> >,T>& sum)"<<std::endl;
 
-      if (fSize == 0 && fData == 0) {
+      if (fSize == 0 && fData == nullptr) {
          // std::cout<<"fSize == 0 && fData == 0"<<std::endl;
          (*this) = sum.Obj().B();
          (*this) += sum.Obj().A();
@@ -363,7 +363,7 @@ public:
    template <class T>
    LASymMatrix &operator=(const ABObj<sym, MatrixInverse<sym, ABObj<sym, LASymMatrix, T>, T>, T> &inv)
    {
-      if (fSize == 0 && fData == 0) {
+      if (fSize == 0 && fData == nullptr) {
          fSize = inv.Obj().Obj().Obj().size();
          fNRow = inv.Obj().Obj().Obj().Nrow();
          fData = (double *)StackAllocatorHolder::Get().Allocate(sizeof(double) * fSize);

@@ -17,6 +17,7 @@
 #include <string>
 #include <thread>
 #include <mutex>
+#include <functional>
 
 #include "THttpEngine.h"
 
@@ -27,22 +28,28 @@ class THttpWSHandler;
 class TExec;
 
 namespace ROOT {
-namespace Experimental {
+
+/// function signature for catching show calls of arbitrary RWebWindow
+/// if returns true, normal show procedure will not be invoked
+using WebWindowShowCallback_t = std::function<bool(RWebWindow &, const RWebDisplayArgs &)>;
 
 class RWebWindowsManager {
 
    friend class RWebWindow;
 
 private:
-   std::unique_ptr<THttpServer> fServer; ///<! central communication with the all used displays
-   std::string fAddr;                    ///<! HTTP address of the server
-   std::recursive_mutex fMutex;          ///<! main mutex, used for window creations
-   unsigned fIdCnt{0};                   ///<! counter for identifiers
-   bool fUseHttpThrd{false};             ///<! use special thread for THttpServer
-   bool fUseSenderThreads{false};        ///<! use extra threads for sending data from RWebWindow to clients
-   float fLaunchTmout{30.};              ///<! timeout in seconds to start browser process, default 30s
-   bool fExternalProcessEvents{false};   ///<! indicate that there are external process events engine
-   std::unique_ptr<TExec> fAssgnExec;    ///<! special exec to assign thread id via ProcessEvents
+   std::unique_ptr<THttpServer> fServer;  ///<! central communication with the all used displays
+   std::string fAddr;                     ///<! HTTP address of the server
+   std::string fSessionKey;               ///<! secret session key used on client to code connections keys
+   bool fUseSessionKey{false};            ///<! is session key has to be used for data signing
+   std::recursive_mutex fMutex;           ///<! main mutex, used for window creations
+   unsigned fIdCnt{0};                    ///<! counter for identifiers
+   bool fUseHttpThrd{false};              ///<! use special thread for THttpServer
+   bool fUseSenderThreads{false};         ///<! use extra threads for sending data from RWebWindow to clients
+   float fLaunchTmout{30.};               ///<! timeout in seconds to start browser process, default 30s
+   bool fExternalProcessEvents{false};    ///<! indicate that there are external process events engine
+   std::unique_ptr<TExec> fAssgnExec;     ///<! special exec to assign thread id via ProcessEvents
+   WebWindowShowCallback_t fShowCallback; ///<! function called for each RWebWindow::Show call
 
    /// Returns true if http server use special thread for requests processing (default off)
    bool IsUseHttpThread() const { return fUseHttpThrd; }
@@ -60,11 +67,13 @@ private:
 
    int WaitFor(RWebWindow &win, WebWindowWaitFunc_t check, bool timed = false, double tm = -1);
 
-   std::string GetUrl(const RWebWindow &win, bool remote = false);
+   std::string GetUrl(RWebWindow &win, bool remote = false, std::string *produced_key = nullptr);
 
    bool CreateServer(bool with_http = false);
 
-   void AssignWindowThreadId(RWebWindow &win);
+   bool InformListener(const std::string &msg);
+
+   static std::string GenerateKey(int keylen = 32);
 
 public:
    RWebWindowsManager();
@@ -77,6 +86,9 @@ public:
    /// Returns http address of the server, empty string when not available
    std::string GetServerAddr() const { return fAddr; }
 
+   /// Assign show callback which can catch window showing, used by RBrowser
+   void SetShowCallback(WebWindowShowCallback_t func) { fShowCallback = func; }
+
    static std::shared_ptr<RWebWindowsManager> &Instance();
 
    std::shared_ptr<RWebWindow> CreateWindow();
@@ -85,9 +97,13 @@ public:
 
    static bool IsMainThrd();
    static void AssignMainThrd();
+
+   static void SetLoopbackMode(bool on = true);
+   static bool IsLoopbackMode();
+
+   static void SetUseSessionKey(bool on = false);
 };
 
-} // namespace Experimental
 } // namespace ROOT
 
 #endif

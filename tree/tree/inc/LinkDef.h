@@ -97,5 +97,7 @@
 #pragma read sourceClass="TLeafElement" targetClass="TLeafElement" version="[1]" source="Int_t fType" target="fType"  code="{ fType = onfile.fType; if (fType < TVirtualStreamerInfo::kObject) newObj->SetLenType(fType); }"
 
 #pragma link C++ namespace ROOT::Internal::TreeUtils;
+#pragma link C++ class ROOT::Internal::TreeUtils::RNoCleanupNotifier;
+#pragma link C++ class TNotifyLink<ROOT::Internal::TreeUtils::RNoCleanupNotifierHelper>;
 
 #endif

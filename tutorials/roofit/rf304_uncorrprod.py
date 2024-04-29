@@ -5,7 +5,9 @@
 ##
 ## `pdf = gauss(x,mx,sx) * gauss(y,my,sy)`
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -39,7 +41,7 @@ gaussxy = ROOT.RooProdPdf("gaussxy", "gaussx*gaussy", [gaussx, gaussy])
 # ---------------------------------------------------------------------------
 
 # Generate 10000 events in x and y from gaussxy
-data = gaussxy.generate(ROOT.RooArgSet(x, y), 10000)
+data = gaussxy.generate({x, y}, 10000)
 
 # Plot x distribution of data and projection of gaussxy x = Int(dy)
 # gaussxy(x,y)

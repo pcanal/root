@@ -68,12 +68,12 @@ of a main program creating an interactive version is shown below:
 
 #include <ROOT/RConfig.hxx>
 #include <ROOT/TErrorDefaultHandler.hxx>
+#include <ROOT/RVersion.hxx>
 #include "RConfigure.h"
 #include "RConfigOptions.h"
-#include "RVersion.h"
-#include "RGitCommit.h"
 #include <string>
 #include <map>
+#include <set>
 #include <cstdlib>
 #ifdef WIN32
 #include <io.h>
@@ -150,6 +150,7 @@ FARPROC dlsym(void *library, const char *function_name)
 #include "TListOfFunctionTemplates.h"
 #include "TFunctionTemplate.h"
 #include "ThreadLocalStorage.h"
+#include "TVirtualMapFile.h"
 #include "TVirtualRWMutex.h"
 #include "TVirtualX.h"
 
@@ -192,13 +193,20 @@ static Int_t IVERSQ()
 
 static Int_t IDATQQ(const char *date)
 {
+   if (!date) {
+      Error("TSystem::IDATQQ", "nullptr date string, expected e.g. 'Dec 21 2022'");
+      return -1;
+   }
+
    static const char *months[] = {"Jan","Feb","Mar","Apr","May",
                                   "Jun","Jul","Aug","Sep","Oct",
                                   "Nov","Dec"};
-
    char  sm[12];
    Int_t yy, mm=0, dd;
-   sscanf(date, "%s %d %d", sm, &dd, &yy);
+   if (sscanf(date, "%s %d %d", sm, &dd, &yy) != 3) {
+      Error("TSystem::IDATQQ", "Cannot parse date string '%s', expected e.g. 'Dec 21 2022'", date);
+      return -1;
+   }
    for (int i = 0; i < 12; i++)
       if (!strncmp(sm, months[i], 3)) {
          mm = i+1;
@@ -521,6 +529,10 @@ namespace Internal {
    /// a hint for ROOT: it will try to satisfy the request if the execution
    /// scenario allows it. For example, if ROOT is configured to use an external
    /// scheduler, setting a value for 'numthreads' might not have any effect.
+   /// The maximum number of threads can be influenced by the environment
+   /// variable `ROOT_MAX_THREADS`: `export ROOT_MAX_THREADS=2` will try to set
+   /// the maximum number of active threads to 2, if the scheduling library
+   /// (such as tbb) "permits".
    ///
    /// \note Use `DisableImplicitMT()` to disable multi-threading (some locks will remain in place as
    /// described in EnableThreadSafety()). `EnableImplicitMT(1)` creates a thread-pool of size 1.
@@ -573,13 +585,6 @@ namespace Internal {
 #else
       return 0;
 #endif
-   }
-
-   ////////////////////////////////////////////////////////////////////////////////
-   /// Returns the size of the pool used for implicit multi-threading.
-   UInt_t GetImplicitMTPoolSize()
-   {
-      return GetThreadPoolSize();
    }
 } // end of ROOT namespace
 
@@ -814,6 +819,12 @@ TROOT::TROOT(const char *name, const char *title, VoidFuncPtr_t *initfunc)
    TStyle::BuildStyles();
    SetStyle(gEnv->GetValue("Canvas.Style", "Modern"));
 
+   const char *webdisplay = gSystem->Getenv("ROOT_WEBDISPLAY");
+   if (!webdisplay || !*webdisplay)
+      webdisplay = gEnv->GetValue("WebGui.Display", "");
+   if (webdisplay && *webdisplay)
+      SetWebDisplay(webdisplay);
+
    // Setup default (batch) graphics and GUI environment
    gBatchGuiFactory = new TGuiFactory;
    gGuiFactory      = gBatchGuiFactory;
@@ -858,6 +869,13 @@ TROOT::~TROOT()
    using namespace ROOT::Internal;
 
    if (gROOTLocal == this) {
+
+      // TMapFile must be closed before they are deleted, so run CloseFiles
+      // (possibly a second time if the application has an explicit TApplication
+      // object, but in that this is a no-op).  TMapFile needs the slow close
+      // so that the custome operator delete can properly find out whether the
+      // memory being 'freed' is part of a memory mapped file or not.
+      CloseFiles();
 
       // If the interpreter has not yet been initialized, don't bother
       gGetROOT = &GetROOT1;
@@ -1049,20 +1067,39 @@ void TROOT::Browse(TBrowser *b)
    }
 }
 
+namespace {
+   std::set<TClass *> &GetClassSavedSet()
+   {
+      static thread_local std::set<TClass*> gClassSaved;
+      return gClassSaved;
+   }
+}
+
 ////////////////////////////////////////////////////////////////////////////////
-/// return class status bit kClassSaved for class cl
+/// return class status 'ClassSaved' for class cl
 /// This function is called by the SavePrimitive functions writing
 /// the C++ code for an object.
 
 Bool_t TROOT::ClassSaved(TClass *cl)
 {
-   if (cl == nullptr) return kFALSE;
-   if (cl->TestBit(TClass::kClassSaved)) return kTRUE;
-   cl->SetBit(TClass::kClassSaved);
-   return kFALSE;
+   if (cl == nullptr)
+      return kFALSE;
+
+   auto result = GetClassSavedSet().insert(cl);
+
+   // Return false on the first insertion only.
+   return !result.second;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Reset the ClassSaved status of all classes
+void TROOT::ResetClassSaved()
+{
+   GetClassSavedSet().clear();
 }
 
 namespace {
+   template <typename Content>
    static void R__ListSlowClose(TList *files)
    {
       // Routine to close a list of files using the 'slow' techniques
@@ -1071,7 +1108,7 @@ namespace {
       static TObject harmless;
       TObjLink *cursor = files->FirstLink();
       while (cursor) {
-         TDirectory *dir = static_cast<TDirectory*>( cursor->GetObject() );
+         Content *dir = static_cast<Content*>( cursor->GetObject() );
          if (dir) {
             // In order for the iterator to stay valid, we must
             // prevent the removal of the object (dir) from the list
@@ -1130,11 +1167,13 @@ namespace {
 
 void TROOT::CloseFiles()
 {
+   // Close files without deleting the objects (`ResetGlobals` will be called
+   // next; see `EndOfProcessCleanups()` below.)
    if (fFiles && fFiles->First()) {
-      R__ListSlowClose(static_cast<TList*>(fFiles));
+      R__ListSlowClose<TDirectory>(static_cast<TList*>(fFiles));
    }
    // and Close TROOT itself.
-   Close("slow");
+   Close("nodelete");
    // Now sockets.
    if (fSockets && fSockets->First()) {
       if (nullptr==fCleanups->FindObject(fSockets) ) {
@@ -1197,7 +1236,7 @@ void TROOT::CloseFiles()
       gInterpreter->CallFunc_Delete(socketCloser);
    }
    if (fMappedFiles && fMappedFiles->First()) {
-      R__ListSlowClose(static_cast<TList*>(fMappedFiles));
+      R__ListSlowClose<TVirtualMapFile>(static_cast<TList*>(fMappedFiles));
    }
 
 }
@@ -1213,14 +1252,17 @@ void TROOT::EndOfProcessCleanups()
    CloseFiles();
 
    if (gInterpreter) {
+      // This might delete some of the objects 'held' by the TFiles (hence
+      // `CloseFiles` must not delete them)
       gInterpreter->ResetGlobals();
    }
 
-   // Now delete the objects 'held' by the TFiles so that it
+   // Now delete the objects still 'held' by the TFiles so that it
    // is done before the tear down of the libraries.
    if (fClosedObjects && fClosedObjects->First()) {
       R__ListSlowDeleteContent(static_cast<TList*>(fClosedObjects));
    }
+   fList->Delete("slow");
 
    // Now a set of simpler things to delete.  See the same ordering in
    // TROOT::~TROOT
@@ -1372,7 +1414,7 @@ TObject *TROOT::FindSpecialObject(const char *name, void *&where)
       }
    }
    if (!temp) return nullptr;
-   if (temp->TestBit(kNotDeleted)) return temp;
+   if (!ROOT::Detail::HasBeenDeleted(temp)) return temp;
    return nullptr;
 }
 
@@ -1544,19 +1586,30 @@ TStyle *TROOT::GetStyle(const char *name) const
 
 TObject *TROOT::GetFunction(const char *name) const
 {
-   if (name == nullptr || name[0] == 0) {
+   if (!name || !*name)
       return nullptr;
-   }
 
-   {
-      R__LOCKGUARD(gROOTMutex);
-      TObject *f1 = fFunctions->FindObject(name);
-      if (f1) return f1;
-   }
+   static std::atomic<bool> isInited = false;
 
-   gROOT->ProcessLine("TF1::InitStandardFunctions();");
+   // Capture the state before calling FindObject as it could change
+   // between the end of FindObject and the if statement
+   bool wasInited = isInited.load();
 
-   R__LOCKGUARD(gROOTMutex);
+   auto f1 = fFunctions->FindObject(name);
+   if (f1 || wasInited)
+      return f1;
+
+   // If 2 threads gets here at the same time, the static initialization "lock"
+   // will stall one of them until ProcessLine is finished and both will return the
+   // correct answer.
+   // Note: if one (or more) thread(s) is suspended right after the 'isInited.load()`
+   // and restart after this thread has finished the initialization (i.e. a rare case),
+   // the only penalty we pay is a spurious 2nd lookup for an unknown function.
+   [[maybe_unused]] static const auto _res = []() {
+      gROOT->ProcessLine("TF1::InitStandardFunctions();");
+      isInited = true;
+      return true;
+   }();
    return fFunctions->FindObject(name);
 }
 
@@ -2375,15 +2428,8 @@ Longptr_t TROOT::ProcessLineFast(const char *line, Int_t *error)
 
 void TROOT::ReadGitInfo()
 {
-#ifdef ROOT_GIT_COMMIT
-   fGitCommit = ROOT_GIT_COMMIT;
-#endif
-#ifdef ROOT_GIT_BRANCH
-   fGitBranch = ROOT_GIT_BRANCH;
-#endif
-
-   TString gitinfo = "gitinfo.txt";
-   char *filename = gSystem->ConcatFileName(TROOT::GetEtcDir(), gitinfo);
+   TString filename = "gitinfo.txt";
+   gSystem->PrependPathName(TROOT::GetEtcDir(), filename);
 
    FILE *fp = fopen(filename, "r");
    if (fp) {
@@ -2391,15 +2437,16 @@ void TROOT::ReadGitInfo()
       // read branch name
       s.Gets(fp);
       fGitBranch = s;
-      // read commit SHA1
+      // read commit hash
       s.Gets(fp);
       fGitCommit = s;
       // read date/time make was run
       s.Gets(fp);
       fGitDate = s;
       fclose(fp);
+   } else {
+      Error("ReadGitInfo()", "Cannot determine git info: etc/gitinfo.txt not found!");
    }
-   delete [] filename;
 }
 
 Bool_t &GetReadingObject() {
@@ -2754,38 +2801,65 @@ void TROOT::SetMacroPath(const char *newpath)
 /// The input parameter `webdisplay` defines where web graphics is rendered.
 /// `webdisplay` parameter may contain:
 ///
+///  - "firefox": select Mozilla Firefox browser for interactive web display
+///  - "chrome": select Google Chrome browser for interactive web display
+///  - "edge": select Microsoft Edge browser for interactive web display
+///  - "native": select one of the natively-supported web browsers firefox/chrome/edge for interactive web display
+///  - "qt5": uses QWebEngine from Qt5, no real http server started (requires `qt5web` component build for ROOT)
+///  - "qt6": uses QWebEngine from Qt6, no real http server started (requires `qt6web` component build for ROOT)
+///  - "cef": uses Chromium Embeded Framework, no real http server started (requires `cefweb` component build for ROOT)
+///  - "local": select on of available local (without http server) engines like qt5/qt6/cef
+///  - "default": system default web browser, invoked with `xdg-open` on Linux, `start` on Mac or `open` on Windows
+///  - "on": try "local", then "native", then "default" option
 ///  - "off": turns off the web display and comes back to normal graphics in
 ///    interactive mode.
-///  - "batch": turns the web display in batch mode. It can be prepended with
-///    another string which is considered as the new current web display.
-///  - "nobatch": turns the web display in interactive mode. It can be
-///    prepended with another string which is considered as the new current web display.
-///
-/// If the option "off" is not set, this method turns the normal graphics to
-/// "Batch" to avoid the loading of local graphics libraries.
+///  - "server:port": turns the web display into server mode with specified port. Web widgets will not be displayed,
+///    only text message with window URL will be printed on standard output
 
 void TROOT::SetWebDisplay(const char *webdisplay)
 {
-   const char *wd = webdisplay;
-   if (!wd)
-      wd = "";
+   const char *wd = webdisplay ? webdisplay : "";
+
+   // store default values to set them back when needed
+   static TString canName = gEnv->GetValue("Canvas.Name", "");
+   static TString brName = gEnv->GetValue("Browser.Name", "");
+   static TString trName = gEnv->GetValue("TreeViewer.Name", "");
 
    if (!strcmp(wd, "off")) {
       fIsWebDisplay = kFALSE;
-      fIsWebDisplayBatch = kFALSE;
-      fWebDisplay = "";
+      fWebDisplay = "off";
    } else {
       fIsWebDisplay = kTRUE;
-      if (!strncmp(wd, "batch", 5)) {
-         fIsWebDisplayBatch = kTRUE;
-         wd += 5;
-      } else if (!strncmp(wd, "nobatch", 7)) {
-         fIsWebDisplayBatch = kFALSE;
-         wd += 7;
+
+      // handle server mode
+      if (!strncmp(wd, "server", 6)) {
+         fWebDisplay = "server";
+         if (wd[6] == ':') {
+            if ((wd[7] >= '0') && (wd[7] <= '9')) {
+               auto port = TString(wd+7).Atoi();
+               if (port > 0)
+                  gEnv->SetValue("WebGui.HttpPort", port);
+               else
+                  Error("SetWebDisplay", "Wrong port parameter %s for server", wd+7);
+            } else if (wd[7]) {
+               gEnv->SetValue("WebGui.UnixSocket", wd+7);
+            }
+         }
       } else {
-         fIsWebDisplayBatch = kFALSE;
+         fWebDisplay = wd;
       }
-      fWebDisplay = wd;
+   }
+
+   if (fIsWebDisplay) {
+      // restore canvas and browser classes configured at the moment when gROOT->SetWebDisplay() was called for the first time
+      // This is necessary when SetWebDisplay() called several times and therefore current settings may differ
+      gEnv->SetValue("Canvas.Name", canName);
+      gEnv->SetValue("Browser.Name", brName);
+      gEnv->SetValue("TreeViewer.Name", "RTreeViewer");
+   } else {
+      gEnv->SetValue("Canvas.Name", "TRootCanvas");
+      gEnv->SetValue("Browser.Name", "TRootBrowser");
+      gEnv->SetValue("TreeViewer.Name", trName);
    }
 }
 
@@ -2934,6 +3008,17 @@ const TString& TROOT::GetLibDir() {
       const static TString rootlibdir = ROOTLIBDIR;
       return rootlibdir;
    }
+#endif
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Get the shared libraries directory in the installation. Static utility function.
+
+const TString& TROOT::GetSharedLibDir() {
+#if defined(R__WIN32)
+   return TROOT::GetBinDir();
+#else
+   return TROOT::GetLibDir();
 #endif
 }
 

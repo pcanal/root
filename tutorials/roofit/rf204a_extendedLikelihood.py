@@ -4,6 +4,7 @@
 ## Extended maximum likelihood fit in multiple ranges.
 ##
 ## \macro_code
+## \macro_output
 ##
 ## \date March 2021
 ## \authors Harshal Shende, Stephan Hageboeck (C++ version)
@@ -28,7 +29,7 @@ sig2 = ROOT.RooGaussian("sig2", "Signal component 2", x, mean, sigma2)
 # Build Chebychev polynomial pdf
 a0 = ROOT.RooRealVar("a0", "a0", 0.5, 0.0, 1.0)
 a1 = ROOT.RooRealVar("a1", "a1", 0.2, 0.0, 1.0)
-bkg = ROOT.RooChebychev("bkg", "Background", x, ROOT.RooArgSet(a0, a1))
+bkg = ROOT.RooChebychev("bkg", "Background", x, [a0, a1])
 
 # Sum the signal components into a composite signal pdf
 sig1frac = ROOT.RooRealVar("sig1frac", "fraction of component 1 in signal", 0.8, 0.0, 1.0)
@@ -69,7 +70,7 @@ canv.Divide(3, 1)
 canv.cd(1)
 
 model1 = ROOT.RooAddPdf(model)
-r = model1.fitTo(data, Save=True)
+r = model1.fitTo(data, Save=True, PrintLevel=-1)
 r.Print()
 
 frame = x.frame(Title="Full range fitted")
@@ -88,7 +89,7 @@ x.setRange("left", 0.0, 4.0)
 x.setRange("right", 6.0, 10.0)
 
 model2 = ROOT.RooAddPdf(model)
-r2 = model2.fitTo(data, Range="left,right", Save=True)
+r2 = model2.fitTo(data, Range="left,right", Save=True, PrintLevel=-1)
 r2.Print()
 
 frame2 = x.frame(Title="Fit in left/right sideband")
@@ -108,7 +109,7 @@ canv.cd(3)
 x.setRange("leftToMiddle", 0.0, 5.0)
 
 model3 = ROOT.RooAddPdf(model)
-r3 = model3.fitTo(data, Range="leftToMiddle", Save=True)
+r3 = model3.fitTo(data, Range="leftToMiddle", Save=True, PrintLevel=-1)
 r3.Print()
 
 frame3 = x.frame(Title="Fit from left to middle")

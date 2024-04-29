@@ -71,15 +71,25 @@ JupyROOTExecutorHandler::JupyROOTExecutorHandler() {}
 
 static void PollImpl(FILE *stdStream, int *pipeHandle, std::string &pipeContent)
 {
+   fflush(stdStream);
+#ifdef _MSC_VER
+   char buffer[60000] = "";
+   struct _stat st;
+   _fstat(pipeHandle[0], &st);
+   if (st.st_size) {
+      _read(pipeHandle[0], buffer, 60000);
+      pipeContent += buffer;
+   }
+#else
    int buf_read;
    char ch;
-   fflush(stdStream);
    while (true) {
       buf_read = read(pipeHandle[0], &ch, 1);
       if (buf_read == 1) {
          pipeContent += ch;
       } else break;
    }
+#endif
 }
 
 void JupyROOTExecutorHandler::Poll()
@@ -94,10 +104,7 @@ static void InitCaptureImpl(int &savedStdStream, int *pipeHandle, int FILENO)
    if (pipe(pipeHandle) != 0) {
       return;
    }
-#ifdef _MSC_VER // Visual Studio
-   unsigned long mode = 1;
-   ioctlsocket(pipeHandle[0], FIONBIO, &mode);
-#else
+#ifndef _MSC_VER
    long flags_stdout = fcntl(pipeHandle[0], F_GETFL);
    if (flags_stdout == -1) return;
    flags_stdout |= O_NONBLOCK;
@@ -183,13 +190,6 @@ bool JupyROOTDeclarerImpl(const char *code)
    return status;
 }
 
-#if PY_MAJOR_VERSION >= 3
-    #define PyInt_FromLong PyLong_FromLong
-    #define PyText_FromString PyUnicode_FromString
-#else
-    #define PyText_FromString PyString_FromString
-#endif
-
 PyObject *JupyROOTExecutor(PyObject * /*self*/, PyObject * args)
 {
    const char *code;
@@ -198,7 +198,7 @@ PyObject *JupyROOTExecutor(PyObject * /*self*/, PyObject * args)
 
    auto res = JupyROOTExecutorImpl(code);
 
-   return PyInt_FromLong(res);
+   return PyLong_FromLong(res);
 }
 
 PyObject *JupyROOTDeclarer(PyObject * /*self*/, PyObject *args)
@@ -209,7 +209,7 @@ PyObject *JupyROOTDeclarer(PyObject * /*self*/, PyObject *args)
 
    auto res = JupyROOTDeclarerImpl(code);
 
-   return PyInt_FromLong(res);
+   return PyLong_FromLong(res);
 }
 
 PyObject *JupyROOTExecutorHandler_Clear(PyObject * /*self*/, PyObject * /*args*/)
@@ -250,13 +250,13 @@ PyObject *JupyROOTExecutorHandler_InitCapture(PyObject * /*self*/, PyObject * /*
 PyObject *JupyROOTExecutorHandler_GetStdout(PyObject * /*self*/, PyObject * /*args*/)
 {
    auto out = JupyROOTExecutorHandler_ptr->GetStdout().c_str();
-   return PyText_FromString(out);
+   return PyUnicode_FromString(out);
 }
 
 PyObject *JupyROOTExecutorHandler_GetStderr(PyObject * /*self*/, PyObject * /*args*/)
 {
    auto err = JupyROOTExecutorHandler_ptr->GetStderr().c_str();
-   return PyText_FromString(err);
+   return PyUnicode_FromString(err);
 }
 
 PyObject *JupyROOTExecutorHandler_Dtor(PyObject * /*self*/, PyObject * /*args*/)
@@ -301,14 +301,6 @@ static PyMethodDef gJupyROOTMethods[] = {
     (char *)"Destruct JupyROOTExecutorHandler"},
    {NULL, NULL, 0, NULL}};
 
-#define QuoteIdent(ident) #ident
-#define QuoteMacro(macro) QuoteIdent(macro)
-#define LIBJUPYROOT_NAME "libJupyROOT" QuoteMacro(PY_MAJOR_VERSION) "_" QuoteMacro(PY_MINOR_VERSION)
-
-#define CONCAT(a, b, c, d) a##b##c##d
-#define LIBJUPYROOT_INIT_FUNCTION(a, b, c, d) CONCAT(a, b, c, d)
-
-#if PY_VERSION_HEX >= 0x03000000
 struct module_state {
    PyObject *error;
 };
@@ -327,30 +319,19 @@ static int jupyrootmodule_clear(PyObject *m)
    return 0;
 }
 
-static struct PyModuleDef moduledef = {PyModuleDef_HEAD_INIT,       LIBJUPYROOT_NAME,     NULL,
+static struct PyModuleDef moduledef = {PyModuleDef_HEAD_INIT,       "libJupyROOT",        NULL,
                                        sizeof(struct module_state), gJupyROOTMethods,     NULL,
                                        jupyrootmodule_traverse,     jupyrootmodule_clear, NULL};
 
 /// Initialization of extension module libJupyROOT
 
-#define JUPYROOT_INIT_ERROR return NULL
-LIBJUPYROOT_INIT_FUNCTION(extern "C" PyObject *PyInit_libJupyROOT, PY_MAJOR_VERSION, _, PY_MINOR_VERSION) ()
-#else // PY_VERSION_HEX >= 0x03000000
-#define JUPYROOT_INIT_ERROR return
-LIBJUPYROOT_INIT_FUNCTION(extern "C" void initlibJupyROOT, PY_MAJOR_VERSION, _, PY_MINOR_VERSION) ()
-#endif
+extern "C" PyObject *PyInit_libJupyROOT()
 {
 // setup PyROOT
-#if PY_VERSION_HEX >= 0x03000000
    gJupyRootModule = PyModule_Create(&moduledef);
-#else
-   gJupyRootModule = Py_InitModule(const_cast<char *>(LIBJUPYROOT_NAME), gJupyROOTMethods);
-#endif
    if (!gJupyRootModule)
-      JUPYROOT_INIT_ERROR;
+      return nullptr;
 
-#if PY_VERSION_HEX >= 0x03000000
    Py_INCREF(gJupyRootModule);
    return gJupyRootModule;
-#endif
 }

@@ -57,6 +57,7 @@ allows a simple partial implementation for new OS'es.
 
 #ifdef WIN32
 #include <io.h>
+#include "Windows4Root.h"
 #endif
 
 const char *gRootDir = nullptr;
@@ -258,19 +259,23 @@ const char *TSystem::GetError()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// Return cryptographic random number
+/// Fill provided buffer with random values
+/// Returns number of bytes written to buffer or -1 in case of error
+
+Int_t TSystem::GetCryptoRandom(void * /* buf */, Int_t /* len */)
+{
+   Error("GetCryptoRandom", "Not implemented");
+   return -1;
+}
+
+
+////////////////////////////////////////////////////////////////////////////////
 /// Static function returning system error number.
 
 Int_t TSystem::GetErrno()
 {
-#ifdef _REENTRANT
-   return errno; // errno can be a macro if _REENTRANT is set
-#else
-#ifdef R__SOLARIS_CC50
-   return ::errno;
-#else
    return errno;
-#endif
-#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -278,15 +283,7 @@ Int_t TSystem::GetErrno()
 
 void TSystem::ResetErrno()
 {
-#ifdef _REENTRANT
-   errno = 0; // errno can be a macro if _REENTRANT is set
-#else
-#ifdef R__SOLARIS_CC50
-   ::errno = 0;
-#else
    errno = 0;
-#endif
-#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -382,7 +379,7 @@ loop_entry:
    }
    // handle every exception
    catch (...) {
-      Warning("Run", "handle uncaugth exception, terminating");
+      Warning("Run", "handle uncaught exception, terminating");
    }
 
 loop_end:
@@ -719,6 +716,7 @@ int TSystem::GetPid()
 void TSystem::Exit(int, Bool_t)
 {
    AbstractMethod("Exit");
+   throw; // unreachable
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -727,6 +725,7 @@ void TSystem::Exit(int, Bool_t)
 void TSystem::Abort(int)
 {
    AbstractMethod("Abort");
+   throw; // unreachable
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1012,14 +1011,15 @@ const char *TSystem::DirName(const char *pathname)
 
    R__LOCKGUARD2(gSystemMutex);
 
-   static Ssiz_t len = 0;
-   static char *buf = nullptr;
+   TTHREAD_TLS(Ssiz_t) len = 0;
+   TTHREAD_TLS(char*) buf = nullptr;
    if (res.Length() >= len) {
       if (buf) delete [] buf;
       len = res.Length() + 50;
       buf = new char [len];
    }
-   strncpy(buf, res.Data(), len);
+   if (buf)
+      strncpy(buf, res.Data(), len);
    return buf;
 }
 
@@ -1489,12 +1489,14 @@ const char *TSystem::TempDirectory() const
 /// Create a secure temporary file by appending a unique
 /// 6 letter string to base. The file will be created in
 /// a standard (system) directory or in the directory
-/// provided in dir. The full filename is returned in base
+/// provided in dir. Optionally one can provide suffix
+/// append to the final name - like extension ".txt" or ".html".
+/// The full filename is returned in base
 /// and a filepointer is returned for safely writing to the file
 /// (this avoids certain security problems). Returns 0 in case
 /// of error.
 
-FILE *TSystem::TempFileName(TString &, const char *)
+FILE *TSystem::TempFileName(TString &, const char *, const char *)
 {
    AbstractMethod("TempFileName");
    return nullptr;
@@ -2065,41 +2067,33 @@ void TSystem::ListSymbols(const char *, const char *)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// List all loaded shared libraries. Regexp is a wildcard expression,
-/// see TRegexp::MakeWildcard.
+/// List the loaded shared libraries.
+/// `regexp` is a regular expression allowing to filter the list.
+///
+/// Examples:
+///
+/// The following line lists all the libraries currently loaded:
+/// ~~~ {.cpp}
+///  gSystem->ListLibraries()
+/// ~~~
+///
+/// The following line lists all the libraries currently loaded having "RIO" in their names:
+/// ~~~ {.cpp}
+///  gSystem->ListLibraries(".*RIO.*")
+/// ~~~
 
-void TSystem::ListLibraries(const char *regexp)
-{
-   TString libs = GetLibraries(regexp);
-   TRegexp separator("[^ \\t\\s]+");
-   TString s;
-   Ssiz_t start = 0, index = 0, end = 0;
-   int i = 0;
-
-   Printf(" ");
-   Printf("Loaded shared libraries");
-   Printf("=======================");
-
-   while ((start < libs.Length()) && (index != kNPOS)) {
-      index = libs.Index(separator, &end, start);
-      if (index >= 0) {
-         s = libs(index, end);
-         if (s.BeginsWith("-")) {
-            if (s.BeginsWith("-l")) {
-               Printf("%s", s.Data());
-               i++;
-            }
-         } else {
-            Printf("%s", s.Data());
-            i++;
-         }
-      }
-      start += end+1;
+void TSystem::ListLibraries(const char *regexp) {
+   if (!(regexp && regexp[0]))
+      regexp = ".*";
+   TRegexp pat(regexp, kFALSE);
+   TString libs(GetLibraries());
+   TString tok;
+   Ssiz_t from = 0, ext;
+   while (libs.Tokenize(tok, from, " ")) {
+      if ((tok.Index(pat, &ext) != 0) || (ext != tok.Length()))
+         continue;
+      std::cout << tok << "\n";
    }
-
-   Printf("-----------------------");
-   Printf("%d libraries loaded", i);
-   Printf("=======================");
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2660,7 +2654,7 @@ static void R__WriteDependencyFile(const TString & build_loc, const TString &dep
    }
 #endif
    {
-     const char *dictHeaders[] = { "RVersion.h", "RConfig.h", "TClass.h",
+     const char *dictHeaders[] = { "RVersion.h", "ROOT/RConfig.hxx", "TClass.h",
        "TDictAttributeMap.h","TInterpreter.h","TROOT.h","TBuffer.h",
        "TMemberInspector.h","TError.h","RtypesImp.h","TIsAProxy.h",
        "TFileMergeInfo.h","TCollectionProxyInfo.h"};
@@ -2832,6 +2826,12 @@ static void R__WriteDependencyFile(const TString & build_loc, const TString &dep
 ///
 /// (the ... have to be replaced by the actual values and are here only to
 /// shorten this comment).
+///
+/// Note that the default behavior is to remove libraries when closing ROOT,
+/// ie TSystem::CleanCompiledMacros() is called in the TROOT destructor.
+/// The default behavior of .L script.C+ is the opposite one, leaving things
+/// after closing, without removing. In other words, .L always passes the 'k'
+/// option behind the scenes.
 
 int TSystem::CompileMacro(const char *filename, Option_t *opt,
                           const char *library_specified,
@@ -3055,11 +3055,12 @@ int TSystem::CompileMacro(const char *filename, Option_t *opt,
 
    // Calculate the -I lines
    TString includes = GetIncludePath();
+   includes.ReplaceAll("-I ", "-I");
    includes.Prepend(' ');
 
    {
       // I need to replace the -Isomerelativepath by -I../ (or -I..\ on NT)
-      TRegexp rel_inc(" -I[^\"/\\$%-][^:-]+");
+      TRegexp rel_inc(" -I[^\"/\\\\$\\%-][^:\\s]+");
       Int_t len,pos;
       pos = rel_inc.Index(includes,&len);
       while( len != 0 ) {
@@ -3067,15 +3068,16 @@ int TSystem::CompileMacro(const char *filename, Option_t *opt,
          sub.Remove(0,3); // Remove ' -I'
          AssignAndDelete( sub, ConcatFileName( WorkingDirectory(), sub ) );
          sub.Prepend(" -I\"");
-         sub.Chop(); // Remove trailing space (i.e between the -Is ...
+         if (sub.EndsWith(" "))
+            sub.Chop(); // Remove trailing space (i.e between the -Is ...
          sub.Append("\" ");
          includes.Replace(pos,len,sub);
          pos = rel_inc.Index(includes,&len);
       }
    }
    {
-       // I need to replace the -I"somerelativepath" by -I"$cwd/ (or -I"$cwd\ on NT)
-      TRegexp rel_inc(" -I\"[^/\\$%-][^:-]+");
+      // I need to replace the -I"somerelativepath" by -I"$cwd/ (or -I"$cwd\ on NT)
+      TRegexp rel_inc(" -I\"[^/\\\\$\\%-][^:\\s]+");
       Int_t len,pos;
       pos = rel_inc.Index(includes,&len);
       while( len != 0 ) {
@@ -3337,7 +3339,7 @@ int TSystem::CompileMacro(const char *filename, Option_t *opt,
 
    // FIXME: Switch to generic polymorphic when we make c++14 default.
    auto ForeachSharedLibDep = [](const char *lib, std::function<bool(const char *)> f) {
-      using namespace std;
+      using std::string, std::vector, std::istringstream, std::istream_iterator;
       string deps = gInterpreter->GetSharedLibDeps(lib, /*tryDyld*/ true);
       istringstream iss(deps);
       vector<string> libs{istream_iterator<std::string>{iss}, istream_iterator<string>{}};
@@ -3762,11 +3764,17 @@ int TSystem::CompileMacro(const char *filename, Option_t *opt,
 
    // ======= Build the library
    if (result) {
-      if (verboseLevel>3 && withInfo) {
+      TString cmdAllowUnresolved = cmd;
+#ifdef R__MACOSX
+      // Allow linking to succeed despite the missing symbols.
+      cmdAllowUnresolved.ReplaceAll("-dynamiclib", "-dynamiclib -Wl,-w -Wl,-undefined,dynamic_lookup");
+#endif
+      if (verboseLevel > 3 && withInfo) {
          ::Info("ACLiC","compiling the dictionary and script files");
-         if (verboseLevel>4)  ::Info("ACLiC", "%s", cmd.Data());
+         if (verboseLevel>4)
+            ::Info("ACLiC", "%s", cmdAllowUnresolved.Data());
       }
-      Int_t success = ExecAndReport(cmd);
+      Int_t success = ExecAndReport(cmdAllowUnresolved);
       if (!success) {
          if (produceRootmap) {
             gSystem->Unlink(libmapfilename);
@@ -3795,6 +3803,11 @@ int TSystem::CompileMacro(const char *filename, Option_t *opt,
 
          TString relink_cmd = cmd.Strip(TString::kTrailing, ';');
          relink_cmd += depLibsFullPaths;
+         if (verboseLevel > 3 && withInfo) {
+            ::Info("ACLiC", "relinking against all dependencies");
+            if (verboseLevel > 4)
+               ::Info("ACLiC", "%s", relink_cmd.Data());
+         }
          result = ExecAndReport(relink_cmd);
       }
 
@@ -4012,24 +4025,28 @@ const char *TSystem::GetObjExt() const
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Set the location where ACLiC will create libraries and use as
-/// a scratch area.
+/// a scratch area. If unset, libraries will be created at the same
+/// location than the script.
 ///
-/// If 'isflat' is false, then the libraries are actually stored in
-/// sub-directories of 'build_dir' including the full pathname of the
-/// script.  If the script is location at /full/path/name/macro.C
-/// the library will be located at 'build_dir+/full/path/name/macro_C.so'
+/// \param build_dir the name of the build directory
+/// \param isflat If false (default), then the libraries are actually stored
+/// in sub-directories of 'build_dir' including the full pathname
+/// of the script. If the script is located at `/full/path/name/macro.C`
+/// the library will be located at `build_dir+/full/path/name/macro_C.so`
 /// If 'isflat' is true, then no subdirectory is created and the library
-/// is created directly in the directory 'build_dir'.  Note that in this
+/// is created directly in the directory 'build_dir'. Note that in this
 /// mode there is a risk than 2 script of the same in different source
 /// directory will over-write each other.
+/// \note This `build_dir` can also be controlled via `ACLiC.BuildDir` in
+/// your `.rootrc`.
 
 void TSystem::SetBuildDir(const char *build_dir, Bool_t isflat)
 {
    fBuildDir = build_dir;
    if (isflat)
-      fAclicProperties |= (kFlatBuildDir & kBitMask);
+      fAclicProperties |= kFlatBuildDir;
    else
-      fAclicProperties &= ~(kFlatBuildDir & kBitMask);
+      fAclicProperties &= ~kFlatBuildDir;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4346,14 +4363,30 @@ TString TSystem::SplitAclicMode(const char *filename, TString &aclicMode,
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Remove the shared libs produced by the CompileMacro() function.
+/// Remove the shared libs produced by the CompileMacro() function, together
+/// with their rootmaps, linkdefs, and pcms (and some more on Windows).
 
 void TSystem::CleanCompiledMacros()
 {
    TIter next(fCompiled);
    TNamed *lib;
+   const char *extensions[] = {".lib", ".exp", ".d", ".def", ".rootmap", "_ACLiC_linkdef.h", "_ACLiC_dict_rdict.pcm"};
    while ((lib = (TNamed*)next())) {
-      if (lib->TestBit(kMustCleanup)) Unlink(lib->GetTitle());
+      if (lib->TestBit(kMustCleanup)) {
+         TString libname = lib->GetTitle();
+#ifdef WIN32
+         // On Windows, we need to unload the dll before deleting it
+         if (gInterpreter->IsLibraryLoaded(libname))
+            ::FreeLibrary(::GetModuleHandle(libname));
+#endif
+         Unlink(libname);
+         TString target, soExt = "." + fSoExt;
+         libname.ReplaceAll(soExt, "");
+         for (const char *ext : extensions) {
+            target = libname + ext;
+            Unlink(target);
+         }
+      }
    }
 }
 

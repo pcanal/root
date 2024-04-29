@@ -111,7 +111,7 @@ namespace cling {
       const Decl* To = llvm::cantFail(m_Importer->Import(declToImport));
       assert(To && "Import did not work!");
       assert((DS.empty() ||
-              DS[0].getID() == clang::diag::err_unsupported_ast_node) &&
+              DS[0].getID() != clang::diag::err_unsupported_ast_node) &&
              "Import not supported!");
 #endif
       return;
@@ -268,7 +268,7 @@ namespace cling {
         DeclarationName childDeclName = parentDecl->getDeclName();
         if (auto II = childDeclName.getAsIdentifierInfo()) {
           StringRef name = II->getName();
-          if (!name.empty() && name.startswith(filter))
+          if (!name.empty() && name.starts_with(filter))
             ImportDecl(parentDecl, childDeclName, childDeclName,
                        childDeclContext);
         }

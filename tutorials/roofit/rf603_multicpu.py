@@ -3,7 +3,9 @@
 ## \notebook
 ## Likelihood and minimization: setting up a multi-core parallelized unbinned maximum likelihood fit
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -20,9 +22,9 @@ y = ROOT.RooRealVar("y", "y", -5, 5)
 z = ROOT.RooRealVar("z", "z", -5, 5)
 
 # Create signal pdf gauss(x)*gauss(y)*gauss(z)
-gx = ROOT.RooGaussian("gx", "gx", x, ROOT.RooFit.RooConst(0), ROOT.RooFit.RooConst(1))
-gy = ROOT.RooGaussian("gy", "gy", y, ROOT.RooFit.RooConst(0), ROOT.RooFit.RooConst(1))
-gz = ROOT.RooGaussian("gz", "gz", z, ROOT.RooFit.RooConst(0), ROOT.RooFit.RooConst(1))
+gx = ROOT.RooGaussian("gx", "gx", x, 0.0, 1.0)
+gy = ROOT.RooGaussian("gy", "gy", y, 0.0, 1.0)
+gz = ROOT.RooGaussian("gz", "gz", z, 0.0, 1.0)
 sig = ROOT.RooProdPdf("sig", "sig", [gx, gy, gz])
 
 # Create background pdf poly(x)*poly(y)*poly(z)
@@ -36,7 +38,7 @@ fsig = ROOT.RooRealVar("fsig", "signal fraction", 0.1, 0.0, 1.0)
 model = ROOT.RooAddPdf("model", "model", [sig, bkg], [fsig])
 
 # Generate large dataset
-data = model.generate(ROOT.RooArgSet(x, y, z), 200000)
+data = model.generate({x, y, z}, 200000)
 
 # Parallel fitting
 # -------------------------------
@@ -46,15 +48,15 @@ data = model.generate(ROOT.RooArgSet(x, y, z), 200000)
 # it back to MINUIT.
 
 # Use four processes and time results both in wall time and CPU time
-model.fitTo(data, NumCPU=4, Timer=True)
+model.fitTo(data, NumCPU=4, Timer=True, PrintLevel=-1)
 
 # Parallel MC projections
 # ----------------------------------------------
 
 # Construct signal, likelihood projection on (y,z) observables and
 # likelihood ratio
-sigyz = sig.createProjection(ROOT.RooArgSet(x))
-totyz = model.createProjection(ROOT.RooArgSet(x))
+sigyz = sig.createProjection({x})
+totyz = model.createProjection({x})
 llratio_func = ROOT.RooFormulaVar("llratio", "log10(@0)-log10(@1)", [sigyz, totyz])
 
 # Calculate likelihood ratio for each event, subset of events with high

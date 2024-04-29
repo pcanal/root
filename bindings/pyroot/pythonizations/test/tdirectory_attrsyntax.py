@@ -6,7 +6,7 @@ from libcppyy import SetOwnership
 
 class TDirectoryReadWrite(unittest.TestCase):
     """
-    Test for the attr syntax of TDirectory.
+    Test for the getitem syntax of TDirectory.
     """
 
     nbins = 8
@@ -39,22 +39,18 @@ class TDirectoryReadWrite(unittest.TestCase):
         self.assertEqual(self.xmax, xaxis.GetXmax())
 
     # Tests
-    def test_readHisto_attrsyntax(self):
-        self.checkHisto(self.dir0.h)
-        self.checkHisto(self.dir0.dir1.h1)
-        self.checkHisto(self.dir0.dir1.dir2.h2)
+    def test_readHisto_itemsyntax(self):
+        self.checkHisto(self.dir0["h"])
+        self.checkHisto(self.dir0["dir1"]["h1"])
+        self.checkHisto(self.dir0["dir1"]["dir2"]["h2"])
 
-    def test_caching_getattr(self):
-        # check that __dict__ of self.dir_caching is initially empty
-        self.assertFalse(self.dir0.__dict__)
-        self.dir0.h
-        # check that after call __dict__ is not empty anymore
-        self.assertTrue(self.dir0.__dict__)
-        # check that __dict__ has only one entry
-        self.assertEqual(len(self.dir0.__dict__), 1)
-        # check that the value in __dict__ is actually the object
+    def test_caching_getitem(self):
+        # check that object is not cached initially
+        self.assertFalse("h" in self.dir0.__dict__)
+        self.dir0["h"]
+        # check that the cached value in is actually the object
         # inside the directory
-        self.assertEqual(self.dir0.__dict__['h'], self.dir0.h)
+        self.assertEqual(self.dir0._cached_items["h"], self.dir0["h"])
 
 
 if __name__ == '__main__':

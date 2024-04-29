@@ -11,7 +11,8 @@
 #include "TSystem.h"
 
 #include "gtest/gtest.h"
-#include <stdlib.h>
+#include "ROOT/TestSupport.hxx"
+#include <cstdlib>
 #include <memory>
 
 #include "RErrorIgnoreRAII.hxx"
@@ -118,6 +119,8 @@ TEST(TTreeReaderBasic, Interfaces) {
 
 
 TEST(TTreeReaderBasic, ErrorProbing) {
+   ROOT::TestSupport::CheckDiagsRAII diags{ kError, "TTreeReader::TTreeReader", "No TTree called doesNotExist was found in the selected TDirectory." };
+
    TTreeReader tr("doesNotExist", gROOT);
    EXPECT_EQ(TTreeReader::kEntryNoTree, tr.GetEntryStatus());
    EXPECT_EQ(nullptr, tr.GetTree());
@@ -261,7 +264,7 @@ TEST(TTreeReaderBasic, InvertedEntryRange) {
 
 
 TEST(TTreeReaderBasic, EntryList) {
-   // See https://root.cern.ch/phpBB3/viewtopic.php?f=3&t=22850&p=100796
+   // See https://root.cern/phpBB3/viewtopic.php?f=3&t=22850&p=100796
    auto tree = MakeTree();
    EXPECT_EQ(9, tree->Draw(">>negZ","three.z<0", "entrylistarray"));
    TEntryListArray* selected = (TEntryListArray*)gDirectory->Get("negZ");
@@ -401,6 +404,8 @@ TEST(TTreeReaderBasic, EntryListAndEntryRange)
    EXPECT_TRUE(r.Next());
    EXPECT_EQ(*rv, 8);
    EXPECT_FALSE(r.Next());
+
+   t.SetEntryList(nullptr);
 }
 
 TEST(TTreeReaderBasic, TChainWithSubEntryListsAndEntryRange)
@@ -463,6 +468,8 @@ TEST(TTreeReaderBasic, InfLoop)
 // ROOT-10019
 TEST(TTreeReaderBasic, DisappearingBranch)
 {
+   ROOT::TestSupport::CheckDiagsRAII diags{ kError, "TTreeReader::SetEntryBase()", "There was an error while notifying the proxies." };
+   diags.requiredDiag(kWarning, "TTreeReader::SetEntryBase()", "Unexpected error '-6' in TChain::LoadTree");
 
    auto createFile = [](const char *fileName, int ncols) {
       // auto r = ROOT::RDataFrame(1).Define("col0",[](){return 0;}).Snapshot<int>("t","f1.root",{"col0"});

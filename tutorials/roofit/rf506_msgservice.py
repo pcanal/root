@@ -4,6 +4,7 @@
 ## Organization and simultaneous fits: tuning and customizing the ROOT.RooFit message logging facility
 ##
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -27,7 +28,7 @@ poly = ROOT.RooPolynomial("p", "p", x, [p0])
 f = ROOT.RooRealVar("f", "f", 0.5, 0.0, 1.0)
 model = ROOT.RooAddPdf("model", "model", [gauss, poly], [f])
 
-data = model.generate(ROOT.RooArgSet(x), 10)
+data = model.generate({x}, 10)
 
 # Print configuration of message service
 # ------------------------------------------
@@ -45,7 +46,7 @@ ROOT.RooMsgService.instance().Print()
 ROOT.RooMsgService.instance().getStream(1).addTopic(ROOT.RooFit.Integration)
 
 # Construct integral over gauss to demonstrate message stream
-igauss = gauss.createIntegral(ROOT.RooArgSet(x))
+igauss = gauss.createIntegral({x})
 igauss.Print()
 
 # Print streams configuration in verbose, also shows inactive streams

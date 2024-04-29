@@ -7,10 +7,10 @@
 ## Setting up a chi^2 fit to a binned dataset
 ##
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
-## \author Clemens Lange
-## \author Wouter Verkerke (C version)
+## \authors Clemens Lange, Wouter Verkerke (C version)
 
 from __future__ import print_function
 import ROOT
@@ -47,7 +47,7 @@ model = ROOT.RooAddPdf("model", "g1+g2+a", [bkg, sig], [bkgfrac])
 # Create biuned dataset
 # -----------------------------------------
 
-d = model.generate(ROOT.RooArgSet(x), 10000)
+d = model.generate({x}, 10000)
 dh = d.binnedClone()
 
 # Construct a chi^2 of the data and the model.
@@ -66,5 +66,5 @@ model.chi2FitTo(dh, ll)
 # messages
 dsmall = d.reduce(ROOT.RooFit.EventRange(1, 100))
 dhsmall = dsmall.binnedClone()
-chi2_lowstat = ROOT.RooChi2Var("chi2_lowstat", "chi2", model, dhsmall)
+chi2_lowstat = model.createChi2(dhsmall)
 print(chi2_lowstat.getVal())

@@ -11,7 +11,7 @@ sap.ui.define([
 ], function (Controller, JSONModel, Button, mInput, mStepInput, mCheckBox, mText, ColorPalettePopover, HorizontalLayout) {
    "use strict";
 
-   var UI5PopupColors = {
+   let UI5PopupColors = {
          aliceblue: 'f0f8ff',
          antiquewhite: 'faebd7',
          aqua: '00ffff',
@@ -164,7 +164,7 @@ sap.ui.define([
 
 
    // TODO: move to separate file
-   var EVEColorButton = Button.extend("rootui5.eve7.controller.EVEColorButton", {
+   let EVEColorButton = Button.extend("rootui5.eve7.controller.EVEColorButton", {
       // when default value not specified - openui tries to load custom
       renderer: {}, // ButtonRenderer.render,
 
@@ -180,7 +180,7 @@ sap.ui.define([
 
    });
 
-    var EVEColorPopup = ColorPalettePopover.extend("rootui5.eve7.controller.EVEColorPopup", {
+    let EVEColorPopup = ColorPalettePopover.extend("rootui5.eve7.controller.EVEColorPopup", {
         // when default value not specified - openui tries to load custom
         defaultColors : ['gold','darkorange', 'indianred','rgb(102,51,0)', 'cyan',// 'magenta'
                              'blue', 'lime', 'gray','slategray','rgb(204, 198, 170)',
@@ -211,7 +211,7 @@ sap.ui.define([
 
     });
 
-   var GedController = Controller.extend("rootui5.eve7.controller.Ged", {
+   let GedController = Controller.extend("rootui5.eve7.controller.Ged", {
 
       onInit : function() {
          this.oModel = new JSONModel({ title: "GED title", "widgetlist" : [] });
@@ -234,8 +234,8 @@ sap.ui.define([
 
       closeGedEditor: function() {
          if (this.ged_visible) {
-            var prnt = this.getView().getParent();
-            if (prnt) prnt.removeContentArea(this.getView());
+            let prnt = this.getView().getParent();
+            if (prnt) prnt.removeItem(this.getView());
             this.ged_visible = false;
          }
 
@@ -248,19 +248,19 @@ sap.ui.define([
          if (this.ged_visible && (elementId == this.ged_id))
             return this.closeGedEditor();
 
-         var editorElement = this.mgr ? this.mgr.GetElement(elementId) : null;
+         let editorElement = this.mgr ? this.mgr.GetElement(elementId) : null;
          if (!editorElement)
             return this.closeGedEditor();
 
          if (!this.ged_visible)
-            sumSplitter.addContentArea(this.getView());
+            sumSplitter.addItem(this.getView());
 
          this.ged_id = elementId;
          this.ged_visible = true;
 
          this.editorElement = editorElement;
 
-         var title = this.editorElement.fName + " (" +  this.editorElement._typename.substring(20) + " )" ;
+         let title = this.editorElement.fName + " (" +  this.editorElement._typename.substring(20) + " )" ;
          this.oModel.setProperty("/title", title);
          this.buildEditor();
       },
@@ -307,6 +307,12 @@ sap.ui.define([
          this.makeNumberSetter(el.fLineWidth, "LineWidth");
       },
 
+      buildREveViewerSetter: function(el)
+      {
+         this.makeBoolSetter(Boolean(el.AxesType), "ShowAxes", "SetAxesType");
+         this.makeBoolSetter(el.BlackBg, "BlackBackground");
+      },
+
       buildREveDataCollectionSetter : function(el)
       {
          this.makeBoolSetter(el.fRnrSelf, "RnrSelf");
@@ -334,7 +340,7 @@ sap.ui.define([
 	 //
 	 // Also, it is not tested whether for all types of events, the direct browser
 	 // event is coming BEFORE the itemPress event handler invocation!
-         var ctrlKeyPressed = false;
+         let ctrlKeyPressed = false;
          list.attachBrowserEvent("click", function(e) {
 	    ctrlKeyPressed = e.ctrlKey;
 	 });
@@ -343,7 +349,7 @@ sap.ui.define([
          let makeItem = function(i) {
             let iid = "item_"+ i;
             let fout = citems[i].fFiltered;
-	    var item  = new sap.m.CustomListItem( iid, {type:sap.m.ListType.Active});
+	    let item  = new sap.m.CustomListItem( iid, {type:sap.m.ListType.Active});
 	    item.addStyleClass("sapUiTinyMargin");
 
             // item info
@@ -366,7 +372,7 @@ sap.ui.define([
 
             let col_widget = new EVEColorButton( {
                icon : "sap-icon://palette",
-               background: JSROOT.Painter.getColor(citems[i].fColor),
+               background: EVE.JSR.getColor(citems[i].fColor),
                press: function () {
                   let oCPPop = new EVEColorPopup( {
                      colorSelect: function(event) {
@@ -418,8 +424,8 @@ sap.ui.define([
 		     list.setSelectedItem(selected[s], false);
 	       }
 	    }
-            let fcall = "ProcessSelection(" + pthis.mgr.global_selection_id + `, ${is_multi}, true`;
-                              fcall += ", { " + secIdcs.join(", ")  + " }";
+            let fcall = "ProcessSelectionStr(" + pthis.mgr.global_selection_id + `, ${is_multi}, true`;
+                              fcall += ", \"" + secIdcs.join(", ")  + " \"";
                               fcall += ")";
                               pthis.mgr.SendMIR(fcall, el.fElementId, el._typename);
 
@@ -435,7 +441,7 @@ sap.ui.define([
          {
             let pthis = this;
             let col_widget = new EVEColorButton( {
-               background: JSROOT.Painter.getColor(si[i].color),
+               background: EVE.JSR.getColor(si[i].color),
                press: function () {
                   let oCPPop = new EVEColorPopup( {
                      colorSelect: function(event) {
@@ -477,6 +483,116 @@ sap.ui.define([
             let gedFrame =  this.getView().byId("GED");
             gedFrame.addContent(frame);
          }
+      },
+
+      buildREveBoxSetSetter : function(el)
+      {
+         this.buildREveElementSetter(el);
+         this.makeBoolSetter(el.coneCap, "DrawConeCap");
+      },
+   
+      buildREveRGBAPaletteSetter: function (el) {
+         let  gedFrame =  this.getView().byId("GED");
+
+         // fix color
+         this.makeBoolSetter(el.fixRng, "FixColorRange");
+         this.makeBoolSetter(el.interpolate, "Interpolate");
+
+         // modes
+         var sheetNames = { myList: [{ Name: "Cut", Key: 0 }, { Name: "Mark", Key: 1 },{ Name: "Clip", Key : 2 }, { Name: "Wrap", Key : 3 } ] };
+         var sheets = new sap.ui.model.json.JSONModel(sheetNames);
+
+         // underflow
+         {
+            let oa_label = new mText({ text: "UnderFlowAction" });
+            gedFrame.addContent(oa_label);
+            let comboBox = new sap.m.ComboBox({
+               showSecondaryValues: true,
+               items: {
+                  path: "/myList",
+                  template: new sap.ui.core.ListItem({ key: "{Key}", text: "{Name}" })
+               },
+
+               selectionChange: function (oControlEvent) {
+                  var oSelectedItem = oControlEvent.getParameter("selectedItem");
+                  oSelectedItem = oSelectedItem.getKey();
+                  let mir = "SetUnderflowAction(" + oSelectedItem + ")";
+                  gcm.mgr.SendMIR(mir, gcm.editorElement.fElementId, gcm.editorElement._typename);
+               }
+            });
+            comboBox.setModel(sheets);
+            let ci = comboBox.getItems();
+            comboBox.setSelectedItem(el.oAction, true);
+
+            let tagg = sheetNames.myList[el.oAction].Name;
+            comboBox.setPlaceholder(tagg);
+            gedFrame.addContent(comboBox);
+         }
+         this.makeColorSetter(el.uColor, "UnderColor", "SetUnderColorRGBA");
+
+         // overflow
+         {
+            let oa_label = new mText({ text: "OverFlowAction" });
+            gedFrame.addContent(oa_label);
+            let comboBox = new sap.m.ComboBox({
+               showSecondaryValues: true,
+               items: {
+                  path: "/myList",
+                  template: new sap.ui.core.ListItem({ key: "{Key}", text: "{Name}" })
+               },
+
+               selectionChange: function (oControlEvent) {
+                  var oSelectedItem = oControlEvent.getParameter("selectedItem");
+                  oSelectedItem = oSelectedItem.getKey();
+                  let mir = "SetOverflowAction(" + oSelectedItem + ")";
+                  gcm.mgr.SendMIR(mir, gcm.editorElement.fElementId, gcm.editorElement._typename);
+               }
+            });
+            comboBox.setModel(sheets);
+            let ci = comboBox.getItems();
+            let tagg = sheetNames.myList[el.oAction].Name;
+                        comboBox.setPlaceholder(tagg);
+            comboBox.setSelectedItem(el.oAction, true);
+
+            gedFrame.addContent(comboBox);
+         }
+         this.makeColorSetter(el.oColor, "OverColor", "SetOverColorRGBA");
+
+         // range
+         let label = new mText({ text: "Range" });
+         label.addStyleClass("sapUiTinyMargin");
+         gedFrame.addContent(label);
+
+         let gcm = this;
+         let s = new sap.m.RangeSlider({
+            min:el.lowLimit,
+            max:el.highLimit,
+            enableTickmarks: true,
+            width: "80%",
+            scale: new sap.m.ResponsiveScale({tickmarksBetweenLabels: 5}),
+            range: [el.min, el.max],
+            liveChange: function (oControlEvent) { // change range
+               // AMT tmp workaround / event queue not enabled
+               if (gcm.mgr.busyProcessingChanges)
+                   return;
+               
+               let minv = this.getValue();
+               let maxv = this.getValue2();
+               let mir = "SetMinMax(" + minv + "," + maxv + ")";
+               gcm.mgr.SendMIR(mir, gcm.editorElement.fElementId, gcm.editorElement._typename );
+            },
+            change: function (oControlEvent) { // change only min or max side
+               // AMT tmp workaround / event queue not enabled
+               if (gcm.mgr.busyProcessingChanges)
+               return;
+               let minv = this.getValue();
+               let maxv = this.getValue2();
+               let mir = "SetMinMax(" + minv + "," + maxv + ")";
+               gcm.mgr.SendMIR(mir, gcm.editorElement.fElementId, gcm.editorElement._typename );
+            }
+         });
+
+         gedFrame.addContent(s);
       },
 
       makeBoolSetter : function(val, labelName, funcName, gedFrame)
@@ -523,7 +639,7 @@ sap.ui.define([
          let pthis = this;
          let widget = new EVEColorButton( {
             icon: "sap-icon://palette",
-            background: JSROOT.Painter.getColor(val),
+            background: EVE.JSR.getColor(val),
             press: function () {
                let oCPPop = new EVEColorPopup( {
                   colors: this.defaultColors,
@@ -636,9 +752,9 @@ sap.ui.define([
 
    /** Return method to toggle rendering self */
    GedController.GetRnrSelfMethod = function(typename) {
-      var desc = this.canEditClass(typename);
+      let desc = this.canEditClass(typename);
       if (desc)
-         for (var k=0;k<desc.length;++k)
+         for (let k=0;k<desc.length;++k)
             if ((desc[k].member == "fRnrSelf") && desc[k].name)
                return "Set" + desc[k].name;
 

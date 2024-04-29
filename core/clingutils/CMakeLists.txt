@@ -11,9 +11,13 @@
 # These files depend on cling/clang/llvm; they need to be linked into libCling.
 # They are used by rootcling_stage1, rootcling and libCling.
 
-set(ClingUtils_dict_headers
+set_property(TARGET Core APPEND PROPERTY DICT_HEADERS
   root_std_complex.h
-  PARENT_SCOPE
+)
+
+target_include_directories(Core PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/res>
 )
 
 ROOT_OBJECT_LIBRARY(ClingUtils
@@ -67,14 +71,15 @@ foreach(dict ${stldicts})
                                 STAGE1
                                 NODEPHEADERS ${header}
                                 LINKDEF src/${dict}Linkdef.h
+                                DICTIONARY_OPTIONS --noIncludePaths
                                 DEPENDENCIES Core)
   target_include_directories(${dict}Dict PRIVATE ${CMAKE_SOURCE_DIR}/interpreter/cling/include/cling/cint)
 endforeach()
 
 set(CLANG_RESOURCE_DIR_STEM)
 if (builtin_clang)
-  set(CLANG_RESOURCE_DIR_STEM ${CMAKE_BINARY_DIR}/interpreter/llvm/src/${CMAKE_CFG_INTDIR}/lib/clang)
-  set(CLANG_RESOURCE_DIR_VERSION ${LLVM_VERSION})
+  set(CLANG_RESOURCE_DIR_STEM ${CMAKE_BINARY_DIR}/interpreter/llvm-project/llvm/${CMAKE_CFG_INTDIR}/lib/clang)
+  set(CLANG_RESOURCE_DIR_VERSION ${LLVM_VERSION_MAJOR})
 else ()
   set(CLANG_RESOURCE_DIR_STEM ${LLVM_LIBRARY_DIR}/clang)
   # A user can define a clang version to use, otherwise find it (but will error if more than one version is present)
@@ -112,6 +117,13 @@ if (runtime_cxxmodules)
   # some systems install it under /usr/include/Vc/Vc which allows rootcling to
   # discover it and assert that the modulemap is not found.
   set(custom_modulemaps ${custom_modulemaps} vc.modulemap)
+
+  # We need to override the default modulemap because instead of producing a
+  # single std.pcm, produces hundreds of pcms. This changed with sdk 15.3.
+  if (CMAKE_SYSTEM_NAME MATCHES Darwin AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 15.0.0.15000309)
+    set(custom_modulemaps ${custom_modulemaps} std_darwin.modulemap)
+  endif()
+
   if (NOT libcxx)
     if (MSVC)
       set(custom_modulemaps ${custom_modulemaps} vcruntime.modulemap)
@@ -159,18 +171,6 @@ foreach(file  multimap  multiset)
   install(FILES ${CMAKE_SOURCE_DIR}/interpreter/cling/include/cling/cint/${file} DESTINATION ${CMAKE_INSTALL_SYSCONFDIR}/cling/cint)
 endforeach()
 
-# These headers do not have complete include guards on all platforms we
-# support. This means that the PCH cannot provide their representation at
-# runtime and clang will hit disk, triggering a possible incompatibility
-# of that file in build-time versus run-time (different length etc).
-# Capture their build-time version here, and inject it into runtime.
-foreach(file wchar.h bits/stat.h bits/time.h)
-  if(EXISTS ${DEFAULT_SYSROOT}/usr/include/${file})
-    list(APPEND copy_commands COMMAND ${CMAKE_COMMAND} -E copy ${DEFAULT_SYSROOT}/usr/include/${file}
-      ${CMAKE_BINARY_DIR}/etc/cling/lib/clang/${CLANG_RESOURCE_DIR_VERSION}/include/${file})
-  endif()
-endforeach()
-
 set(stamp_file ${CMAKE_BINARY_DIR}${CMAKE_FILES_DIRECTORY}/LLVMRES.stamp)
 if(MSVC)
   add_custom_command(OUTPUT ${stamp_file}
@@ -188,15 +188,6 @@ else()
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CLANG_RESOURCE_DIR}
         ${CMAKE_BINARY_DIR}/etc/cling/lib/clang/${CLANG_RESOURCE_DIR_VERSION}/include
-        COMMAND ${CMAKE_COMMAND} -E copy
-        ${CMAKE_SOURCE_DIR}/interpreter/llvm/ROOT/assert.h
-        ${CMAKE_BINARY_DIR}/etc/cling/lib/clang/${CLANG_RESOURCE_DIR_VERSION}/include/assert.h
-        COMMAND ${CMAKE_COMMAND} -E copy
-        ${CMAKE_SOURCE_DIR}/interpreter/llvm/ROOT/stdlib.h
-        ${CMAKE_BINARY_DIR}/etc/cling/lib/clang/${CLANG_RESOURCE_DIR_VERSION}/include/stdlib.h
-        COMMAND ${CMAKE_COMMAND} -E copy
-        ${CMAKE_SOURCE_DIR}/interpreter/llvm/ROOT/unistd.h
-        ${CMAKE_BINARY_DIR}/etc/cling/lib/clang/${CLANG_RESOURCE_DIR_VERSION}/include/unistd.h
         ${copy_commands}
         COMMAND ${CMAKE_COMMAND} -E touch ${stamp_file}
         DEPENDS ${files_to_copy}

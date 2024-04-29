@@ -1,4 +1,4 @@
-## @author Vincenzo Eduardo Padulano
+#  @author Vincenzo Eduardo Padulano
 #  @author Enric Tejedor
 #  @date 2021-02
 
@@ -9,19 +9,152 @@
 # For the licensing terms see $ROOTSYS/LICENSE.                                #
 # For the list of contributors see $ROOTSYS/README/CREDITS.                    #
 ################################################################################
+from __future__ import annotations
 
-import functools
-from abc import ABCMeta
-from abc import abstractmethod
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from functools import partial
+from typing import Callable, Iterable, List, Optional, TYPE_CHECKING, Union
 
 import ROOT
-from DistRDF.Backends import Utils
-from DistRDF.HeadNode import TreeHeadNode
 
-# Abstract class declaration
-# This ensures compatibility between Python 2 and 3 versions, since in
-# Python 2 there is no ABC class
-ABC = ABCMeta("ABC", (object,), {})
+from DistRDF import Ranges
+from DistRDF.Backends import Utils
+
+# Type hints only
+if TYPE_CHECKING:
+    from DistRDF._graph_cache import ExecutionIdentifier
+    from DistRDF.HeadNode import TaskObjects
+    from DistRDF.Ranges import DataRange
+
+
+def setup_mapper(initialization_fn: Callable) -> None:
+    """
+    Perform initial setup steps common to every mapper function.
+    """
+    # Disable graphics functionality in ROOT. It is not needed inside a
+    # distributed task
+    ROOT.gROOT.SetBatch(True)
+    # Enable thread safety for the whole mapper function. We need to do
+    # this since two tasks could be invoking the C++ interpreter
+    # simultaneously, given that this function will release the GIL
+    # before calling into C++ to run the event loop. Dask multi-threaded
+    # or even multi-process workers could trigger such a scenario.
+    ROOT.EnableThreadSafety()
+
+    # Run initialization method to prepare the worker runtime
+    # environment
+    initialization_fn()
+
+
+def get_mergeable_values(starting_node: ROOT.RDF.RNode, range_id: int,
+                         computation_graph_callable: Callable[[ROOT.RDF.RNode, int], List],
+                         exec_id: ExecutionIdentifier) -> List:
+    """
+    Triggers the computation graph and returns a list of mergeable values.
+    """
+
+    actions = computation_graph_callable(starting_node, range_id, exec_id)
+
+    mergeables = [Utils.get_mergeablevalue(action) for action in actions]
+
+    return mergeables
+
+
+@dataclass
+class TaskResult:
+    """
+    Holds objects returned by a task in distributed execution.
+    Attributes:
+        mergeables: A list of the partial results of the mapper. Only in a
+            TTree-based run, if the task has nothing to process then this
+            attribute is None.
+        entries_in_trees: A struct holding the amount of processed entries in
+            the task, as well as a dictionary where each key is an identifier
+            for a tree opened in the task and the value is the number of entries
+            in that tree. This attribute is not None only in a TTree-based run.
+    """
+    mergeables: Optional[List]
+    entries_in_trees: Optional[Ranges.TaskTreeEntries]
+
+
+def distrdf_mapper(
+        current_range: Ranges.DataRange,
+        build_rdf_from_range:  Callable[[Union[Ranges.EmptySourceRange, Ranges.TreeRangePerc]],
+                                        TaskObjects],
+        computation_graph_callable: Callable[[ROOT.RDF.RNode, int], List],
+        initialization_fn: Callable) -> TaskResult:
+    """
+    Maps the computation graph to the input logical range of entries.
+    """
+    # Wrap code that may be calling into C++ in a try-except block in order
+    # to better propagate exceptions.
+    try:
+        setup_mapper(initialization_fn)
+
+        # Build an RDataFrame instance for the current mapper task, based
+        # on the type of the head node.
+        rdf_plus = build_rdf_from_range(current_range)
+        if rdf_plus.rdf is not None:
+            mergeables = get_mergeable_values(rdf_plus.rdf, current_range.id, computation_graph_callable,
+                                              current_range.exec_id)
+        else:
+            mergeables = None
+    except ROOT.std.exception as e:
+        raise RuntimeError(f"C++ exception thrown:\n\t{type(e).__name__}: {e.what()}")
+
+    return TaskResult(mergeables, rdf_plus.entries_in_trees)
+
+
+def merge_values(mergeables_out: Iterable, mergeables_in: Iterable) -> Iterable:
+    """
+    Merge values of second argument into values of first argument and return
+    first argument.
+    """
+    if mergeables_out is not None and mergeables_in is not None:
+
+        for mergeable_out, mergeable_in in zip(mergeables_out, mergeables_in):
+            Utils.merge_values(mergeable_out, mergeable_in)
+
+    elif mergeables_out is None and mergeables_in is not None:
+        mergeables_out = mergeables_in
+
+    # This should treat the 4 possible cases:
+    # 1. both arguments are non-empty: first if statement
+    # 2. First argument is None and second is not empty: elif statement
+    # 3. First argument is not empty and second is None: return first
+    #    list, no need to do anything
+    # 4. Both arguments are None: return first, it's None anyway.
+    return mergeables_out
+
+
+def distrdf_reducer(results_inout: TaskResult,
+                    results_in: TaskResult) -> TaskResult:
+    """
+    Merges two given iterables of values that were returned by two mapper
+    function executions. Returns the first argument with its values updated from
+    the second.
+    """
+    mergeables_out, entries_in_trees_out = results_inout.mergeables, results_inout.entries_in_trees
+    mergeables_in, entries_in_trees_in = results_in.mergeables, results_in.entries_in_trees
+
+    if entries_in_trees_out is not None and entries_in_trees_in is not None:
+        # Merge dictionaries of trees and their entries. Different tasks
+        # might have to access the same tree, so we must not count its
+        # entries more than once.
+        entries_in_trees_out.trees_with_entries.update(entries_in_trees_in.trees_with_entries)
+        # On the other hand, any two tasks will process different
+        # entries, so we sum them
+        entries_in_trees_out.processed_entries += entries_in_trees_in.processed_entries
+
+    # Wrap code that may be calling into C++ in a try-except block in order
+    # to better propagate exceptions.
+    try:
+        mergeables_updated = merge_values(mergeables_out, mergeables_in)
+    except ROOT.std.exception as e:
+        raise RuntimeError(f"C++ exception thrown:\n\t{type(e).__name__}: {e.what()}")
+
+    return TaskResult(mergeables_updated, entries_in_trees_out)
 
 
 class BaseBackend(ABC):
@@ -39,35 +172,10 @@ class BaseBackend(ABC):
             analysis.
     """
 
-    supported_operations = [
-        "AsNumpy",
-        "Count",
-        "Define",
-        "Fill",
-        "Filter",
-        "Graph",
-        "Histo1D",
-        "Histo2D",
-        "Histo3D",
-        "Max",
-        "Mean",
-        "Min",
-        "Profile1D",
-        "Profile2D",
-        "Profile3D",
-        "Snapshot",
-        "Sum"
-    ]
-
     initialization = staticmethod(lambda: None)
 
     headers = set()
     shared_libraries = set()
-
-    # Define a minimum amount of partitions for any distributed RDataFrame.
-    # This is a safe lower limit, to account for backends that may not support
-    # the case where the distributed RDataFrame processes only one partition.
-    MIN_NPARTITIONS = 2
 
     @classmethod
     def register_initialization(cls, fun, *args, **kwargs):
@@ -85,257 +193,12 @@ class BaseBackend(ABC):
 
             **kwargs (dict): Keyword arguments used to execute the function.
         """
-        cls.initialization = functools.partial(fun, *args, **kwargs)
-        fun(*args, **kwargs)
-
-    def check_supported(self, operation_name):
-        """
-        Checks if a given operation is supported
-        by the given backend.
-
-        Args:
-            operation_name (str): Name of the operation to be checked.
-
-        Raises:
-            Exception: This happens when `operation_name` doesn't exist
-            the `supported_operations` instance attribute.
-        """
-        if operation_name not in self.supported_operations:
-            raise Exception(
-                "The current backend doesn't support \"{}\" !"
-                .format(operation_name)
-            )
-
-    def execute(self, generator):
-        """
-        Executes an RDataFrame computation graph on a distributed backend.
-
-        Args:
-            generator (ComputationGraphGenerator): A factory object for a
-                computation graph. Its ``get_callable`` method will return a
-                function responsible for creating the computation graph of a
-                given RDataFrame object and a range of entries. The range is
-                needed for the `Snapshot` operation.
-        """
-        # Check if the workflow must be generated in optimized mode
-        optimized = ROOT.RDF.Experimental.Distributed.optimized
-
-        if optimized:
-            computation_graph_callable = generator.get_callable_optimized()
-        else:
-            computation_graph_callable = generator.get_callable()
-
-        headnode = generator.headnode
-        if isinstance(headnode, TreeHeadNode):
-            maintreename = headnode.maintreename
-            defaultbranches = headnode.defaultbranches
-        else:
-            # Only other head node type is EmptySourceHeadNode at the moment
-            maintreename = None
-            nentries = headnode.nentries
-
-        # Avoid having references to the instance inside the mapper
-        initialization = self.initialization
-
-        # Build the ranges for the current dataset
-        ranges = headnode.build_ranges()
-
-        def mapper(current_range):
-            """
-            Triggers the event-loop and executes all
-            nodes in the computational graph using the
-            callable.
-
-            Args:
-                current_range (Range): A Range named tuple, representing the
-                    range of entries to be processed, their input files and
-                    information about friend trees.
-
-            Returns:
-                list: This respresents the list of (mergeable)values of all
-                action nodes in the computational graph.
-            """
-            import ROOT
-
-            # We have to decide whether to do this in Dist or in subclasses
-            # Utils.declare_headers(worker_includes)  # Declare headers if any
-            # Run initialization method to prepare the worker runtime
-            # environment
-            initialization()
-
-            if maintreename is not None:
-                # Build TEntryList for this range:
-                elists = ROOT.TEntryList()
-
-                # Build TChain of files for this range:
-                chain = ROOT.TChain(maintreename)
-                for start, end, filename, treenentries, subtreename in zip(current_range.localstarts, current_range.localends,
-                                                              current_range.filelist, current_range.treesnentries, current_range.treenames):
-                    # Use default constructor of TEntryList rather than the
-                    # constructor accepting treename and filename, otherwise
-                    # the TEntryList would remove any url or protocol from the
-                    # file name.
-                    elist = ROOT.TEntryList()
-                    elist.SetTreeName(subtreename)
-                    elist.SetFileName(filename)
-                    elist.EnterRange(start, end)
-                    elists.AddSubList(elist)
-                    chain.Add(filename + "?#" + subtreename, treenentries)
-
-                # We assume 'end' is exclusive
-                chain.SetCacheEntryRange(current_range.globalstart, current_range.globalend)
-
-                # Connect the entry list to the chain
-                chain.SetEntryList(elists, "sync")
-
-                # Gather information about friend trees. Check that we got an
-                # RFriendInfo struct and that it's not empty
-                if (current_range.friendinfo is not None and
-                    not current_range.friendinfo.fFriendNames.empty()):
-                    # Zip together the information about friend trees. Each
-                    # element of the iterator represents a single friend tree.
-                    # If the friend is a TChain, the zipped information looks like:
-                    # (name, alias), (file1.root, file2.root, ...), (subname1, subname2, ...)
-                    # If the friend is a TTree, the file list is made of
-                    # only one filename and the list of names of the sub trees
-                    # is empty, so the zipped information looks like:
-                    # (name, alias), (filename.root, ), ()
-                    zipped_friendinfo = zip(
-                        current_range.friendinfo.fFriendNames,
-                        current_range.friendinfo.fFriendFileNames,
-                        current_range.friendinfo.fFriendChainSubNames
-                    )
-                    for (friend_name, friend_alias), friend_filenames, friend_chainsubnames in zipped_friendinfo:
-                        # Start a TChain with the current friend treename
-                        friend_chain = ROOT.TChain(str(friend_name))
-                        # Add each corresponding file to the TChain
-                        if friend_chainsubnames.empty():
-                            # This friend is a TTree, friend_filenames is a vector of size 1
-                            friend_chain.Add(str(friend_filenames[0]))
-                        else:
-                            # This friend is a TChain, add all files with their tree names
-                            for filename, chainsubname in zip(friend_filenames, friend_chainsubnames):
-                                fullpath = filename + "/" + chainsubname
-                                friend_chain.Add(str(fullpath))
-
-                        # Set cache on the same range as the parent TChain
-                        friend_chain.SetCacheEntryRange(current_range.globalstart, current_range.globalend)
-                        # Finally add friend TChain to the parent (with alias)
-                        chain.AddFriend(friend_chain, friend_alias)
-
-                if defaultbranches is not None:
-                    rdf = ROOT.RDataFrame(chain, defaultbranches)
-                else:
-                    rdf = ROOT.RDataFrame(chain)
-
-            else:
-                # Only other head node type is EmptySourceHeadNode at the moment
-                # Initialize an RDataFrame with number of entries requested by
-                # user, then limit processing to the entries in this range.
-                rdf = ROOT.RDataFrame(nentries).Range(current_range.start, current_range.end)
-
-            if optimized:
-                # Create the RDF computation graph and execute it on this ranged
-                # dataset. The results of the actions of the graph and their types
-                # are returned
-                results, res_types = computation_graph_callable(rdf, current_range.id)
-
-                # Get RResultPtrs out of the type-erased RResultHandles by
-                # instantiating with the type of the value
-                mergeables = [
-                    ROOT.ROOT.Detail.RDF.GetMergeableValue(res.GetResultPtr[res_type]())
-                    if isinstance(res, ROOT.RDF.RResultHandle)
-                    else res
-                    for res, res_type in zip(results, res_types)
-                ]
-            else:
-                # Output of the callable
-                resultptr_list = computation_graph_callable(rdf, current_range.id)
-
-                mergeables = [
-                    resultptr  # Here resultptr is already the result value
-                    if isinstance(resultptr, (dict, list))
-                    else ROOT.ROOT.Detail.RDF.GetMergeableValue(resultptr)
-                    for resultptr in resultptr_list
-                ]
-
-            return mergeables
-
-        def reducer(mergeables_out, mergeables_in):
-            """
-            Merges two given lists of values that were
-            returned by the mapper function for two different
-            ranges.
-
-            Args:
-                mergeables_out (list): A list of computed (mergeable)values for
-                    a given entry range in a dataset. The elements of this list
-                    will be updated with the information contained in the
-                    elements of the other argument list.
-
-                mergeables_in (list): A list of computed (mergeable)values for
-                    a given entry range in a dataset.
-
-            Returns:
-                list: The list of updated (mergeable)values.
-            """
-
-            import ROOT
-
-            # We still need the list index to modify results of `Snapshot` and
-            # `AsNumpy` in place.
-            for index, (mergeable_out, mergeable_in) in enumerate(
-                    zip(mergeables_out, mergeables_in)):
-                # Create a global list with all the files of the partial
-                # snapshots.
-                if isinstance(mergeable_out, list):
-                    mergeables_out[index].extend(mergeable_in)
-
-                # Concatenate the partial numpy arrays along the same key of
-                # the dictionary.
-                elif isinstance(mergeable_out, dict):
-                    # Import numpy lazily
-                    try:
-                        import numpy
-                    except ImportError:
-                        raise ImportError("Failed to import numpy during distributed RDataFrame reduce step.")
-                    mergeables_out[index] = {
-                        key: numpy.concatenate([mergeable_out[key],
-                                                mergeable_in[key]])
-                        for key in mergeable_out
-                    }
-
-                # The `MergeValues` function modifies the arguments in place
-                # so there's no need to access the list elements.
-                else:
-                    ROOT.ROOT.Detail.RDF.MergeValues(
-                        mergeable_out, mergeable_in)
-
-            return mergeables_out
-
-        # Values produced after Map-Reduce
-        values = self.ProcessAndMerge(ranges, mapper, reducer)
-        # List of action nodes in the same order as values
-        nodes = generator.get_action_nodes()
-
-        # Set the value of every action node
-        for node, value in zip(nodes, values):
-            if node.operation.name == "Snapshot":
-                # Retrieve treename from operation args and start TChain
-                snapshot_treename = node.operation.args[0]
-                snapshot_chain = ROOT.TChain(snapshot_treename)
-                # Add partial snapshot files to the chain
-                for filename in value:
-                    snapshot_chain.Add(filename)
-                # Create a new rdf with the chain and return that to user
-                node.value = self.make_dataframe(snapshot_chain)
-            elif node.operation.name == "AsNumpy":
-                node.value = value
-            else:
-                node.value = value.GetValue()
+        cls.initialization = partial(fun, *args, **kwargs)
 
     @abstractmethod
-    def ProcessAndMerge(self, ranges, mapper, reducer):
+    def ProcessAndMerge(self, ranges: List[DataRange],
+                        mapper: Callable[..., TaskResult],
+                        reducer: Callable[[TaskResult, TaskResult], TaskResult]) -> TaskResult:
         """
         Subclasses must define how to run map-reduce functions on a given
         backend.
@@ -350,12 +213,13 @@ class BaseBackend(ABC):
         """
         pass
 
-    def optimize_npartitions(self):
+    @abstractmethod
+    def optimize_npartitions(self) -> int:
         """
-        Distributed backends may optimize the number of partitions of the
-        current dataset or leave it as it is.
+        Return a default number of partitions to split the dataframe in,
+        depending on the backend.
         """
-        return self.MIN_NPARTITIONS
+        pass
 
     def distribute_files(self, files_paths):
         """

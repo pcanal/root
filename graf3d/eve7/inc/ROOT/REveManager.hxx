@@ -42,8 +42,6 @@ class REveScene;
 class REveSceneList;
 
 class RWebWindow;
-class REveGeomViewer;
-
 
 class REveManager
 {
@@ -54,9 +52,9 @@ public:
    class RExceptionHandler : public TStdExceptionHandler {
    public:
       RExceptionHandler() : TStdExceptionHandler() { Add(); }
-      virtual ~RExceptionHandler()                 { Remove(); }
+      ~RExceptionHandler() override                 { Remove(); }
 
-      virtual EStatus Handle(std::exception& exc);
+      EStatus Handle(std::exception& exc) override;
    };
 
    class ChangeGuard {
@@ -67,7 +65,7 @@ public:
 
    struct Conn
    {
-      enum EConnState {Free, Processing, WaitingResponse };
+      enum EConnState {Free, WaitingResponse };
       unsigned fId{0};
       EConnState   fState{Free};
 
@@ -89,12 +87,13 @@ public:
    class MIR
    {
       public:
-       MIR(const std::string& cmd, ElementId_t id, const std::string& ctype)
-       :fCmd(cmd), fId(id), fCtype(ctype){}
+       MIR(const std::string& cmd, ElementId_t id, const std::string& ctype, unsigned connid)
+       :fCmd(cmd), fId(id), fCtype(ctype), fConnId(connid){}
 
        std::string fCmd;
        ElementId_t fId;
        std::string fCtype;
+       unsigned    fConnId;
    };
 
    struct Logger {
@@ -146,9 +145,9 @@ protected:
    REveSelection            *fSelection{nullptr};
    REveSelection            *fHighlight{nullptr};
 
-   std::shared_ptr<ROOT::Experimental::RWebWindow>  fWebWindow;
-   std::vector<Conn>                                fConnList;
-   std::queue<std::shared_ptr<MIR> >                fMIRqueue;
+   std::shared_ptr<ROOT::RWebWindow>       fWebWindow;
+   std::vector<Conn>                       fConnList;
+   std::queue<std::shared_ptr<MIR> >       fMIRqueue;
 
    // MIR execution
    std::thread       fMIRExecThread;
@@ -156,7 +155,8 @@ protected:
    std::unordered_map<std::string, std::shared_ptr<TMethodCall> > fMethCallMap;
 
    Logger            fLogger;
-   REveServerStatus  fServerStatus; 
+   REveServerStatus  fServerStatus;
+   bool              fIsRCore{false};
 
    void WindowConnect(unsigned connid);
    void WindowData(unsigned connid, const std::string &arg);
@@ -164,7 +164,9 @@ protected:
 
    void MIRExecThread();
    void ExecuteMIR(std::shared_ptr<MIR> mir);
-   void PublishChanges();
+
+   void StreamSceneChangesToJson();
+   void SendSceneChanges();
 
 public:
    REveManager(); // (Bool_t map_window=kTRUE, Option_t* opt="FI");
@@ -183,8 +185,12 @@ public:
 
    REveScene *GetWorld() const { return fWorld; }
 
+   REveViewer* GetDefaultViewer() const;
+
    REveViewer *SpawnNewViewer(const char *name, const char *title = "");
    REveScene  *SpawnNewScene (const char *name, const char *title = "");
+
+   void AllowMultipleRemoteConnections(bool loopBack = true, bool useAuthKey = true);
 
    void BeginChange();
    void EndChange();
@@ -248,18 +254,21 @@ public:
    void SetDefaultHtmlPage(const std::string& path);
    void SetClientVersion(const std::string& version);
 
-   void ScheduleMIR(const std::string &cmd, ElementId_t i, const std::string& ctype);
+   void ScheduleMIR(const std::string &cmd, ElementId_t i, const std::string& ctype, unsigned connid);
 
    static REveManager* Create();
    static void         Terminate();
    static void         ExecuteInMainThread(std::function<void()> func);
    static void         QuitRoot();
 
+   static void    ErrorHandler(Int_t level, Bool_t abort, const char *location,
+                               const char *msg);
+
 
    // Access to internals, needed for low-level control in advanced
    // applications.
 
-   std::shared_ptr<RWebWindow> GetWebWindow() const { return fWebWindow; }
+   std::shared_ptr<ROOT::RWebWindow> GetWebWindow() const { return fWebWindow; }
 
    // void Send(void* buff, unsigned connid);
    void Send(unsigned connid, const std::string &data);
@@ -267,9 +276,11 @@ public:
 
    void Show(const RWebDisplayArgs &args = "");
 
-   std::shared_ptr<REveGeomViewer> ShowGeometry(const RWebDisplayArgs &args = "");
+   void DisconnectEveViewer(REveViewer*);
+   void ConnectEveViewer(REveViewer*);
 
    void GetServerStatus(REveServerStatus&);
+   bool IsRCore() const { return fIsRCore; }
 };
 
 R__EXTERN REveManager* gEve;

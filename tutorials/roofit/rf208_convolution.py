@@ -7,11 +7,12 @@
 ##
 ## pdf = landau(t) (x) gauss(t)
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
-## \author Clemens Lange
-## \author Wouter Verkerke (C version)
+## \authors Clemens Lange, Wouter Verkerke (C version)
 
 import ROOT
 
@@ -44,10 +45,10 @@ lxg = ROOT.RooFFTConvPdf("lxg", "landau (X) gauss", t, landau, gauss)
 # ----------------------------------------------------------------------
 
 # Sample 1000 events in x from gxlx
-data = lxg.generate(ROOT.RooArgSet(t), 10000)
+data = lxg.generate({t}, 10000)
 
 # Fit gxlx to data
-lxg.fitTo(data)
+lxg.fitTo(data, PrintLevel=-1)
 
 # Plot data, pdf, landau (X) gauss pdf
 frame = t.frame(Title="landau (x) gauss convolution")

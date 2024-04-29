@@ -3,7 +3,9 @@
 ## \notebook
 ## Special pdf's: using non-parametric (multi-dimensional) kernel estimation pdfs
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -19,7 +21,7 @@ x = ROOT.RooRealVar("x", "x", 0, 20)
 p = ROOT.RooPolynomial("p", "p", x, [0.01, -0.01, 0.0004])
 
 # Sample 500 events from p
-data1 = p.generate(ROOT.RooArgSet(x), 200)
+data1 = p.generate({x}, 200)
 
 # Create 1D kernel estimation pdf
 # ---------------------------------------------------------------
@@ -60,7 +62,7 @@ py = ROOT.RooPolynomial(
     [0.01, 0.01, -0.0004],
 )
 pxy = ROOT.RooProdPdf("pxy", "pxy", [p, py])
-data2 = pxy.generate(ROOT.RooArgSet(x, y), 1000)
+data2 = pxy.generate({x, y}, 1000)
 
 # Create 2D kernel estimation pdf
 # ---------------------------------------------------------------
@@ -73,7 +75,7 @@ kest4 = ROOT.RooNDKeysPdf("kest4", "kest4", [x, y], data2, "am")
 kest5 = ROOT.RooNDKeysPdf("kest5", "kest5", [x, y], data2, "am", 2)
 
 # Create a histogram of the data
-hh_data = ROOT.RooAbsData.createHistogram(data2, "hh_data", x, Binning=10, YVar=dict(var=y, Binning=10))
+hh_data = data2.createHistogram("hh_data", x, Binning=10, YVar=dict(var=y, Binning=10))
 
 # Create histogram of the 2d kernel estimation pdfs
 hh_pdf = kest4.createHistogram("hh_pdf", x, Binning=25, YVar=dict(var=y, Binning=25))

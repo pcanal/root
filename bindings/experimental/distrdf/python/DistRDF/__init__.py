@@ -1,20 +1,28 @@
-# @author Vincenzo Eduardo Padulano
+#  @author Vincenzo Eduardo Padulano
 #  @author Enric Tejedor
 #  @date 2021-02
 
 ################################################################################
-# Copyright (C) 1995-2021, Rene Brun and Fons Rademakers.                      #
+# Copyright (C) 1995-2022, Rene Brun and Fons Rademakers.                      #
 # All rights reserved.                                                         #
 #                                                                              #
 # For the licensing terms see $ROOTSYS/LICENSE.                                #
 # For the list of contributors see $ROOTSYS/README/CREDITS.                    #
 ################################################################################
+from __future__ import annotations
 
 import logging
-import sys
 import types
 
+import concurrent.futures
+
+from typing import Iterable, TYPE_CHECKING
+
 from DistRDF.Backends import build_backends_submodules
+from DistRDF.LiveVisualize import LiveVisualize
+
+if TYPE_CHECKING:
+    from DistRDF.Proxy import ResultPtrProxy, ResultMapProxy
 
 logger = logging.getLogger(__name__)
 
@@ -40,27 +48,69 @@ def initialize(fun, *args, **kwargs):
     Base.BaseBackend.register_initialization(fun, *args, **kwargs)
 
 
-def create_logger(level="WARNING", log_path="./DistRDF.log"):
-    """DistRDF basic logger"""
-    logger = logging.getLogger(__name__)
+def RunGraphs(proxies: Iterable) -> int:
+    """
+    Trigger the execution of multiple RDataFrame computation graphs on a certain
+    distributed backend. If the backend doesn't support multiple job
+    submissions concurrently, the distributed computation graphs will be
+    executed sequentially.
 
-    level = getattr(logging, level)
+    Args:
+        proxies(list): List of action proxies that should be triggered. Only
+            actions belonging to different RDataFrame graphs will be
+            triggered to avoid useless calls.
 
-    logger.setLevel(level)
+    Return:
+        (int): The number of unique computation graphs executed by this call.
 
-    format_string = ("%(levelname)s: %(name)s[%(asctime)s]: %(message)s")
-    formatter = logging.Formatter(format_string)
 
-    stream_handler = logging.StreamHandler(sys.stdout)
-    stream_handler.setFormatter(formatter)
-    logger.addHandler(stream_handler)
+    Example:
 
-    if log_path:
-        file_handler = logging.FileHandler(log_path)
-        file_handler.setFormatter(formatter)
-        logger.addHandler(file_handler)
+        @code{.py}
+        import ROOT
+        RDataFrame = ROOT.RDF.Experimental.Distributed.Dask.RDataFrame
+        RunGraphs = ROOT.RDF.Experimental.Distributed.RunGraphs
 
-    return logger
+        # Create 3 different dataframes and book an histogram on each one
+        histoproxies = [
+            RDataFrame(100)
+                .Define("x", "rdfentry_")
+                .Histo1D(("name", "title", 10, 0, 100), "x")
+            for _ in range(4)
+        ]
+
+        # Execute the 3 computation graphs
+        n_graphs_run = RunGraphs(histoproxies)
+        # Retrieve all the histograms in one go
+        histos = [histoproxy.GetValue() for histoproxy in histoproxies]
+        @endcode
+
+
+    """
+    # Import here to avoid circular dependencies in main module
+    from DistRDF.Proxy import execute_graph
+    if not proxies:
+        logger.warning("RunGraphs: Got an empty list of handles, now quitting.")
+        return 0
+
+    # Get proxies belonging to distinct computation graphs
+    uniqueproxies = list({proxy.proxied_node.get_head(): proxy for proxy in proxies}.values())
+
+    # Submit all computation graphs concurrently from multiple Python threads.
+    # The submission is not computationally intensive
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(uniqueproxies)) as executor:
+        futures = [executor.submit(execute_graph, proxy.proxied_node) for proxy in uniqueproxies]
+        concurrent.futures.wait(futures)
+
+    return len(uniqueproxies)
+
+
+def VariationsFor(actionproxy: ResultPtrProxy) -> ResultMapProxy:
+    """
+    Equivalent of ROOT.RDF.Experimental.VariationsFor in distributed mode.
+    """
+    # similar to resPtr.fActionPtr->MakeVariedAction()
+    return actionproxy.create_variations()
 
 
 def create_distributed_module(parentmodule):
@@ -83,9 +133,8 @@ def create_distributed_module(parentmodule):
 
     # Inject top-level functions
     distributed.initialize = initialize
-    distributed.create_logger = create_logger
-
-    # Set non-optimized default mode
-    distributed.optimized = False
+    distributed.RunGraphs = RunGraphs
+    distributed.VariationsFor = VariationsFor
+    distributed.LiveVisualize = LiveVisualize
 
     return distributed

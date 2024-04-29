@@ -4,7 +4,9 @@
 ## Multidimensional models: normalization and  integration of pdfs, construction of
 ## cumulative distribution functions from pdfs in two dimensions
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -20,8 +22,8 @@ x = ROOT.RooRealVar("x", "x", -10, 10)
 y = ROOT.RooRealVar("y", "y", -10, 10)
 
 # Create pdf gaussx(x,-2,3), gaussy(y,2,2)
-gx = ROOT.RooGaussian("gx", "gx", x, ROOT.RooFit.RooConst(-2), ROOT.RooFit.RooConst(3))
-gy = ROOT.RooGaussian("gy", "gy", y, ROOT.RooFit.RooConst(+2), ROOT.RooFit.RooConst(2))
+gx = ROOT.RooGaussian("gx", "gx", x, -2.0, 3.0)
+gy = ROOT.RooGaussian("gy", "gy", y, +2.0, 2.0)
 
 # gxy = gx(x)*gy(y)
 gxy = ROOT.RooProdPdf("gxy", "gxy", [gx, gy])
@@ -33,12 +35,12 @@ gxy = ROOT.RooProdPdf("gxy", "gxy", [gx, gy])
 print("gxy = ", gxy.getVal())
 
 # Return value of gxy normalized over x _and_ y in range [-10,10]
-nset_xy = ROOT.RooArgSet(x, y)
+nset_xy = {x, y}
 print("gx_Norm[x,y] = ", gxy.getVal(nset_xy))
 
 # Create object representing integral over gx
 # which is used to calculate  gx_Norm[x,y] == gx / gx_Int[x,y]
-x_and_y = ROOT.RooArgSet(x, y)
+x_and_y = {x, y}
 igxy = gxy.createIntegral(x_and_y)
 print("gx_Int[x,y] = ", igxy.getVal())
 
@@ -46,15 +48,15 @@ print("gx_Int[x,y] = ", igxy.getVal())
 
 # Return value of gxy normalized over x in range [-10,10] (i.e. treating y
 # as parameter)
-nset_x = ROOT.RooArgSet(x)
+nset_x = {x}
 print("gx_Norm[x] = ", gxy.getVal(nset_x))
 
 # Return value of gxy normalized over y in range [-10,10] (i.e. treating x
 # as parameter)
-nset_y = ROOT.RooArgSet(y)
+nset_y = {y}
 print("gx_Norm[y] = ", gxy.getVal(nset_y))
 
-# Integarte normalizes pdf over subrange
+# Integrate normalized pdf over subrange
 # ----------------------------------------------------------------------------
 
 # Define a range named "signal" in x from -5,5
@@ -73,7 +75,7 @@ print("gx_Int[x,y|signal]_Norm[x,y] = ", igxy_sig.getVal())
 
 # Create the cumulative distribution function of gx
 # i.e. calculate Int[-10,x] gx(x') dx'
-gxy_cdf = gxy.createCdf(ROOT.RooArgSet(x, y))
+gxy_cdf = gxy.createCdf({x, y})
 
 # Plot cdf of gx versus x
 hh_cdf = gxy_cdf.createHistogram("hh_cdf", x, Binning=40, YVar=dict(var=y, Binning=40))

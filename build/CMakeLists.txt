@@ -14,6 +14,7 @@ if(WIN32)
     win/bindexplib/bindexplib.cxx
   )
   file(COPY win/w32pragma.h DESTINATION ${CMAKE_BINARY_DIR}/include/)
+  file(COPY win/sehmap.h DESTINATION ${CMAKE_BINARY_DIR}/include/)
 endif()
 
 ROOT_EXECUTABLE(rmkdepend
@@ -28,6 +29,9 @@ ROOT_EXECUTABLE(rmkdepend
 
 if(NOT MSVC AND _BUILD_TYPE_UPPER MATCHES "DEBUG|RELWITHDEBINFO")
   file(GLOB PRETTY_PRINTERS "gdbPrinters/*.so-gdb.py")
+  if(NOT roofit)
+    list(FILTER PRETTY_PRINTERS EXCLUDE REGEX libRooFitCore.so-gdb.py)
+  endif()
   set(PRETTY_PRINTER_DESTS)
   foreach(PRETTY_PRINTER ${PRETTY_PRINTERS})
     get_filename_component(PRETTY_PRINTER_DEST ${PRETTY_PRINTER} NAME)

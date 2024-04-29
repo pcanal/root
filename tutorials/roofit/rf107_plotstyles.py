@@ -3,7 +3,9 @@
 ## \notebook
 ## Basic functionality: demonstration of various plotting styles of data, functions in a RooPlot
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -23,10 +25,10 @@ mean = ROOT.RooRealVar("mean", "mean", -3, -10, 10)
 gauss = ROOT.RooGaussian("gauss", "gauss", x, mean, sigma)
 
 # Generate a sample of 100 events with sigma=3
-data = gauss.generate(ROOT.RooArgSet(x), 100)
+data = gauss.generate({x}, 100)
 
 # Fit pdf to data
-gauss.fitTo(data)
+gauss.fitTo(data, PrintLevel=-1)
 
 # Make plot frames
 # -------------------------------
@@ -41,7 +43,7 @@ frame4 = x.frame(Name="xframe", Title="Partial Range / Filled Bar chart", Bins=2
 # ---------------------------------------
 
 # Use sqrt(sum(weights^2)) error instead of Poisson errors
-data.plotOn(frame1, DataError=ROOT.RooAbsData.SumW2)
+data.plotOn(frame1, DataError="SumW2")
 
 # Remove horizontal error bars
 data.plotOn(frame2, XErrorSize=0)
@@ -50,7 +52,7 @@ data.plotOn(frame2, XErrorSize=0)
 data.plotOn(frame3, MarkerColor="b", LineColor="b")
 
 # Filled bar chart
-data.plotOn(frame4, DrawOption="B", DataError=ROOT.RooAbsData.ErrorType(2), XErrorSize=0, FillColor="kGray")
+data.plotOn(frame4, DrawOption="B", DataError=None, XErrorSize=0, FillColor="kGray")
 
 # Function plotting styles
 # -----------------------------------------------

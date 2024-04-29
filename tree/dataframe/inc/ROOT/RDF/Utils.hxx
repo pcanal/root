@@ -12,7 +12,7 @@
 #define ROOT_RDFUTILS
 
 #include "ROOT/RSpan.hxx"
-#include "ROOT/RStringView.hxx"
+#include <string_view>
 #include "ROOT/RVec.hxx"
 #include "ROOT/TypeTraits.hxx"
 #include "Rtypes.h"
@@ -23,7 +23,7 @@
 #include <memory>
 #include <new> // std::hardware_destructive_interference_size
 #include <string>
-#include <type_traits> // std::decay
+#include <type_traits> // std::decay, std::false_type
 #include <vector>
 
 class TTree;
@@ -219,6 +219,60 @@ unsigned int GetColumnWidth(const std::vector<std::string>& names, const unsigne
 template <typename T>
 constexpr std::size_t CacheLineStep() {
    return (kCacheLineSize + sizeof(T) - 1) / sizeof(T);
+}
+
+void CheckReaderTypeMatches(const std::type_info &colType, const std::type_info &requestedType,
+                            const std::string &colName);
+
+// TODO in C++17 this could be a lambda within FillHelper::Exec
+template <typename T>
+constexpr std::size_t FindIdxTrue(const T &arr)
+{
+   for (size_t i = 0; i < arr.size(); ++i) {
+      if (arr[i])
+         return i;
+   }
+   return arr.size();
+}
+
+// return type has to be decltype(auto) to preserve perfect forwarding
+template <std::size_t N, typename... Ts>
+decltype(auto) GetNthElement(Ts &&...args)
+{
+   auto tuple = std::forward_as_tuple(args...);
+   return std::get<N>(tuple);
+}
+
+#if __cplusplus >= 201703L
+template <class... Ts>
+using Disjunction = std::disjunction<Ts...>;
+#else
+template <class...>
+struct Disjunction : std::false_type {
+};
+template <class B1>
+struct Disjunction<B1> : B1 {
+};
+template <class B1, class... Bn>
+struct Disjunction<B1, Bn...> : std::conditional_t<bool(B1::value), B1, Disjunction<Bn...>> {
+};
+#endif
+
+bool IsStrInVec(const std::string &str, const std::vector<std::string> &vec);
+
+/// Return a vector with all elements of v1 and v2 and duplicates removed.
+/// Precondition: each of v1 and v2 must not have duplicate elements.
+template <typename T>
+std::vector<T> Union(const std::vector<T> &v1, const std::vector<T> &v2)
+{
+   std::vector<T> res = v1;
+
+   // Add the variations coming from the input columns
+   for (const auto &e : v2)
+      if (std::find(v1.begin(), v1.end(), e) == v1.end())
+         res.emplace_back(e);
+
+   return res;
 }
 
 } // end NS RDF

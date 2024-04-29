@@ -5,8 +5,8 @@
 /// to CLING code migration
 ///
 /// \macro_image
-/// \macro_output
 /// \macro_code
+/// \macro_output
 ///
 /// \date April 2009
 /// \author Wouter Verkerke
@@ -26,7 +26,7 @@ void rf509_wsinteractive()
    // but this does not work anymore in CLING.
    // so this tutorial is an example on how to
    // change the code
-   RooWorkspace *w1 = new RooWorkspace("w", kTRUE);
+   RooWorkspace *w1 = new RooWorkspace("w", true);
 
    // Fill workspace with pdf and data in a separate function
    fillWorkspace(*w1);
@@ -40,17 +40,12 @@ void rf509_wsinteractive()
    // U s e   w o r k s p a c e   c o n t e n t s
    // ----------------------------------------------
 
-   // Old syntax to use the name space prefix operator to access the workspace contents
-   //
-   // RooDataSet* d = w::model.generate(w::x,1000) ;
-   // RooFitResult* r = w::model.fitTo(*d) ;
-
    // use normal workspace methods
    RooAbsPdf *model = w1->pdf("model");
    RooRealVar *x = w1->var("x");
 
-   RooDataSet *d = model->generate(*x, 1000);
-   RooFitResult *r = model->fitTo(*d);
+   std::unique_ptr<RooDataSet> d{ model->generate(*x, 1000)};
+   std::unique_ptr<RooFitResult> r{model->fitTo(*d, PrintLevel(-1))};
 
    // old syntax to access the variable x
    // RooPlot* frame = w::x.frame() ;

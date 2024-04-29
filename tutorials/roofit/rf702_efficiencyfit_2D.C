@@ -6,8 +6,8 @@
 /// of x should be described by eff(x)
 ///
 /// \macro_image
-/// \macro_output
 /// \macro_code
+/// \macro_output
 ///
 /// \date February 2018
 /// \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -27,7 +27,7 @@
 #include "RooPlot.h"
 using namespace RooFit;
 
-void rf702_efficiencyfit_2D(Bool_t flat = kFALSE)
+void rf702_efficiencyfit_2D(bool flat = false)
 {
    // C o n s t r u c t   e f f i c i e n c y   f u n c t i o n   e ( x , y )
    // -----------------------------------------------------------------------
@@ -68,13 +68,13 @@ void rf702_efficiencyfit_2D(Bool_t flat = kFALSE)
    RooProdPdf model("model", "model", shapePdf, Conditional(effPdf, cut));
 
    // Generate some toy data from model
-   RooDataSet *data = model.generate(RooArgSet(x, y, cut), 10000);
+   std::unique_ptr<RooDataSet> data{model.generate({x, y, cut}, 10000)};
 
    // F i t   c o n d i t i o n a l   e f f i c i e n c y   p d f   t o   d a t a
    // --------------------------------------------------------------------------
 
    // Fit conditional efficiency pdf to data
-   effPdf.fitTo(*data, ConditionalObservables(RooArgSet(x, y)));
+   effPdf.fitTo(*data, ConditionalObservables(RooArgSet(x, y)), PrintLevel(-1));
 
    // P l o t   f i t t e d ,   d a t a   e f f i c i e n c y
    // --------------------------------------------------------

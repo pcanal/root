@@ -174,7 +174,7 @@ bool LookForFile(const std::vector<const char*>& Args, std::string& Path,
         llvm::sys::fs::is_regular_file(FilePath)) {
       if (FileType)
         LogFileStatus("Using", FileType, FilePath.str());
-      Path = FilePath.str();
+      Path = FilePath.str().str();
       return true;
     }
     // Don't write same same log entry twice when FilePath == Path
@@ -201,7 +201,7 @@ bool LookForFile(const std::vector<const char*>& Args, std::string& Path,
       if (llvm::sys::fs::is_regular_file(FilePath)) {
         if (FileType)
           LogFileStatus("Using", FileType, FilePath.str());
-        Path = FilePath.str();
+        Path = FilePath.str().str();
         return true;
       }
       if (FileType)
@@ -277,7 +277,7 @@ bool SplitPaths(llvm::StringRef PathStr,
   }
 
   // Trim trailing sep in case of A:B:C:D:
-  if (!PathStr.empty() && PathStr.endswith(Delim))
+  if (!PathStr.empty() && PathStr.ends_with(Delim))
     PathStr = PathStr.substr(0, PathStr.size()-Delim.size());
 
   if (!PathStr.empty()) {

@@ -1,10 +1,366 @@
 # JSROOT changelog
 
 ## Changes in dev
-1. Fix problem with curved TGraph drawings (#218)
-2. Fix problem with logy/logz drawing in lego plots
-3. Provide x3dscNNN and y3dscNNN draw option for histogram to resize x/y axis
-4. Provide JSROOT.Painter.setDefaultDrawOpt to change default draw option
+1. Let plot current time, file creation or modification time with `&optdate=[1,2,3]` URL parameters
+2. Let plot file name, full file name or item name with `&optfile=[1,2,3]` URL parameters
+3. Let define date and file name position with `&datex=0.03&datey=0.03` URL parameters
+4. Improve TRatioPlot axis and lines drawing
+5. Use localStorage to preserve custom settings and gStyle
+6. Let configure custom storage prefix with `&storage_prefix=name` URL #290
+7. Let customize URL for "Show in new tab" menu command
+8. Support both new and old TRatioPlot drawings
+9. Fully integrate svg2pdf.js into jsroot repo
+10. Synchronize X/Y range selection with native ROOT
+11. Proper handle attributes from TH2Poly bins, support "p" for markers drawing
+
+
+## Changes in 7.6.0
+1. Implement "tickz" draw option, used for color palette ticks
+2. Implement skewness and kurtosis calculations for histogram stats box
+3. Introduce "logv" draw option for `TH3`, configures logarithmic scale for box volume
+4. Implement color palette drawing for `TH3`
+5. Implement cutg draw option for `TH2`/`TF2` surface plots
+6. Implement `TMath::Sq()` function and several others like SinH, ASinH, ...
+7. Implement histogram drawing build from `TGraph2D` using Delaunay interpolation
+8. Provide preliminary `TF3` support
+9. Support `TLinearGradient` and `TRadialGradient` colors
+10. Support LZMA decompression of ROOT files #272
+11. Include ZSTD decompression to repository #274
+12. Support opacity transfer function for `TH3`, see tutorials/gl/glvox2.C
+13. Upgrade three.js r155 -> r158
+14. Handle TCanvas IsEdiatable flag to disable some interactive features
+15. Support PDF creation using jsPDF and svg2pdf.js - in browser and node.js
+16. Implement custom fonts support in TWebCanvas
+17. List of ROOT/JSON files on server with `&dir=<path>` URL parameter #283
+18. Load TGaxis function from the file #282
+19. Let display progress messages in modal element #285
+20. Fix - do not add `THStack` and `TMultiGraph` to legend
+21. Fix - correctly use margin in `TPaveText` class
+22. Fix - correctly draw endcaps in legend errors
+23. Fix - vertical position of up elements like {M}^{2} in TLatex
+24. Fix - let draw THStack with diff binning hists
+25. Fix - better tooltip name for the items
+26. Fix - better logy scale selection
+
+
+## Changes in 7.5.5
+1. Fix - abort tree draw operation faster
+2. Fix - support plain TRI option for TGraph2D
+3. Fix - use latest npm "gl" module
+
+
+## Changes in 7.5.4
+1. Fix - catch exception when parsing TF1 formula
+2. Fix - properly check THStack histograms axes when doing sum
+3. Fix - correctly handle negative offset on time axis
+4. Fix - do not use `inset` because of old Chrome browsers
+5. Fix - properly provide object hints
+
+
+## Changes in 7.5.3
+1. Fix - draw histograms with negative bins #276
+2. Fix - correctly read TLeaf with fixed-size array
+3. Fix - bug in options handling in startGUI
+4. Fix - greyscale support in TLegend drawing
+5. Fix - correctly use text font for TGaxis title
+6. Fix - preserve auto colors in THStack #277
+7. Fix - correctly set pave name #278
+
+
+## Changes in 7.5.2
+1. Fix - proper fit pars display in stats, proper #chi^{2}
+2. Fix - several bugs in TFormula parsing
+3. Fix - correctly use saved buffer in TF1/TF2
+4. Fix - properly adjust size of stats box
+5. Fix - support pol0..pol9 functions
+6. Fix - TGraph bar width should be at least 1 pixel
+7. Fix - prevent drawing of empty TGraph
+
+
+## Changes in 7.5.1
+1. Fix - expand item in hierarchy painter
+2. Fix - correctly use saved TF1 values for non-equidistant bins #270
+3. Fix - in log scales replace 10^1 label by 10
+4. Fix - vertical align of log labels on X axis
+5. Fix - second click of the same item in hierarchy painter
+
+
+## Changes in 7.5.0
+1. Correctly implement `TH2` projections like MERCATOR or PARABOLIC, add MOLLWEIDE
+2. Support "pol", "cyl", "sph" and "psr" coordinates systems for lego and surf plots
+3. Support orthographic camera for lego and surface plots
+4. Implement "tri1", "tri2", "triw" draw options for `TGraph2D` with Delaunay algorithm
+5. Add support of `TProfile3D` and `TPaveClass` classes
+6. Use "col" as default draw option for `TH2`, "box2" for `TH3`
+7. Draw axes grids in front of objects - making it equivalent to original ROOT
+8. Change `TF1` and `TF2` drawing - always convert into histogram, support TWebCanvas, handle log scales
+9. Provide "Bring to front" menu command for different objects like pave, box, marker, ...
+10. Provide "Build legend" context menu command for the pad
+11. Let toggle vertical/horizontal flag for color palette via context menu
+12. Support canvas grayscale, let toggle via context menu
+13. Basic latex support when drawing axes labels and titles in 3D
+14. Handle "dark mode" in geom painter - automatically adjust background
+15. Let configure material and scene properties in geom control gui
+16. Reset pad enlarge state when pressing "Escape" key #265
+17. Scale special fill patterns like 3244 to pad size
+18. Add "Superimpose" menu command in hierarchy - let select draw option when append item to pad
+19. Support `inspectN` draw option, allows automatically expand object content to specified level
+20. Implement `allfunc` draw option for histograms, force drawing disregard of TF1::kNotDraw bit
+21. Use `eslint` for static code checking, add testing of interactive features
+22. Upgrade three.js r151 -> r155
+23. Use https://github.com/georgealways/lil-gui/ instead of dat.GUI in geom painter
+24. Put `gl` in "devDependencies" of package.json; one can skip it installation with `npm i --production`
+25. Fix - correct scaling of axis labels when tilt them by 25 degree, make this angle configurable
+26. Fix - legend multi-columns drawing and labels scaling
+27. Fix - graph "B" bar widths as in native ROOT
+28. Fix - use pad and not frame size for `TText` / `TLatex` scaling
+29. Fix - properly handle "NB" (no border) draw option for `TPave` classes
+30. Fix - do not draw histogram title with AXIS draw option
+31. Fix - correct scaling of custom axis labels
+32. Fix - shrink axis labels like 0.20 -> 0.2 or 10^0 -> 1
+33. Fix - copy axis attributes from histogram z scale to palette
+34. Fix - let handle derived from TH1/TH2 classes as histograms #269
+
+
+## Changes in 7.4.3
+1. Fix - correctly use GMT specifier in time format
+2. Fix - logical error in `decodeUrl`
+3. Fix - member-wise streaming of std::map   #262
+
+
+## Changes in 7.4.2
+1. Fix - unzoom z on lego2 plots
+2. Fix - browsing TLists with nullptr inside
+3. Fix - check NaN values when performing TTree::Draw()
+4. Fix - support standard log function in TF1/TF2
+
+
+## Changes in 7.4.1
+1. Fix - context menu position on lego plots
+2. Fix - add missing math functions Chebyshev0 and normalized Gaus
+3. Fix - correctly render TPolyLine3D
+4. Fix - properly add interactive resize elements for paves and frame
+5. Fix - drag and drop handling on tabs layout
+
+
+## Changes in 7.4.0
+1. Upgrade d3.js v7.6.1 -> v7.8.4
+2. Upgrade three.js r146 -> r151
+3. Support `[cutg]` draw option for TH2
+4. Correctly handle `same0` draw option for TH2
+5. Fix several issues with axis reverse order, support on lego plots
+6. Support more kinds of log scales - ln and logN where N is any positive integer
+7. Adjust TAxis title positioning to native ROOT behavior
+8. Add interactivity (moving, context menu) for TLine, TBox, TText, TLatex, TDiamond, TGaxis, TASImage
+9. Use new gStyle attributes for candle and violin plots
+10. Implement autoplace for TLegend, also via context menu
+11. Change algorithm of building smooth (bezier) curves
+12. Let change physical node visibility in TGeo drawings
+13. Use TGaxis attributes from gStyle - fAxisMaxDigits, fStripDecimals and exponent offset
+14. Implement "projxy" draw option for TH2 - like projxy3 or projx1_y5
+15. Support custom function in TGaxis - when drawn in TWebCanvas
+16. Introduce settings.WithCredentials, set xhr.withCredentials = true when submitting HTTP requests
+17. Let superimpose TH3 and geo drawings
+18. Apply pad draw options like 'gridx' or 'logy' to all subpads
+19. Support new TScatter and TAnnotation classes
+20. Implement moving and resizing of subpads
+21. Implement zooming in the TASImage
+22. Let configure position and direction of camera for TGeo, let create URL for that
+23. Support labels rotation for simple axis in geometry
+24. Support many orthographic cameras with overlayed grid/labels
+25. Support InstancedMesh for TGeo drawing, let show really large geometries
+26. Implement 'inject=path/script_name.js' url option to inject scripts without emulating of v6
+27. Exclude 'HEAD' http request when reading ROOT file, all necessary info can be get from first real HTTP request
+28. Provide makeImage function for generation of svg, png and jpeg images in batch and interactively (#257)
+29. Implement interactive zoom shifting when middle-mouse button down or single-touch moving
+30. Several improvements for touch devices or devices with small displays
+31. Remove settings.FrameNDC, use Style.fPadLeft/Right/Top/BottomMargin values instead
+32. Fix - rescan sumw2 when update TH1
+33. Fix - correct placing for TLegend header
+34. Fix - correctly align sub/super scripts in complex TLatex
+35. Fix - correctly set visibility level for geo drawing (#258)
+36. Fix - use more factor for number of nodes in geo drawing (#258)
+
+
+## Changes in 7.3.4
+1. Fix - failure in normal_cdf calculation
+2. Fix - check in TTree::Draw for null buffer
+3. Fix - do not rise exception in treeProcess
+4. Fix - RH1 zero line drawing only when required
+5. Fix - do not allow move float browser too far left/top
+
+
+## Changes in 7.3.2
+1. Fix - undefined graph in TGraphPainter
+2. Fix - error in showing info in the geo painter
+3. Fix - stack limitation with Math.min.apply in tree draw
+
+
+## Changes in 7.3.1
+1. Fix - TGeo update in the TWebCanvas
+2. Fix - several tutorials with three.js modules loading
+3. Fix - redraw pad when change text align attributes
+4. Fix - pad ranges for TWebCanvas, handle log2 scales
+5. Fix - support candle and violin options when creating string draw option
+6. Fix - labels and tooltips on reversed axes
+7. Fix - zooming on TRatioPlot
+8. Fix - pad ranges calculations for TWebCanvas
+9. Fix - set proper background for geo drawing
+
+
+## Changes in 7.3.0
+1. Mark methods returning `Promise` as **async**
+2. Upgrade three.js to r146
+3. Fix several bugs in `csg.mjs`, improve geometry clipping
+4. Provide `settings.PreferSavedPoints` to exclude function evaluation when there are saved points
+5. Add more interactive features with `TWebCanvas`
+6. 3-dimensional `TTree::Draw()` now produces `TPolyMarker3D` by default
+7. Force MathJax rendering when `\` symbol is found (#243)
+8. Support `TButton` class
+9. Remove `localfile` url option, only interactively one can open file selection dialog
+10. Fix - show correct bin index in `TH2` tooltips
+11. Fix - interactive move/resize on touch devices
+12. Fix - correctly handle axis zooming on lego plots
+13. Fix - histogram statistics calculation with negative bins
+14. Base version for ROOT 6.28 release
+
+
+## Changes in 7.2.1
+1. Fix - prevent glitch when enabling projection via context menu
+2. Fix - `multi.json` request parsing
+3. Fix - decoding of multipart message (#250)
+4. Fix - use alpha channel for TColor when intended
+5. Backport `settings.PreferSavedPoints` only for `TF1`
+
+
+## Changes in 7.2.0
+1. Use TAxis attributes in lego plots - ticks/labels/title colors, sizes, offsets
+2. Correctly resize stats box when number of lines changes
+3. Support JSROOT usage with yarn and webpack
+4. Provide `FileProxy` class to let read ROOT files from arbitrary place
+5. Let 'hook' save file functionality to use alternative method to store image files
+6. Implement 'tabs' layout for objects display (#238)
+7. Upgrade d3.js to version 7.6.1
+8. Fix - adjust pad margins when moving palette and frame
+
+
+## Changes in 7.1.1
+1. Fix - let modify node visibility bits via context menu
+2. Fix - menu position adjusting
+3. Fix - tree_draw.js example, export treeDraw function from main.mjs
+4. Fix - TH3 scatter plot with large number of bins converted to box2
+5. Fix - create geo css entries also when expand object in hierarchy (#240)
+
+
+## Changes in 7.1.0
+1. Let change `settings` and `gStyle` parameters via "Settings" menu of the top hierarchy item
+2. Settings and gStyle can be stored as cookies, automatically read when next time loading webpage
+3. `settings.OnlyLastCycle` defines if only last object version shown in TFile (also as `&lastcycle` URL parameter)
+4. `settings.DarkMode` configures dark mode for GUI and drawings (also as `&dark` URL parameter)
+5. Support new `TGraph2DAsymmErrors` class
+6. Support `gStyle.fOptDate` and `gStyle.fOptFile` (also as `&optdate` and `&optfile` URL parameter)
+7. Support `gStyle.fDateX` and `gStyle.fDateY` used for positioning date and file on canvas
+8. Support `gStyle.fHistTopMargin` (also as `&histmargin=value` URL parameter)
+9. Let save frame, title and stats properties to `gStyle` via correspondent context menus
+10. Support majority of special symbols in TMathText
+11. Fix several issues with TPaveText
+
+
+## Changes in 7.0.2
+1. Fix - TH2 arrow drawing
+2. Fix - interactive change of fonts attributes
+3. Fix - proper draw results of TTree::Draw
+4. Fix - draw new histogram on same canvas
+
+
+## Changes in 7.0.1
+1. Fix problem with irregular axis labels
+2. Correctly scale and tilt large number of axes labels
+
+
+## Changes in 7.0.0
+1. Use ES6 modules for code organization
+2. Rewrite code with ES6 classes; one have to use class syntax to derive from it
+3. Upgrade d3.js to 7.3.0, three.js to r138
+4. Fully remove jQuery and jQueryUI, replace by plain HTML/JavaScript
+5. Remove "collapsible" and "tabs" layouts which were implemented with jQuery - use "flex" instead
+6. Improve flexible layout, provide context menu with cascading, tiling, selecting frames
+7. Use `BigInt` in I/O with 64bit integer which can not be stored as plain `Number`
+8. Starting from Chrome 96, allow embedding WebGL into SVG - solving problem with lego plots in canvas
+9. Implement all variants of CANDLE and VIOLIN draw options (#194)
+10. Implement "circular" and "chord" draw options for TH2
+11. Implement "cjust" draw option when drawing color palette
+12. Implement "colhz" draw option to plot horizontal color palette
+13. Implement "pads" draw option for THStack
+14. In TF1/TF2 always try to use formula, only when fail - apply saved buffer
+15. Add many standard functions to math like "crystalball_pdf", "gaussian_pdf", "tdistribution_pdf"
+16. Improve drawing of TEfficiency, support 2D case
+17. Support new TGraphMultiErrors class
+18. Let disable TGraph dragging via `settings.DragGraphs` flag (#224)
+19. Correctly display extra data from TGraphQQ
+20. Implement "3d" draw options for TMultiGraph
+21. Support "A" hist option (do not draw axis) in lego/surf plots
+22. Support drawing of TGeo and TAxis3D objects inside TPad
+23. Implement proper drawing of TEllipse
+24. Add proper support of "Symbols" and "Wingdings" fonts
+25. Make "col" default draw option for TH2 in JSROOT gui
+
+
+## Changes in 6.3.4
+1. Fix bug in handling superimposing items via URL syntax
+2. Enable geometry clipping in node.js
+3. Upgrade node.js packages
+4. Let draw TGeo object inside TCanvas
+5. Let superimpose TPolyLine3D and TPolyMarker3D with TGeo drawing
+6. Fix plain #sum and #int parsing in TLatex
+7. Fix ticks position for axes with labels
+
+
+## Changes in 6.3.3
+1. Fix TEfficiency drawing
+2. Provide TPadPainter.divide method
+3. Fix browsing remote file via THttpServer
+4. Fix lego draw update while zooming
+
+
+## Changes in 6.3.2
+1. Fix bug in TH1 drawing when minimum or/and maximum was configured for histogram
+
+
+## Changes in 6.3.1
+1. Fix bug with col draw option in TH2/RH2
+
+
+## Changes in 6.3.0
+1. Fully rewrite TLatex parsing, use svg elements instead of plain text/tspan
+2. Make TLatex reliably working in node.js, does not depend from availability of canvas component
+3. Many optimizations to produce smaller (and faster) SVG output
+4. Provide x3dscNNN and y3dscNNN draw option for histogram to resize x/y axis in 3D plots
+5. Provide "Find label" command in TAxis context menu to zoom into bin region
+6. Allows to use JSROOT.define() in external scripts
+7. Provide JSROOT.Painter.setDefaultDrawOpt() to change class default draw option
+8. Provide example of custom entries in histogram context menu
+9. Provide alternative external location for zstd-codec, let use zstd even when not found locally
+10. Let skip HEAD requests when reading files, adding "^" symbol to file name (#223)
+11. Show long histogram names in stats box when possible
+12. Fix logic how "ndiv" parameter of TAxis is handled, showing really the configured number of ticks
+13. Fix problem with curved TGraph drawings (#218)
+14. Fix problems with TGraph drawing updates
+15. Base version for ROOT 6.26 release
+
+
+## Changes in 6.2.2
+1. Fix - proper fill TH1 which drawn with line option
+2. Fix - object drawing from inspector
+3. Fix - error with filling data of TGeoTrack in "extract tracks" example
+4. Fix - error in pad items context menu
+5. Fix - assigned dropped item name only when new painter created
+
+
+## Changes in 6.2.1
+1. Fix logy and logz handling on lego plots
+2. Fix error in statistic calculations for projections
+3. Fix zstd-codec loading with minified jsroot scripts
 
 
 ## Changes in 6.2.0

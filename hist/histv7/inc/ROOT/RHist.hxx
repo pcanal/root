@@ -147,8 +147,23 @@ public:
       fImpl->FillN(xN, weightN);
    }
 
+   /// For each coordinate in `xN`, add `weightN[i]` to the bin at coordinate
+   /// `xN[i]`. The sizes of `xN` and `weightN` must be the same. This is more
+   /// efficient than many separate calls to `Fill()`.
+   /// Overload for passing initializer lists.
+   void FillN(std::initializer_list<const CoordArray_t> xN, std::initializer_list<const Weight_t> weightN) noexcept
+   {
+      fImpl->FillN(std::span<const CoordArray_t>(xN.begin(), xN.end()), std::span<const Weight_t>(weightN.begin(), weightN.end()));
+   }
+
    /// Convenience overload: `FillN()` with weight 1.
    void FillN(const std::span<const CoordArray_t> xN) noexcept { fImpl->FillN(xN); }
+
+   /// Convenience overload: `FillN()` with weight 1.
+   /// Overload for passing initializer lists.
+   void FillN(std::initializer_list<const CoordArray_t> xN) noexcept {
+      fImpl->FillN(std::span<const CoordArray_t>(xN.begin(), xN.end()));
+   }
 
    /// Get the number of entries this histogram was filled with.
    int64_t GetEntries() const noexcept { return fImpl->GetStat().GetEntries(); }
@@ -290,18 +305,21 @@ using RH1D = RHist<1, double, RHistStatContent, RHistStatUncertainty>;
 using RH1F = RHist<1, float, RHistStatContent, RHistStatUncertainty>;
 using RH1C = RHist<1, char, RHistStatContent>;
 using RH1I = RHist<1, int, RHistStatContent>;
+using RH1L = RHist<1, int64_t, RHistStatContent>;
 using RH1LL = RHist<1, int64_t, RHistStatContent>;
 
 using RH2D = RHist<2, double, RHistStatContent, RHistStatUncertainty>;
 using RH2F = RHist<2, float, RHistStatContent, RHistStatUncertainty>;
 using RH2C = RHist<2, char, RHistStatContent>;
 using RH2I = RHist<2, int, RHistStatContent>;
+using RH2L = RHist<2, int64_t, RHistStatContent>;
 using RH2LL = RHist<2, int64_t, RHistStatContent>;
 
 using RH3D = RHist<3, double, RHistStatContent, RHistStatUncertainty>;
 using RH3F = RHist<3, float, RHistStatContent, RHistStatUncertainty>;
 using RH3C = RHist<3, char, RHistStatContent>;
 using RH3I = RHist<3, int, RHistStatContent>;
+using RH3L = RHist<3, int64_t, RHistStatContent>;
 using RH3LL = RHist<3, int64_t, RHistStatContent>;
 ///\}
 

@@ -187,7 +187,7 @@ public:
    /// \param[in] shape Shape vector
    /// \param[in] layout Memory layout
    RTensor(Value_t *data, Shape_t shape, MemoryLayout layout = MemoryLayout::RowMajor)
-      : fShape(shape), fLayout(layout), fData(data), fContainer(NULL)
+      : fShape(shape), fLayout(layout), fData(data), fContainer(nullptr)
    {
       fSize = Internal::GetSizeFromShape(shape);
       fStrides = Internal::ComputeStridesFromShape(shape, layout);
@@ -199,7 +199,7 @@ public:
    /// \param[in] strides Strides vector
    /// \param[in] layout Memory layout
    RTensor(Value_t *data, Shape_t shape, Shape_t strides, MemoryLayout layout = MemoryLayout::RowMajor)
-      : fShape(shape), fStrides(strides), fLayout(layout), fData(data), fContainer(NULL)
+      : fShape(shape), fStrides(strides), fLayout(layout), fData(data), fContainer(nullptr)
    {
       fSize = Internal::GetSizeFromShape(shape);
    }
@@ -246,7 +246,7 @@ public:
    std::shared_ptr<Container_t> GetContainer() { return fContainer; }
    const std::shared_ptr<Container_t> GetContainer() const { return fContainer; }
    MemoryLayout GetMemoryLayout() const { return fLayout; }
-   bool IsView() const { return fContainer == NULL; }
+   bool IsView() const { return fContainer == nullptr; }
    bool IsOwner() const { return !IsView(); }
 
    // Copy
@@ -257,15 +257,20 @@ public:
    RTensor<Value_t, Container_t> Squeeze() const;
    RTensor<Value_t, Container_t> ExpandDims(int idx) const;
    RTensor<Value_t, Container_t> Reshape(const Shape_t &shape) const;
-   RTensor<Value_t, Container_t> Slice(const Slice_t &slice); 
+   RTensor<Value_t, Container_t> Resize(const Shape_t &shape);
+   RTensor<Value_t, Container_t> Slice(const Slice_t &slice);
 
    // Iterator class
-   class Iterator : public std::iterator<std::random_access_iterator_tag, Value_t> {
+   class Iterator {
    private:
       RTensor<Value_t, Container_t>& fTensor;
       Index_t::value_type fGlobalIndex;
    public:
-      using difference_type = typename std::iterator<std::random_access_iterator_tag, Value_t>::difference_type;
+      using iterator_category = std::random_access_iterator_tag;
+      using value_type = Value_t;
+      using difference_type = std::ptrdiff_t;
+      using pointer = Value_t *;
+      using reference = Value_t &;
 
       Iterator(RTensor<Value_t, Container_t>& x, typename Index_t::value_type idx) : fTensor(x), fGlobalIndex(idx) {}
       Iterator& operator++() { fGlobalIndex++; return *this; }
@@ -449,20 +454,18 @@ inline RTensor<Value_t, Container_t> RTensor<Value_t, Container_t>::ExpandDims(i
    auto shape = fShape;
    auto strides = fStrides;
    if (idx < 0) {
-      if (len + idx + 1 < 0) {
-         throw std::runtime_error("Given negative index is invalid.");
-      }
-      shape.insert(shape.end() + 1 + idx, 1);
-      strides.insert(strides.begin() + 1 + idx, 1);
-   } else {
-      if (idx > len) {
-         throw std::runtime_error("Given index is invalid.");
-      }
-      shape.insert(shape.begin() + idx, 1);
-      strides.insert(strides.begin() + idx, 1);
+      idx = len + 1 + idx;
    }
+   if (idx < 0) {
+      throw std::runtime_error("Given negative index is invalid.");
+   }
+   else if (idx > len) {
+      throw std::runtime_error("Given index is invalid.");
+   }
+   shape.insert(shape.begin() + idx, 1);
+   strides = Internal::ComputeStridesFromShape(shape, fLayout);
 
-   // Create copy, attach new shape and strides and return
+   // Create view copy, attach new shape and strides and return
    RTensor<Value_t, Container_t> x(*this);
    x.fShape = shape;
    x.fStrides = strides;
@@ -479,6 +482,23 @@ inline RTensor<Value_t, Container_t> RTensor<Value_t, Container_t>::Reshape(cons
    // Create copy, replace and return
    RTensor<Value_t, Container_t> x(*this);
    x.ReshapeInplace(shape);
+   return x;
+}
+
+/// \brief Resize tensor
+/// \param[in] shape Shape vector
+/// \returns New RTensor
+/// Resize tensor into new shape
+template <typename Value_t, typename Container_t>
+inline RTensor<Value_t, Container_t> RTensor<Value_t, Container_t>::Resize(const Shape_t &shape)
+{
+   // Create new tensor with the specified shape
+   RTensor <Value_t, Container_t> x(shape, fLayout);
+
+   // Copying contents from previous tensor
+   size_t n = (x.GetSize()>fSize) ? fSize : x.GetSize();
+   std::copy(this->GetData(), this->GetData() + n, x.GetData() );
+
    return x;
 }
 

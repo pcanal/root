@@ -13,7 +13,7 @@
 #include <iostream>
 #include <chrono>
 
-std::shared_ptr<ROOT::Experimental::RWebWindow> window;
+std::shared_ptr<ROOT::RWebWindow> window;
 
 int num_clients = 1;
 bool window_terminated = false;
@@ -115,19 +115,22 @@ void ping(int nclients = 1, int test_mode = 0)
    // gEnv->SetValue("WebGui.SenderThrds", "yes");
 
    // create window
-   window = ROOT::Experimental::RWebWindow::Create();
+   window = ROOT::RWebWindow::Create();
 
    // configure maximal number of clients which allowed to connect
    window->SetConnLimit(num_clients);
 
    // configure default html page
    // either HTML code can be specified or just name of file after 'file:' prefix
-   // Detect file location to specify full path to the
+   // Detect file location to specify full path to the HTML file
    std::string fname = __FILE__;
    auto pos = fname.find("ping.cxx");
-   if (pos > 0) { fname.resize(pos); fname.append("ping.html"); }
-           else fname = "ping.html";
-   window->SetDefaultPage(std::string("file:") + fname);
+   if (pos > 0)
+      fname.resize(pos);
+   else
+      fname.clear();
+   fname.append("ping.html");
+   window->SetDefaultPage("file:" + fname);
 
    // configure window geometry
    window->SetGeometry(300, 500);
@@ -152,7 +155,7 @@ void ping(int nclients = 1, int test_mode = 0)
    // provide blocking method to let run
    if (batch_mode) {
       const int run_limit = 200;
-      const double fullrun_time = 40., startup_time = 15.;
+      const double fullrun_time = 100., startup_time = 70.;
       start_tm = firstmsg_tm = std::chrono::high_resolution_clock::now();
       window->WaitFor([=](double tm) { return (current_counter >= run_limit) || (tm > fullrun_time) || ((current_counter == 0) && (tm > startup_time))  ? 1 : 0; });
       stop_tm = std::chrono::high_resolution_clock::now();

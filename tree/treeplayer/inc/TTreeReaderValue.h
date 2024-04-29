@@ -74,13 +74,13 @@ Base class of TTreeReaderValue.
 
       EReadStatus ProxyReadDefaultImpl();
 
-      typedef Bool_t (ROOT::Detail::TBranchProxy::*BranchProxyRead_t)();
+      typedef bool (ROOT::Detail::TBranchProxy::*BranchProxyRead_t)();
       template <BranchProxyRead_t Func>
       ROOT::Internal::TTreeReaderValueBase::EReadStatus ProxyReadTemplate();
 
       /// Return true if the branch was setup \em and \em read correctly.
       /// Use GetSetupStatus() to only check the setup status.
-      Bool_t IsValid() const { return fProxy && 0 == (int)fSetupStatus && 0 == (int)fReadStatus; }
+      bool IsValid() const { return fProxy && 0 == (int)fSetupStatus && 0 == (int)fReadStatus; }
       /// Return this TTreeReaderValue's setup status.
       /// Use this method to check e.g. whether the TTreeReaderValue is correctly setup and ready for reading.
       ESetupStatus GetSetupStatus() const { return fSetupStatus; }
@@ -113,13 +113,13 @@ Base class of TTreeReaderValue.
 
       Detail::TBranchProxy* GetProxy() const { return fProxy; }
 
-      void MarkTreeReaderUnavailable() { fTreeReader = 0; fSetupStatus = kSetupTreeDestructed; }
+      void MarkTreeReaderUnavailable() { fTreeReader = nullptr; fSetupStatus = kSetupTreeDestructed; }
 
       /// Stringify the template argument.
       static std::string GetElementTypeName(const std::type_info& ti);
 
-      int          fHaveLeaf : 1;                 ///< Whether the data is in a leaf
-      int          fHaveStaticClassOffsets : 1;   ///< Whether !fStaticClassOffsets.empty()
+      bool         fHaveLeaf : 1;                 ///< Whether the data is in a leaf
+      bool         fHaveStaticClassOffsets : 1;   ///< Whether !fStaticClassOffsets.empty()
       EReadStatus  fReadStatus : 2;               ///< Read status of this data access
       ESetupStatus fSetupStatus = kSetupNotSetup; ///< Setup status of this data access
       TString      fBranchName;                   ///< Name of the branch to read data from.
@@ -133,7 +133,7 @@ Base class of TTreeReaderValue.
       Read_t fProxyReadFunc = &TTreeReaderValueBase::ProxyReadDefaultImpl;      ///<! Pointer to the Read implementation to use.
 
       // FIXME: re-introduce once we have ClassDefInline!
-      //ClassDef(TTreeReaderValueBase, 0);//Base class for accessors to data via TTreeReader
+      //ClassDefOverride(TTreeReaderValueBase, 0);//Base class for accessors to data via TTreeReader
 
       friend class ::TTreeReader;
    };
@@ -181,7 +181,7 @@ public:
 protected:
    // FIXME: use IsA() instead once we have ClassDefTInline
    /// Get the template argument as a string.
-   virtual const char* GetDerivedTypeName() const {
+   const char* GetDerivedTypeName() const override {
       static const std::string sElementTypeName = GetElementTypeName(typeid(T));
       return sElementTypeName.data();
    }
@@ -189,5 +189,14 @@ protected:
    // FIXME: re-introduce once we have ClassDefTInline!
    //ClassDefT(TTreeReaderValue, 0);//Accessor to data via TTreeReader
 };
+
+namespace cling {
+std::string printValue(ROOT::Internal::TTreeReaderValueBase *val);
+template <typename T>
+std::string printValue(TTreeReaderValue<T> *val)
+{
+   return printValue(static_cast<ROOT::Internal::TTreeReaderValueBase *>(val));
+}
+} // namespace cling
 
 #endif // ROOT_TTreeReaderValue

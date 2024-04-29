@@ -106,16 +106,18 @@ if(runtime_cxxmodules)
   # FIXME: Revise after a llvm upgrade or reproduce it outside rootcling.
   list(REMOVE_ITEM HEADERS "Math/Math.h")
 
-  if(veccore)
-    set(dictoptions "-mByproduct" "Vc")
-  endif(veccore)
+  if(vc)
+    # We do not link against libVc.a thus it makes no sense to check for
+    # version compatibility between libraries and header files. This fixes
+    # ROOT-11002 where upon building the modules.idx we run the static ctor
+    # runLibraryAbiCheck which fails to find the corresponding symbol.
+    set(dictoptions "-m" "Vc" "-mByproduct" "Vc" "-D" "Vc_NO_VERSION_CHECK")
+  endif(vc)
 endif()
 
 ROOT_ADD_C_FLAG(_flags -Wno-strict-overflow)  # Avoid what it seems a compiler false positive warning
 ROOT_ADD_C_FLAG(_flags -Wno-maybe-uninitialized)  # Avoid what it seems a compiler false positive warning
 ROOT_ADD_C_FLAG(_flags -Wno-parentheses-equality)
-
-set_source_files_properties(src/triangle.c COMPILE_FLAGS "${_flags}")
 
 if(imt)
   set(MATHCORE_DEPENDENCIES Imt)
@@ -151,10 +153,12 @@ ROOT_STANDARD_LIBRARY_PACKAGE(MathCore
     src/GaussLegendreIntegrator.cxx
     src/GenAlgoOptions.cxx
     src/GoFTest.cxx
+    src/IOptions.cxx
     src/Integrator.cxx
     src/IntegratorOptions.cxx
     src/MersenneTwisterEngine.cxx
     src/MinimTransformFunction.cxx
+    src/Minimizer.cxx
     src/MinimizerOptions.cxx
     src/MinimizerVariableTransformation.cxx
     src/MixMaxEngineImpl17.cxx
@@ -185,7 +189,6 @@ ROOT_STANDARD_LIBRARY_PACKAGE(MathCore
     src/TRandomGen.cxx
     src/TStatistic.cxx
     src/UnBinData.cxx
-    src/triangle.c
     src/VectorizedTMath.cxx
   LIBRARIES
     ${MATHCORE_LIBRARIES}

@@ -7,11 +7,12 @@
 ##
 ## (require ROOT to be compiled with --enable-fftw3)
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
-## \author Clemens Lange
-## \author Wouter Verkerke (C version)
+## \authors Clemens Lange, Wouter Verkerke (C version)
 
 import ROOT
 
@@ -36,17 +37,17 @@ model = ROOT.RooFFTConvPdf("model", "model", mean, modelx, model_mean)
 # Configure convolution to construct a 2-D cache in (x,mean)
 # rather than a 1-d cache in mean that needs to be recalculated
 # for each value of x
-model.setCacheObservables(ROOT.RooArgSet(x))
+model.setCacheObservables({x})
 model.setBufferFraction(1.0)
 
 # Integrate model over projModel = Int model dmean
-projModel = model.createProjection(ROOT.RooArgSet(mean))
+projModel = model.createProjection({mean})
 
 # Generate 1000 toy events
-d = projModel.generateBinned(ROOT.RooArgSet(x), 1000)
+d = projModel.generateBinned({x}, 1000)
 
 # Fit p.d.f. to toy data
-projModel.fitTo(d, Verbose=True)
+projModel.fitTo(d, Verbose=True, PrintLevel=-1)
 
 # Plot data and fitted p.d.f.
 frame = x.frame(Bins=25)
@@ -59,7 +60,7 @@ hh = model.createHistogram(
     x,
     Binning=50,
     YVar=dict(var=mean, Binning=50),
-    ConditionalObservables=ROOT.RooArgSet(mean),
+    ConditionalObservables={mean},
 )
 hh.SetTitle("histogram of model(x|mean)")
 hh.SetLineColor(ROOT.kBlue)

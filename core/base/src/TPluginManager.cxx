@@ -86,6 +86,7 @@ TFile, TSQLServer, TGrid, etc. functionality.
 #include "THashList.h"
 #include "THashTable.h"
 #include "TClass.h"
+#include "TClassEdit.h"
 #include "TInterpreter.h"
 #include "TMethod.h"
 #include "TMethodArg.h"
@@ -98,10 +99,9 @@ TFile, TSQLServer, TGrid, etc. functionality.
 #include "ThreadLocalStorage.h"
 
 #include <memory>
+#include <sstream>
 
 TPluginManager *gPluginMgr;   // main plugin manager created in TROOT
-
-static TVirtualMutex *gPluginManagerMutex;
 
 static bool &TPH__IsReadingDirs() {
    TTHREAD_TLS(bool) readingDirs (false);
@@ -113,20 +113,20 @@ ClassImp(TPluginHandler);
 ////////////////////////////////////////////////////////////////////////////////
 /// Create a plugin handler. Called by TPluginManager.
 
-TPluginHandler::TPluginHandler(const char *base, const char *regexp,
-                               const char *className, const char *pluginName,
-                               const char *ctor, const char *origin):
-   fBase(base),
-   fRegexp(regexp),
-   fClass(className),
-   fPlugin(pluginName),
-   fCtor(ctor),
-   fOrigin(origin),
-   fCallEnv(nullptr),
-   fMethod(nullptr),
-   fCanCall(0),
-   fIsMacro(kFALSE),
-   fIsGlobal(kFALSE)
+TPluginHandler::TPluginHandler(const char *base, const char *regexp, const char *className, const char *pluginName,
+                               const char *ctor, const char *origin)
+   : fBase(base),
+     fRegexp(regexp),
+     fClass(className),
+     fPlugin(pluginName),
+     fCtor(ctor),
+     fOrigin(origin),
+     fCallEnv(nullptr),
+     fMethod(nullptr),
+     fCanCall(0),
+     fIsMacro(kFALSE),
+     fIsGlobal(kFALSE),
+     fLoadStatus(-1)
 {
    TString aclicMode, arguments, io;
    TString fname = gSystem->SplitAclicMode(fPlugin, aclicMode, arguments, io);
@@ -174,6 +174,22 @@ Bool_t TPluginHandler::CanHandle(const char *base, const char *uri)
    if (ruri.Index(re) != kNPOS)
       return kTRUE;
    return kFALSE;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Return true if the name of the iarg-th argument's type match `type_name`
+Bool_t TPluginHandler::CheckNameMatch(int iarg, const std::type_info& ti)
+{
+   int err = 0;
+   char* demangled_name = TClassEdit::DemangleTypeIdName(ti, err);
+   if (err) {
+      return false;
+   }
+   std::string norm_name;
+   TClassEdit::GetNormalizedName(norm_name, demangled_name);
+   free(demangled_name);
+   const TMethodArg *arg = static_cast<const TMethodArg *>(fMethod->GetListOfMethodArgs()->At(iarg));
+   return norm_name == arg->GetTypeNormalizedName();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -229,10 +245,15 @@ void TPluginHandler::SetupCallEnv()
    fCallEnv = new TMethodCall;
    fCallEnv->Init(fMethod);
 
+   // cache argument types for fast comparison
+   fArgTupleTypeInfo.clear();
+   fArgTupleTypeInfo.resize(fMethod->GetNargs());
+
    setCanCall = 1;
 
    return;
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Check if the plugin library for this handler exits. Returns 0
@@ -248,19 +269,32 @@ Int_t TPluginHandler::CheckPlugin() const
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Load the plugin library for this handler. Returns 0 on successful loading
+/// Load the plugin library for this handler. Sets status to 0 on successful loading
 /// and -1 in case the library does not exist or in case of error.
-
-Int_t TPluginHandler::LoadPlugin()
+void TPluginHandler::LoadPluginImpl()
 {
    if (fIsMacro) {
-      if (TClass::GetClass(fClass)) return 0;
-      return gROOT->LoadMacro(fPlugin);
+      if (TClass::GetClass(fClass))
+         fLoadStatus = 0;
+      else
+         fLoadStatus = gROOT->LoadMacro(fPlugin);
    } else {
       // first call also loads dependent libraries declared via the rootmap file
-      if (TClass::LoadClass(fClass, /* silent = */ kFALSE)) return 0;
-      return gROOT->LoadClass(fClass, fPlugin);
+      if (TClass::LoadClass(fClass, /* silent = */ kFALSE))
+         fLoadStatus = 0;
+      else
+         fLoadStatus = gROOT->LoadClass(fClass, fPlugin);
    }
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Load the plugin library for this handler. Returns 0 on successful loading
+/// and -1 in case the library does not exist or in case of error.
+Int_t TPluginHandler::LoadPlugin()
+{
+   // call once and cache the result to reduce lock contention
+   std::call_once(fLoadStatusFlag, &TPluginHandler::LoadPluginImpl, this);
+   return fLoadStatus;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -278,9 +312,8 @@ Bool_t TPluginHandler::CheckForExecPlugin(Int_t nargs)
       // SetupCallEnv is likely to require/take the interpreter lock.
       // Grab it now to avoid dead-lock.  In particular TPluginHandler::ExecPluginImpl
       // takes the gInterpreterMutex and *then* call (indirectly) code that
-      // take the gPluginManagerMutex.
+      // take the lock in fHandlers.
       R__LOCKGUARD(gInterpreterMutex);
-      R__LOCKGUARD2(gPluginManagerMutex);
 
       // Now check if another thread did not already do the work.
       if (fCanCall == 0)
@@ -329,6 +362,14 @@ void TPluginHandler::Print(Option_t *opt) const
 
 
 ClassImp(TPluginManager);
+
+////////////////////////////////////////////////////////////////////////////////
+/// Constructor
+TPluginManager::TPluginManager() : fHandlers(new TList()), fBasesLoaded(nullptr), fReadingDirs(kFALSE)
+{
+   fHandlers->UseRWLock();
+   fHandlers->SetOwner();
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Clean up the plugin manager.
@@ -529,13 +570,6 @@ void TPluginManager::AddHandler(const char *base, const char *regexp,
                                 const char *className, const char *pluginName,
                                 const char *ctor, const char *origin)
 {
-   {
-      R__LOCKGUARD2(gPluginManagerMutex);
-      if (!fHandlers) {
-         fHandlers = new TList;
-         fHandlers->SetOwner();
-      }
-   }
    // make sure there is no previous handler for the same case
    RemoveHandler(base, regexp);
 
@@ -544,10 +578,7 @@ void TPluginManager::AddHandler(const char *base, const char *regexp,
 
    TPluginHandler *h = new TPluginHandler(base, regexp, className,
                                           pluginName, ctor, origin);
-   {
-      R__LOCKGUARD2(gPluginManagerMutex);
-      fHandlers->Add(h);
-   }
+   fHandlers->Add(h);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -556,9 +587,6 @@ void TPluginManager::AddHandler(const char *base, const char *regexp,
 
 void TPluginManager::RemoveHandler(const char *base, const char *regexp)
 {
-   R__LOCKGUARD2(gPluginManagerMutex);
-   if (!fHandlers) return;
-
    TIter next(fHandlers);
    TPluginHandler *h;
 
@@ -581,7 +609,6 @@ TPluginHandler *TPluginManager::FindHandler(const char *base, const char *uri)
 {
    LoadHandlersFromPluginDirs(base);
 
-   R__LOCKGUARD2(gPluginManagerMutex);
    TIter next(fHandlers);
    TPluginHandler *h;
 
@@ -609,8 +636,6 @@ TPluginHandler *TPluginManager::FindHandler(const char *base, const char *uri)
 
 void TPluginManager::Print(Option_t *opt) const
 {
-   if (!fHandlers) return;
-
    TIter next(fHandlers);
    TPluginHandler *h;
    Int_t cnt = 0, cntmiss = 0;
@@ -640,8 +665,6 @@ void TPluginManager::Print(Option_t *opt) const
 Int_t TPluginManager::WritePluginMacros(const char *dir, const char *plugin) const
 {
    const_cast<TPluginManager*>(this)->LoadHandlersFromPluginDirs();
-
-   if (!fHandlers) return 0;
 
    TString d;
    if (!dir || !dir[0])
@@ -724,8 +747,6 @@ Int_t TPluginManager::WritePluginMacros(const char *dir, const char *plugin) con
 Int_t TPluginManager::WritePluginRecords(const char *envFile, const char *plugin) const
 {
    const_cast<TPluginManager*>(this)->LoadHandlersFromPluginDirs();
-
-   if (!fHandlers) return 0;
 
    FILE *fd;
    if (!envFile || !envFile[0])

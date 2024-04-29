@@ -9,6 +9,10 @@
 # @author Pere Mato, CERN
 ############################################################################
 
+set (EXTRA_DICT_OPTS)
+if (runtime_cxxmodules AND WIN32)
+  set (EXTRA_DICT_OPTS NO_CXXMODULE)
+endif()
 
 ROOT_STANDARD_LIBRARY_PACKAGE(RooFit
   HEADERS
@@ -35,6 +39,8 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFit
     RooDecay.h
     RooDstD0BG.h
     RooExponential.h
+    RooExpPoly.h
+    RooPower.h
     RooFunctor1DBinding.h
     RooFunctorBinding.h
     RooGamma.h
@@ -52,7 +58,6 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFit
     RooMomentMorphFunc.h
     RooMomentMorphFuncND.h
     RooMomentMorph.h
-    RooMomentMorphND.h
     RooMultiBinomial.h
     RooNDKeysPdf.h
     RooNonCPEigenDecay.h
@@ -61,6 +66,7 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFit
     RooParamHistFunc.h
     RooPoisson.h
     RooPolynomial.h
+    RooSpline.h
     RooStepFunction.h
     RooTFnBinding.h
     RooTFnPdfBinding.h
@@ -96,6 +102,8 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFit
     src/RooDecay.cxx
     src/RooDstD0BG.cxx
     src/RooExponential.cxx
+    src/RooExpPoly.cxx
+    src/RooPower.cxx
     src/RooFunctor1DBinding.cxx
     src/RooFunctorBinding.cxx
     src/RooGamma.cxx
@@ -113,7 +121,6 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFit
     src/RooMomentMorph.cxx
     src/RooMomentMorphFunc.cxx
     src/RooMomentMorphFuncND.cxx
-    src/RooMomentMorphND.cxx
     src/RooMultiBinomial.cxx
     src/RooNDKeysPdf.cxx
     src/RooNonCPEigenDecay.cxx
@@ -122,6 +129,7 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFit
     src/RooParamHistFunc.cxx
     src/RooPoisson.cxx
     src/RooPolynomial.cxx
+    src/RooSpline.cxx
     src/RooStepFunction.cxx
     src/RooTFnBinding.cxx
     src/RooTFnPdfBinding.cxx
@@ -146,11 +154,12 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFit
     RIO
     Matrix
     MathCore
+  ${EXTRA_DICT_OPTS}
 )
 
 # For recent clang, this can facilitate auto-vectorisation.
 # In RooFit, the errno side effect is not needed, anyway:
-if(NOT MSVC)
+if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   target_compile_options(RooFit PUBLIC -fno-math-errno)
 endif()
 

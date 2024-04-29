@@ -6,11 +6,12 @@
 ##
 ## Linear interpolation between p.d.f shapes using the 'Alex Read' algorithm
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
-## \author Clemens Lange
-## \author Wouter Verkerke (C version)
+## \authors Clemens Lange, Wouter Verkerke (C version)
 
 
 import ROOT
@@ -24,7 +25,7 @@ x = ROOT.RooRealVar("x", "x", -20, 20)
 
 # Lower end point shape: a Gaussian
 g1mean = ROOT.RooRealVar("g1mean", "g1mean", -10)
-g1 = ROOT.RooGaussian("g1", "g1", x, g1mean, ROOT.RooFit.RooConst(2))
+g1 = ROOT.RooGaussian("g1", "g1", x, g1mean, 2.0)
 
 # Upper end point shape: a Polynomial
 g2 = ROOT.RooPolynomial("g2", "g2", x, [-0.03, -0.001])
@@ -81,11 +82,11 @@ hh.SetLineColor(ROOT.kBlue)
 
 # Generate a toy dataset alpha = 0.8
 alpha.setVal(0.8)
-data = lmorph.generate(ROOT.RooArgSet(x), 1000)
+data = lmorph.generate({x}, 1000)
 
 # Fit pdf to toy data
 lmorph.setCacheAlpha(True)
-lmorph.fitTo(data, Verbose=True)
+lmorph.fitTo(data, Verbose=True, PrintLevel=-1)
 
 # Plot fitted pdf and data overlaid
 frame2 = x.frame(Bins=100)
@@ -99,7 +100,7 @@ lmorph.plotOn(frame2)
 frame3 = alpha.frame(Bins=100, Range=(0.1, 0.9))
 
 # Make 2D pdf of histogram
-nll = ROOT.RooNLLVar("nll", "nll", lmorph, data)
+nll = lmorph.createNLL(data)
 nll.plotOn(frame3, ShiftToZero=True)
 
 lmorph.setCacheAlpha(False)

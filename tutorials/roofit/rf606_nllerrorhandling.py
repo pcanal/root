@@ -6,11 +6,12 @@
 ##
 ## Understanding and customizing error handling in likelihood evaluations
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
-## \author Clemens Lange
-## \author Wouter Verkerke (C version)
+## \authors Clemens Lange, Wouter Verkerke (C version)
 
 
 import ROOT
@@ -30,7 +31,7 @@ k = ROOT.RooRealVar("k", "k", -30, -50, -10)
 argus = ROOT.RooArgusBG("argus", "argus", m, m0, k)
 
 # Sample 1000 events in m from argus
-data = argus.generate(ROOT.RooArgSet(m), 1000)
+data = argus.generate({m}, 1000)
 
 # Plot model and data
 # --------------------------------------
@@ -54,7 +55,7 @@ argus.plotOn(frame1)
 
 argus.fitTo(data, PrintEvalErrors=10)
 
-# Peform another fit. In self configuration only the number of errors per
+# Perform another fit. In self configuration only the number of errors per
 # likelihood evaluation is shown, it is greater than zero. The
 # EvalErrorWall(kFALSE) arguments disables the default error handling strategy
 # and will cause the actual (problematic) value of the likelihood to be passed
@@ -72,7 +73,7 @@ argus.fitTo(data, PrintEvalErrors=0, EvalErrorWall=False)
 # ------------------------------------------------------------------
 
 # Construct likelihood function of model and data
-nll = ROOT.RooNLLVar("nll", "nll", argus, data)
+nll = argus.createNLL(data)
 
 # Plot likelihood in m0 in range that includes problematic values
 # In self configuration no messages are printed for likelihood evaluation errors,

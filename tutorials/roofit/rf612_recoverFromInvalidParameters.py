@@ -11,8 +11,8 @@
 ## this function can be negative, and hence, it cannot be used as a PDF. In this case, RooFit passes
 ## an error to the minimiser, which might try to recover.
 ##
-## \macro_output
 ## \macro_code
+## \macro_output
 ##
 ## \date June 2021
 ## \author Harshal Shende, Stephan Hageboeck (C++ version)
@@ -27,7 +27,7 @@ x = ROOT.RooRealVar("x", "x", -15, 15)
 a1 = ROOT.RooRealVar("a1", "a1", -0.5, -10.0, 20.0)
 a2 = ROOT.RooRealVar("a2", "a2", 0.2, -10.0, 20.0)
 a3 = ROOT.RooRealVar("a3", "a3", 0.01)
-pdf = ROOT.RooPolynomial("pol3", "c + a1 * x + a2 * x*x + 0.01 * x*x*x", x, ROOT.RooArgSet(a1, a2, a3))
+pdf = ROOT.RooPolynomial("pol3", "c + a1 * x + a2 * x*x + 0.01 * x*x*x", x, [a1, a2, a3])
 
 # Create toy data with all-positive coefficients:
 data = pdf.generate(x, 10000)
@@ -108,9 +108,9 @@ print(
 legend = ROOT.TLegend(0.5, 0.7, 0.9, 0.9)
 legend.SetBorderSize(0)
 legend.SetFillStyle(0)
-legend.AddEntry(frame.findObject("data"), "Data", "P")
-legend.AddEntry(frame.findObject("noRecovery"), "Without recovery (cannot be plotted)", "L")
-legend.AddEntry(frame.findObject("recovery"), "With recovery", "L")
+legend.AddEntry("data", "Data", "P")
+legend.AddEntry("noRecovery", "Without recovery (cannot be plotted)", "L")
+legend.AddEntry("recovery", "With recovery", "L")
 frame.Draw()
 legend.Draw()
 c.Draw()

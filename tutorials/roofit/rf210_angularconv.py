@@ -2,7 +2,7 @@
 ## \ingroup tutorial_roofit
 ## \notebook
 ## Convolution in cyclical angular observables theta, and
-## construction of p.d.f in terms of trasnformed angular
+## construction of p.d.f in terms of transformed angular
 ## coordinates, e.g. cos(theta), the convolution
 ## is performed in theta rather than cos(theta)
 ##
@@ -11,11 +11,12 @@
 ## pdf(theta)    = ROOT.T(theta)          (x) gauss(theta)
 ## pdf(cosTheta) = ROOT.T(acos(cosTheta)) (x) gauss(acos(cosTheta))
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
-## \author Clemens Lange
-## \author Wouter Verkerke (C version)
+## \authors Clemens Lange, Wouter Verkerke (C version)
 
 import ROOT
 
@@ -54,10 +55,10 @@ Mpsi.setBufferFraction(0)
 # --------------------------------------------------------------------------------
 
 # Generate some events in observable psi
-data_psi = Mpsi.generate(ROOT.RooArgSet(psi), 10000)
+data_psi = Mpsi.generate({psi}, 10000)
 
 # Fit convoluted model as function of angle psi
-Mpsi.fitTo(data_psi)
+Mpsi.fitTo(data_psi, PrintLevel=-1)
 
 # Plot cos(psi) frame with Mf(cpsi)
 frame1 = psi.frame(Title="Cyclical convolution in angle psi")
@@ -84,13 +85,13 @@ Mcpsi.setBufferFraction(0)
 # --------------------------------------------------------------------------------
 
 # Generate some events
-data_cpsi = Mcpsi.generate(ROOT.RooArgSet(cpsi), 10000)
+data_cpsi = Mcpsi.generate({cpsi}, 10000)
 
 # set psi constant to exclude to be a parameter of the fit
 psi.setConstant(True)
 
 # Fit convoluted model as function of cos(psi)
-Mcpsi.fitTo(data_cpsi)
+Mcpsi.fitTo(data_cpsi, PrintLevel=-1)
 
 # Plot cos(psi) frame with Mf(cpsi)
 frame2 = cpsi.frame(Title="Same convolution in psi, in cos(psi)")

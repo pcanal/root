@@ -3,7 +3,9 @@
 ## \notebook
 ## Addition and convolution: setting up an extended maximum likelihood fit
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -48,10 +50,10 @@ model = ROOT.RooAddPdf("model", "(g1+g2)+a", [bkg, sig], [nbkg, nsig])
 
 # Generate a data sample of expected number events in x from model
 # = model.expectedEvents() = nsig+nbkg
-data = model.generate(ROOT.RooArgSet(x))
+data = model.generate({x})
 
 # Fit model to data, ML term automatically included
-model.fitTo(data)
+model.fitTo(data, PrintLevel=-1)
 
 # Plot data and PDF overlaid, expected number of events for pdf projection normalization
 # rather than observed number of events (==data.numEntries())
@@ -60,16 +62,15 @@ data.plotOn(xframe)
 model.plotOn(xframe, Normalization=dict(scaleFactor=1.0, scaleType=ROOT.RooAbsReal.RelativeExpected))
 
 # Overlay the background component of model with a dashed line
-ras_bkg = ROOT.RooArgSet(bkg)
 model.plotOn(
     xframe,
-    Components=ras_bkg,
+    Components={bkg},
     LineStyle=":",
     Normalization=dict(scaleFactor=1.0, scaleType=ROOT.RooAbsReal.RelativeExpected),
 )
 
 # Overlay the background+sig2 components of model with a dotted line
-ras_bkg_sig2 = ROOT.RooArgSet(bkg, sig2)
+ras_bkg_sig2 = {bkg, sig2}
 model.plotOn(
     xframe,
     Components=ras_bkg_sig2,

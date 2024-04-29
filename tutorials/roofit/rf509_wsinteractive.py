@@ -4,7 +4,9 @@
 ## Organization and simultaneous fits: easy interactive access to workspace contents - CINT
 ## to CLING code migration
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -77,8 +79,8 @@ w.Print()
 model = w["model"]
 x = w["x"]
 
-d = model.generate(ROOT.RooArgSet(x), 1000)
-r = model.fitTo(d)
+d = model.generate({x}, 1000)
+r = model.fitTo(d, PrintLevel=-1)
 
 # old syntax to access the variable x
 # frame = w.x.frame()
@@ -86,19 +88,18 @@ r = model.fitTo(d)
 frame = x.frame()
 d.plotOn(frame)
 
-# OLD syntax to ommit x.
+# OLD syntax to omit x.
 # NB: The 'w.' prefix can be omitted if namespace w is imported in local namespace
 # in the usual C++ way
 #
 # using namespace w
 # model.plotOn(frame)
-# model.plotOn(frame, ROOT.RooFit.Components(bkg), ROOT.RooFit.LineStyle(ROOT.kDashed))
+# model.plotOn(frame, Components=bkg, LineStyle="--")
 
 # correct syntax
 bkg = w["bkg"]
 model.plotOn(frame)
-ras_bkg = ROOT.RooArgSet(bkg)
-model.plotOn(frame, Components=ras_bkg, LineStyle="--")
+model.plotOn(frame, Components=bkg, LineStyle="--")
 
 # Draw the frame on the canvas
 c = ROOT.TCanvas("rf509_wsinteractive", "rf509_wsinteractive", 600, 600)

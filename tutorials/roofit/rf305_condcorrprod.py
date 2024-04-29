@@ -5,7 +5,9 @@
 ##
 ## `pdf = gauss(x,f(y),sx | y ) * gauss(y,ms,sx)`    with `f(y) = a0 + a1*y`
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -32,21 +34,19 @@ gaussx = ROOT.RooGaussian("gaussx", "Gaussian in x with shifting mean in y", x, 
 # -----------------------------------------------------------
 
 # Create gaussy(y,0,5)
-gaussy = ROOT.RooGaussian("gaussy", "Gaussian in y", y, ROOT.RooFit.RooConst(0), ROOT.RooFit.RooConst(3))
+gaussy = ROOT.RooGaussian("gaussy", "Gaussian in y", y, 0.0, 3.0)
 
 # Create product gx(x|y)*gy(y)
 # -------------------------------------------------------
 
 # Create gaussx(x,sx|y) * gaussy(y)
-model = ROOT.RooProdPdf(
-    "model", "gaussx(x|y)*gaussy(y)", ROOT.RooArgSet(gaussy), Conditional=(ROOT.RooArgSet(gaussx), ROOT.RooArgSet(x))
-)
+model = ROOT.RooProdPdf("model", "gaussx(x|y)*gaussy(y)", {gaussy}, Conditional=({gaussx}, {x}))
 
 # Sample, fit and plot product pdf
 # ---------------------------------------------------------------
 
 # Generate 1000 events in x and y from model
-data = model.generate(ROOT.RooArgSet(x, y), 10000)
+data = model.generate({x, y}, 10000)
 
 # Plot x distribution of data and projection of model x = Int(dy)
 # model(x,y)

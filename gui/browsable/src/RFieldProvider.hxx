@@ -24,7 +24,7 @@
 
 #include "RFieldHolder.hxx"
 
-using namespace ROOT::Experimental::Browsable;
+using namespace ROOT::Browsable;
 
 using namespace std::string_literals;
 
@@ -44,7 +44,7 @@ using RField = ROOT::Experimental::RField<T>;
 class RFieldProvider : public RProvider {
    class RDrawVisitor : public ROOT::Experimental::Detail::RFieldVisitor {
    private:
-      std::shared_ptr<ROOT::Experimental::Detail::RPageSource> fNtplSource;
+      std::shared_ptr<ROOT::Experimental::RNTupleReader> fNtplReader;
       std::unique_ptr<TH1> fHist;
 
       /** Test collected entries if it looks like integer values and one can use better binning */
@@ -82,7 +82,7 @@ class RFieldProvider : public RProvider {
       template<typename T>
       void FillHistogram(const RField<T> &field)
       {
-         std::string title = "Drawing of RField "s + field.GetName();
+         std::string title = "Drawing of RField "s + field.GetFieldName();
 
          fHist = std::make_unique<TH1F>("hdraw", title.c_str(), 100, 0, 0);
          fHist->SetDirectory(nullptr);
@@ -91,7 +91,7 @@ class RFieldProvider : public RProvider {
          int cnt = 0;
          if (bufsize > 10) bufsize-=3; else bufsize = -1;
 
-         auto view = ROOT::Experimental::RNTupleView<T>(field.GetOnDiskId(), fNtplSource.get());
+         auto view = fNtplReader->GetView<T>(field.GetOnDiskId());
          for (auto i : view.GetFieldRange()) {
             fHist->Fill(view(i));
             if (++cnt == bufsize) {
@@ -111,7 +111,7 @@ class RFieldProvider : public RProvider {
 
          int nentries = 0;
 
-         auto view = ROOT::Experimental::RNTupleView<std::string>(field.GetOnDiskId(), fNtplSource.get());
+         auto view = fNtplReader->GetView<std::string>(field.GetOnDiskId());
          for (auto i : view.GetFieldRange()) {
              std::string v = view(i);
              nentries++;
@@ -126,7 +126,7 @@ class RFieldProvider : public RProvider {
 
          // now create histogram with labels
 
-         std::string title = "Drawing of RField "s + field.GetName();
+         std::string title = "Drawing of RField "s + field.GetFieldName();
          fHist = std::make_unique<TH1F>("h",title.c_str(),3,0,3);
          fHist->SetDirectory(nullptr);
          fHist->SetStats(0);
@@ -139,16 +139,13 @@ class RFieldProvider : public RProvider {
       }
 
    public:
-      explicit RDrawVisitor(std::shared_ptr<ROOT::Experimental::Detail::RPageSource> ntplSource)
-         : fNtplSource(ntplSource)
-      {
-      }
+      explicit RDrawVisitor(std::shared_ptr<ROOT::Experimental::RNTupleReader> ntplReader) : fNtplReader(ntplReader) {}
 
       TH1 *MoveHist() {
          return fHist.release();
       }
 
-      void VisitField(const ROOT::Experimental::Detail::RFieldBase & /* field */) final {}
+      void VisitField(const ROOT::Experimental::RFieldBase & /* field */) final {}
       void VisitBoolField(const RField<bool> &field) final { FillHistogram(field); }
       void VisitFloatField(const RField<float> &field) final { FillHistogram(field); }
       void VisitDoubleField(const RField<double> &field) final { FillHistogram(field); }
@@ -162,6 +159,14 @@ class RFieldProvider : public RProvider {
       void VisitUInt32Field(const RField<std::uint32_t> &field) final { FillHistogram(field); }
       void VisitUInt64Field(const RField<std::uint64_t> &field) final { FillHistogram(field); }
       void VisitUInt8Field(const RField<std::uint8_t> &field) final { FillHistogram(field); }
+      void VisitCardinalityField(const ROOT::Experimental::RCardinalityField &field) final
+      {
+         if (const auto f32 = field.As32Bit()) {
+            FillHistogram(*f32);
+         } else if (const auto f64 = field.As64Bit()) {
+            FillHistogram(*f64);
+         }
+      }
    }; // class RDrawVisitor
 
 public:
@@ -171,15 +176,16 @@ public:
    {
       if (!holder) return nullptr;
 
-      auto ntplSource = holder->GetNtplSource();
+      auto ntplReader = holder->GetNtplReader();
       std::string name = holder->GetParentName();
 
-      const auto &desc = ntplSource->GetDescriptor();
-      auto field = desc.GetFieldDescriptor(holder->GetId()).CreateField(desc);
-      name.append(field->GetName());
+      const auto fieldName = ntplReader->GetDescriptor().GetFieldDescriptor(holder->GetId()).GetFieldName();
+      const auto qualifiedFieldName = ntplReader->GetDescriptor().GetQualifiedFieldName(holder->GetId());
+      auto view = ntplReader->GetView<void>(qualifiedFieldName);
+      name.append(fieldName);
 
-      RDrawVisitor drawVisitor(ntplSource);
-      field->AcceptVisitor(drawVisitor);
+      RDrawVisitor drawVisitor(ntplReader);
+      view.GetField().AcceptVisitor(drawVisitor);
       return drawVisitor.MoveHist();
    }
 };

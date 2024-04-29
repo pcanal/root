@@ -22,13 +22,11 @@
 //                                                                      //
 //////////////////////////////////////////////////////////////////////////
 
-#ifndef __CINT__
 #include <cstdio>
 #include <cctype>
 #include <fcntl.h>
 #ifndef _WIN32
 #include <unistd.h>
-#endif
 #endif
 
 #include "TNamed.h"
@@ -232,11 +230,7 @@ enum ESendRecvOptions {
    kDontBlock          // send/recv as much data as possible without blocking
 };
 
-#ifdef __CINT__
-typedef void *Func_t;
-#else
 typedef void (*Func_t)();
-#endif
 
 R__EXTERN const char  *gRootDir;
 R__EXTERN const char  *gProgName;
@@ -257,9 +251,9 @@ R__EXTERN TVirtualMutex *gSystemMutex;
 class TProcessEventTimer : public TTimer {
 public:
    TProcessEventTimer(Long_t delay);
-   Bool_t Notify() { return kTRUE; }
+   Bool_t Notify() override { return kTRUE; }
    Bool_t ProcessEvents();
-   ClassDef(TProcessEventTimer,0)  // Process pending events at fixed time intervals
+   ClassDefOverride(TProcessEventTimer,0)  // Process pending events at fixed time intervals
 };
 
 
@@ -349,6 +343,7 @@ public:
    void                    SetErrorStr(const char *errstr);
    const char             *GetErrorStr() const { return GetLastErrorString(); }
    virtual const char     *GetError();
+   virtual Int_t           GetCryptoRandom(void *buf, Int_t len);
    void                    RemoveOnExit(TObject *obj);
    virtual const char     *HostName();
    virtual void            NotifyApplicationCreated();
@@ -401,10 +396,11 @@ public:
    virtual FILE           *OpenPipe(const char *command, const char *mode);
    virtual int             ClosePipe(FILE *pipe);
    virtual TString         GetFromPipe(const char *command);
-   virtual void            Exit(int code, Bool_t mode = kTRUE);
-   virtual void            Abort(int code = 0);
    virtual int             GetPid();
    virtual void            StackTrace();
+
+   [[ noreturn ]] virtual void Exit(int code, Bool_t mode = kTRUE);
+   [[ noreturn ]] virtual void Abort(int code = 0);
 
    //---- Directories
    virtual int             MakeDirectory(const char *name);
@@ -421,7 +417,7 @@ public:
    Bool_t                  cd(const char *path) { return ChangeDirectory(path); }
    const char             *pwd() { return WorkingDirectory(); }
    virtual const char     *TempDirectory() const;
-   virtual FILE           *TempFileName(TString &base, const char *dir = nullptr);
+   virtual FILE           *TempFileName(TString &base, const char *dir = nullptr, const char *suffix = nullptr);
 
    //---- Paths & Files
    virtual const char     *BaseName(const char *pathname);
@@ -450,7 +446,7 @@ public:
    virtual const char     *UnixPathName(const char *unixpathname);
    virtual const char     *FindFile(const char *search, TString& file, EAccessMode mode = kFileExists);
    virtual char           *Which(const char *search, const char *file, EAccessMode mode = kFileExists);
-   virtual TList          *GetVolumes(Option_t *) const { return 0; }
+   virtual TList          *GetVolumes(Option_t *) const { return nullptr; }
 
    //---- Users & Groups
    virtual Int_t           GetUid(const char *user = nullptr);
@@ -553,7 +549,7 @@ public:
    virtual TString         SplitAclicMode(const char *filename, TString &mode, TString &args, TString &io) const;
    virtual void            CleanCompiledMacros();
 
-   ClassDef(TSystem,0)  //ABC defining a generic interface to the OS
+   ClassDefOverride(TSystem,0)  //ABC defining a generic interface to the OS
 };
 
 R__EXTERN TSystem *gSystem;

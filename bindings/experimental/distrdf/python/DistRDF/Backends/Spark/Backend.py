@@ -1,4 +1,4 @@
-## @author Vincenzo Eduardo Padulano
+# @author Vincenzo Eduardo Padulano
 #  @author Enric Tejedor
 #  @date 2021-02
 
@@ -9,8 +9,10 @@
 # For the licensing terms see $ROOTSYS/LICENSE.                                #
 # For the list of contributors see $ROOTSYS/README/CREDITS.                    #
 ################################################################################
+from __future__ import annotations
 
 import ntpath  # Filename from path (should be platform-independent)
+import warnings
 
 from DistRDF import DataFrame
 from DistRDF import HeadNode
@@ -64,16 +66,16 @@ class SparkBackend(Base.BaseBackend):
         else:
             self.sc = pyspark.SparkContext.getOrCreate()
 
-    def optimize_npartitions(self):
-        numex = self.sc.getConf().get("spark.executor.instances")
-        numcoresperex = self.sc.getConf().get("spark.executor.cores")
-
-        if numex is not None:
-            if numcoresperex is not None:
-                return int(numex) * int(numcoresperex)
-            return int(numex)
-        else:
-            return self.MIN_NPARTITIONS
+    def optimize_npartitions(self) -> int:
+        """
+        The SparkContext.defaultParallelism property roughly translates to the
+        available amount of logical cores on the cluster. Some examples:
+        - spark.master = local[n]: returns n.
+        - spark.executor.instances = m and spark.executor.cores = n: returns `n*m`.
+        By default, the minimum number this returns is 2 if the context
+        doesn't know any better. For example, if dynamic allocation is enabled.
+        """
+        return self.sc.defaultParallelism
 
     def ProcessAndMerge(self, ranges, mapper, reducer):
         """
@@ -133,6 +135,14 @@ class SparkBackend(Base.BaseBackend):
         # Map-Reduce using Spark
         return parallel_collection.map(spark_mapper).treeReduce(reducer)
 
+    def ProcessAndMergeLive(self, ranges, mapper, reducer, drawables_info_dict):
+        """
+        Informs the user that the live visualization feature is not supported for the Spark backend 
+        and refers to ProcessAndMerge to proceed with the standard map-reduce workflow.
+        """
+        warnings.warn("The live visualization feature is not supported for the Spark backend. Skipping LiveVisualize.")
+        return self.ProcessAndMerge(ranges, mapper, reducer)
+
     def distribute_unique_paths(self, paths):
         """
         Spark supports sending files to the executors via the
@@ -155,9 +165,6 @@ class SparkBackend(Base.BaseBackend):
         """
         # Set the number of partitions for this dataframe, one of the following:
         # 1. User-supplied `npartitions` optional argument
-        # 2. An educated guess according to the backend, using the backend's
-        #    `optimize_npartitions` function
-        # 3. Set `npartitions` to 2
-        npartitions = kwargs.pop("npartitions", self.optimize_npartitions())
-        headnode = HeadNode.get_headnode(npartitions, *args)
-        return DataFrame.RDataFrame(headnode, self)
+        npartitions = kwargs.pop("npartitions", None)
+        headnode = HeadNode.get_headnode(self, npartitions, *args)
+        return DataFrame.RDataFrame(headnode)

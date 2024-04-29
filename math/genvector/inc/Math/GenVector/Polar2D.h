@@ -36,6 +36,8 @@ namespace Math {
        Phi is restricted to be in the range [-PI,PI)
 
        @ingroup GenVector
+
+       @sa Overview of the @ref GenVector "physics vector library"
    */
 
 
@@ -45,6 +47,7 @@ class Polar2D {
 public :
 
    typedef T Scalar;
+   static constexpr unsigned int Dimension = 2U;
 
    /**
       Default constructor with r=1,phi=0
@@ -61,7 +64,7 @@ public :
       R() and Phi()
    */
    template <class CoordSystem >
-   explicit Polar2D( const CoordSystem & v ) :
+   explicit constexpr Polar2D( const CoordSystem & v ) :
       fR(v.R() ),  fPhi(v.Phi() )  { Restrict(); }
 
    // for g++  3.2 and 3.4 on 32 bits found that the compiler generated copy ctor and assignment are much slower

@@ -3,7 +3,9 @@
 ## \notebook
 ## Multidimensional models: projecting pdf and data slices in discrete observables
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -37,7 +39,7 @@ gm1 = ROOT.RooGaussModel("gm1", "gauss model 1", dt, bias1, sigma1)
 bmix_gm1 = ROOT.RooBMixDecay("bmix", "decay", dt, mixState, tagFlav, tau, dm, w, dw, gm1, type="DoubleSided")
 
 # Generate BMixing data with above set of event errors
-data = bmix_gm1.generate(ROOT.RooArgSet(dt, tagFlav, mixState), 20000)
+data = bmix_gm1.generate({dt, tagFlav, mixState}, 20000)
 
 # Plot full decay distribution
 # ----------------------------------------------------------

@@ -3,7 +3,9 @@
 ## \notebook
 ## Basic functionality: plotting unbinned data with alternate and variable binnings
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -36,7 +38,7 @@ bmix = ROOT.RooBMixDecay("bmix", "decay", dt, mixState, tagFlav, tau, dm, w, dw,
 # --------------------------------------------
 
 # Sample 2000 events in (dt,mixState,tagFlav) from bmix
-data = bmix.generate(ROOT.RooArgSet(dt, mixState, tagFlav), 2000)
+data = bmix.generate({dt, mixState, tagFlav}, 2000)
 
 # Show dt distribution with custom binning
 # -------------------------------------------------------------------------------

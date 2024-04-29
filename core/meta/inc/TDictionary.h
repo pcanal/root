@@ -143,7 +143,8 @@ enum EClassProperty {
    kClassHasImplicitDtor = 0x00000200,
    kClassHasDtor         = 0x00000300,
    kClassHasVirtual      = 0x00001000,
-   kClassIsAbstract      = 0x00002000
+   kClassIsAbstract      = 0x00002000,
+   kClassIsAggregate     = 0x00004000
 };
 
 enum ERefTypeValues {
@@ -167,15 +168,15 @@ namespace ROOT {
 class TDictionary : public TNamed {
 
 private:
-   TDictAttributeMap *fAttributeMap;    //pointer to a class attribute map
-   ULong64_t fUpdatingTransactionCount; //!the Cling ID of the transaction that last updated the object
+   TDictAttributeMap *fAttributeMap{nullptr};    //pointer to a class attribute map
+   ULong64_t fUpdatingTransactionCount{0}; //!the Cling ID of the transaction that last updated the object
 
 protected:
    Bool_t              UpdateInterpreterStateMarker();
 
 public:
-   TDictionary(): fAttributeMap(0), fUpdatingTransactionCount(0) { }
-   TDictionary(const char* name): TNamed(name, ""), fAttributeMap(0), fUpdatingTransactionCount(0) { }
+   TDictionary(): fAttributeMap(nullptr), fUpdatingTransactionCount(0) { }
+   TDictionary(const char* name): TNamed(name, ""), fAttributeMap(nullptr), fUpdatingTransactionCount(0) { }
    TDictionary(const TDictionary& dict);
    virtual ~TDictionary();
 
@@ -221,7 +222,7 @@ public:
    static bool WantsUsingDecls(EMemberSelection sel) { return sel != EMemberSelection::kNoUsingDecls; }
 
    typedef const void *DeclId_t;
-   ClassDef(TDictionary,2)  //Interface to dictionary
+   ClassDefOverride(TDictionary,2)  //Interface to dictionary
 };
 
 #endif

@@ -12,7 +12,6 @@
 #include "TROOT.h"
 #include "TBuffer.h"
 #include "TMethod.h"
-#include "TMath.h"
 #include "TF1.h"
 #include "TMethodCall.h"
 #include <TBenchmark.h>
@@ -25,14 +24,14 @@
 #include "ROOT/StringUtils.hxx"
 
 #include <array>
-#include <cassert>
 #include <iostream>
+#include <memory>
 #include <unordered_map>
 #include <functional>
 #include <set>
 #include <sstream>
 
-using namespace std;
+using std::map, std::pair, std::make_pair, std::list, std::max, std::string;
 
 #ifdef WIN32
 #pragma optimize("",off)
@@ -77,7 +76,7 @@ ClassImp(TFormula);
     - `gaus(x, [0..2])` is a more explicit way of writing `gaus(0)`
     - `expo(y, [3..4])` is a substitute for `exp([3]+[4]*y)`
 
-    See below the [full list of predefined functions](\ref FormulaFuncs) which can be used as shortcuts in 
+    See below the [full list of predefined functions](\ref FormulaFuncs) which can be used as shortcuts in
     TFormula.
 
     `TMath` functions can be part of the expression, eg:
@@ -163,24 +162,24 @@ ClassImp(TFormula);
     \anchor FormulaFuncs
     ### List of predefined functions
 
-    The list of available predefined functions which can be used as shortcuts is the following: 
-    1. One Dimensional functions: 
+    The list of available predefined functions which can be used as shortcuts is the following:
+    1. One Dimensional functions:
       - `gaus`  is a substitute for `[Constant]*exp(-0.5*((x-[Mean])/[Sigma])*((x-[Mean])/[Sigma]))`
-      - `landau` is a substitute for `[Constant]*TMath::Landau(x,[MPV],[Sigma],false)`
+      - `landau` is a substitute for `[Constant]*TMath::Landau (x,[MPV],[Sigma],false)`
       - `expo`  is a substitute for `exp([Constant]+[Slope]*x)`
-      - `crystalball` is substitute for `[Constant]*ROOT::Math::crystalball_function(x,[Alpha],[N],[Sigma],[Mean])`
-      - `breitwigner` is a substitute for `[p0]*ROOT::Math::breitwigner_pdf(x,[p2],[p1])`
-      - `pol0,1,2,...N` is a substitute for a polynomial of degree `N` : 
+      - `crystalball` is substitute for `[Constant]*ROOT::Math::crystalball_function (x,[Alpha],[N],[Sigma],[Mean])`
+      - `breitwigner` is a substitute for `[p0]*ROOT::Math::breitwigner_pdf (x,[p2],[p1])`
+      - `pol0,1,2,...N` is a substitute for a polynomial of degree `N` :
          `([p0]+[p1]*x+[p2]*pow(x,2)+....[pN]*pow(x,N)`
       - `cheb0,1,2,...N` is a substitute for a Chebyshev polynomial of degree `N`:
          `ROOT::Math::Chebyshev10(x,[p0],[p1],[p2],...[pN])`. Note the maximum N allowed here is 10.
-    2. Two Dimensional functions: 
+    2. Two Dimensional functions:
       - `xygaus` is a substitute for `[Constant]*exp(-0.5*pow(((x-[MeanX])/[SigmaX]),2 )- 0.5*pow(((y-[MeanY])/[SigmaY]),2))`, a 2d Gaussian without correlation.
-      - `bigaus` is a substitute for `[Constant]*ROOT::Math::bigaussian_pdf(x,y,[SigmaX],[SigmaY],[Rho],[MeanX],[MeanY])`, a 2d gaussian including a correlation parameter.
-    3. Three Dimensional functions: 
-      - `xyzgaus` is for a 3d Gaussians without correlations: 
+      - `bigaus` is a substitute for `[Constant]*ROOT::Math::bigaussian_pdf (x,y,[SigmaX],[SigmaY],[Rho],[MeanX],[MeanY])`, a 2d gaussian including a correlation parameter.
+    3. Three Dimensional functions:
+      - `xyzgaus` is for a 3d Gaussians without correlations:
       `[Constant]*exp(-0.5*pow(((x-[MeanX])/[SigmaX]),2 )- 0.5*pow(((y-[MeanY])/[SigmaY]),2 )- 0.5*pow(((z-[MeanZ])/[SigmaZ]),2))`
-      
+
 
     ### An expanded note on variables and parameters
 
@@ -453,7 +452,8 @@ TFormula::TFormula()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-static bool IsReservedName(const char* name){
+static bool IsReservedName(const char* name)
+{
    if (strlen(name)!=1) return false;
    for (auto const & specialName : {"x","y","z","t"}){
       if (strcmp(name,specialName)==0) return true;
@@ -507,7 +507,7 @@ TFormula::TFormula(const char *name, const char *formula, bool addToGlobList, bo
       // if the formula has been correctly initialized add to the list of global functions
       if (ok) {
          if (addToGlobList && gROOT) {
-            TFormula *old = 0;
+            TFormula *old = nullptr;
             R__LOCKGUARD(gROOTMutex);
             old = dynamic_cast<TFormula *>(gROOT->GetListOfFunctions()->FindObject(name));
             if (old)
@@ -555,7 +555,7 @@ TFormula::TFormula(const char *name, const char *formula, int ndim, int npar, bo
       fReadyToExecute = true;
 
       if (addToGlobList && gROOT) {
-         TFormula *old = 0;
+         TFormula *old = nullptr;
          R__LOCKGUARD(gROOTMutex);
          old = dynamic_cast<TFormula*> ( gROOT->GetListOfFunctions()->FindObject(name) );
          if (old)
@@ -575,7 +575,7 @@ TFormula::TFormula(const char *name, const char *formula, int ndim, int npar, bo
 TFormula::TFormula(const TFormula &formula) :
    TNamed(formula.GetName(),formula.GetTitle())
 {
-   formula.Copy(*this);
+   formula.TFormula::Copy(*this);
 
    if (!TestBit(TFormula::kNotGlobal) && gROOT ) {
       R__LOCKGUARD(gROOTMutex);
@@ -596,10 +596,8 @@ TFormula::TFormula(const TFormula &formula) :
 
 TFormula& TFormula::operator=(const TFormula &rhs)
 {
-
-   if (this != &rhs) {
-      rhs.Copy(*this);
-   }
+   if (this != &rhs)
+      rhs.TFormula::Copy(*this);
    return *this;
 }
 
@@ -801,7 +799,7 @@ static std::unique_ptr<TMethodCall>
 prepareMethod(bool HasParameters, bool HasVariables, const char* FuncName,
               bool IsVectorized, bool AddCladArrayRef = false) {
    std::unique_ptr<TMethodCall>
-       Method = std::unique_ptr<TMethodCall>(new TMethodCall());
+       Method = std::make_unique<TMethodCall>();
 
    TString prototypeArguments = "";
    if (HasVariables || HasParameters) {
@@ -1075,7 +1073,7 @@ void TFormula::HandlePolN(TString &formula)
       }
       if (formula == pattern) {
          // case of single polynomial
-         SetBit(kLinear, 1);
+         SetBit(kLinear, true);
          fNumber = 300 + degree;
       }
       formula.ReplaceAll(pattern, replacement);
@@ -1176,7 +1174,7 @@ void TFormula::HandleParametrizedFunctions(TString &formula)
          }
 
          if (isNormalized) {
-            SetBit(kNormalized, 1);
+            SetBit(kNormalized, true);
          }
          std::vector<TString> variables;
          Int_t dim = 0;
@@ -1414,7 +1412,7 @@ void TFormula::HandleFunctionArguments(TString &formula)
          argSeparators.push_back(k - 1); // closing parenthesis
 
          // retrieve `f` (code copied from ExtractFunctors)
-         TObject *obj = 0;
+         TObject *obj = nullptr;
          {
             R__LOCKGUARD(gROOTMutex);
             obj = gROOT->GetListOfFunctions()->FindObject(name);
@@ -1717,6 +1715,11 @@ void TFormula::HandleExponentiation(TString &formula)
          TString pattern = TString::Format("%s^%s", left.Data(), right.Data());
          TString replacement = TString::Format("pow(%s,%s)", left.Data(), right.Data());
 
+         // special case for square function
+         if (right == "2"){
+            replacement = TString::Format("TMath::Sq(%s)",left.Data());
+         }
+
          // std::cout << "pattern : " << pattern << std::endl;
          // std::cout << "replacement : " << replacement << std::endl;
          formula.Replace(leftPos, pattern.Length(), replacement, replacement.Length());
@@ -1747,7 +1750,7 @@ void TFormula::HandleLinear(TString &formula)
          expandedFormula += formula(delimeterPos, formula.Length() - (delimeterPos + 1));
          break;
       }
-      SetBit(kLinear, 1);
+      SetBit(kLinear, true);
       auto termName = std::string("__linear") + std::to_string(iTerm+1);
       fLinearParts.push_back(new TFormula(termName.c_str(), terms[iTerm].c_str(), false));
       std::stringstream ss;
@@ -1819,11 +1822,11 @@ Bool_t TFormula::PrepareFormula(TString &formula)
 ////////////////////////////////////////////////////////////////////////////////
 ///    Extracts functors from formula, and put them in fFuncs.
 ///    Simple grammar:
-///  -  <function>  := name(arg1,arg2...)
-///  -  <variable>  := name
-///  -  <parameter> := [number]
-///  -  <name>      := String containing lower and upper letters, numbers, underscores
-///  -  <number>    := Integer number
+///  -  `<function>`  := name(arg1,arg2...)
+///  -  `<variable>`  := name
+///  -  `<parameter>` := [number]
+///  -  `<name>`      := String containing lower and upper letters, numbers, underscores
+///  -  `<number>`    := Integer number
 ///    Operators are omitted.
 
 void TFormula::ExtractFunctors(TString &formula)
@@ -1960,7 +1963,7 @@ void TFormula::ExtractFunctors(TString &formula)
             // function " << std::endl;
 
             // check if function is provided by gROOT
-            TObject *obj = 0;
+            TObject *obj = nullptr;
             // exclude case function name is x,y,z,t
             if (!IsReservedName(name))
             {
@@ -2160,7 +2163,7 @@ void TFormula::ProcessFormula(TString &formula)
          }
 #endif
       } else {
-         TFormula *old = 0;
+         TFormula *old = nullptr;
          {
             R__LOCKGUARD(gROOTMutex);
             old = (TFormula *)gROOT->GetListOfFunctions()->FindObject(gNamePrefix + fun.fName);
@@ -2871,7 +2874,7 @@ Double_t* TFormula::GetParameters() const
 {
    if(!fClingParameters.empty())
       return const_cast<Double_t*>(&fClingParameters[0]);
-   return 0;
+   return nullptr;
 }
 
 void TFormula::GetParameters(Double_t *params) const
@@ -2970,30 +2973,9 @@ void TFormula::SetParameters(const Double_t *params)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Set a list of parameters.
-/// The order is by default the alphabetic order given to the parameters
-/// apart if the users has defined explicitly the parameter names
-
-void TFormula::SetParameters(Double_t p0, Double_t p1, Double_t p2, Double_t p3, Double_t p4, Double_t p5, Double_t p6,
-                             Double_t p7, Double_t p8, Double_t p9, Double_t p10)
-{
-   if(fNpar >= 1) SetParameter(0,p0);
-   if(fNpar >= 2) SetParameter(1,p1);
-   if(fNpar >= 3) SetParameter(2,p2);
-   if(fNpar >= 4) SetParameter(3,p3);
-   if(fNpar >= 5) SetParameter(4,p4);
-   if(fNpar >= 6) SetParameter(5,p5);
-   if(fNpar >= 7) SetParameter(6,p6);
-   if(fNpar >= 8) SetParameter(7,p7);
-   if(fNpar >= 9) SetParameter(8,p8);
-   if(fNpar >= 10) SetParameter(9,p9);
-   if(fNpar >= 11) SetParameter(10,p10);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// Set a parameter given a parameter index
-/// The parameter index is by default the alphabetic order given to the parameters
-/// apart if the users has defined explicitly the parameter names
+/// Set a parameter given a parameter index.
+/// The parameter index is by default the alphabetic order given to the parameters,
+/// apart if the users has defined explicitly the parameter names.
 
 void TFormula::SetParameter(Int_t param, Double_t value)
 {
@@ -3002,35 +2984,6 @@ void TFormula::SetParameter(Int_t param, Double_t value)
    fClingParameters[param] = value;
    // TString name = TString::Format("%d",param);
    // SetParameter(name,value);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-void TFormula::SetParNames(const char *name0, const char *name1, const char *name2, const char *name3,
-                           const char *name4, const char *name5, const char *name6, const char *name7,
-                           const char *name8, const char *name9, const char *name10)
-{
-   if (fNpar >= 1)
-      SetParName(0, name0);
-   if (fNpar >= 2)
-      SetParName(1, name1);
-   if (fNpar >= 3)
-      SetParName(2, name2);
-   if (fNpar >= 4)
-      SetParName(3, name3);
-   if (fNpar >= 5)
-      SetParName(4, name4);
-   if (fNpar >= 6)
-      SetParName(5, name5);
-   if (fNpar >= 7)
-      SetParName(6, name6);
-   if (fNpar >= 8)
-      SetParName(7, name7);
-   if (fNpar >= 9)
-      SetParName(8, name8);
-   if (fNpar >= 10)
-      SetParName(9, name9);
-   if (fNpar >= 11)
-      SetParName(10, name10);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3168,7 +3121,7 @@ Double_t TFormula::EvalPar(const Double_t *x,const Double_t *params) const
 bool TFormula::fIsCladRuntimeIncluded = false;
 
 static bool functionExists(const string &Name) {
-   return gInterpreter->GetFunction(/*cl*/0, Name.c_str());
+   return gInterpreter->GetFunction(/*cl*/nullptr, Name.c_str());
 }
 
 static void IncludeCladRuntime(Bool_t &IsCladRuntimeIncluded) {
@@ -3220,7 +3173,7 @@ static void CallCladFunction(TInterpreter::CallFuncIFacePtr_t::Generic_t FuncPtr
       //    }
       // }
       args[1] = &result;
-      (*FuncPtr)(0, 2, args, /*ret*/ nullptr); // We do not use ret in a return-void func.
+      (*FuncPtr)(nullptr, 2, args, /*ret*/ nullptr); // We do not use ret in a return-void func.
    } else {
       // __attribute__((used)) extern "C" void __cf_0(void* obj, int nargs, void** args, void* ret)
       // {
@@ -3242,7 +3195,7 @@ static void CallCladFunction(TInterpreter::CallFuncIFacePtr_t::Generic_t FuncPtr
 
       array_ref_interface ari{result, static_cast<size_t>(result_size)};
       args[2] = &ari;
-      (*FuncPtr)(0, 3, args, /*ret*/nullptr); // We do not use ret in a return-void func.
+      (*FuncPtr)(nullptr, 3, args, /*ret*/nullptr); // We do not use ret in a return-void func.
    }
 }
 
@@ -3274,6 +3227,9 @@ bool TFormula::GenerateGradientPar() {
    return true;
 }
 
+// Compute the gradient with respect to the parameter passing
+/// a CladStorageObject, i.e. a std::vector, which has the size as the nnumber of parameters.
+/// Note that the result buffer needs to be initialized to zero before passing it to this function.
 void TFormula::GradientPar(const Double_t *x, TFormula::CladStorage& result)
 {
    if (DoEval(x) == TMath::QuietNaN())
@@ -3298,7 +3254,9 @@ void TFormula::GradientPar(const Double_t *x, TFormula::CladStorage& result)
    }
    GradientPar(x, result.data());
 }
-
+/// Compute the gradient with respect to the parameter passing
+/// a buffer with a size at least equal to the number of parameters.
+/// Note that the result buffer needs to be initialized to zero before passed to this function.
 void TFormula::GradientPar(const Double_t *x, Double_t *result) {
    const Double_t *vars = (x) ? x : fClingVariables.data();
    const Double_t *pars = (fNpar <= 0) ? nullptr : fClingParameters.data();
@@ -3404,42 +3362,6 @@ ROOT::Double_v TFormula::EvalParVec(const ROOT::Double_v *x, const Double_t *par
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Sets first 4  variables (e.g. x, y, z, t) and evaluate formula.
-
-Double_t TFormula::Eval(Double_t x, Double_t y, Double_t z, Double_t t) const
-{
-   double xxx[4] = {x,y,z,t};
-   return EvalPar(xxx, nullptr); // takes care of case where formula is vectorized
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// Sets first 3  variables (e.g. x, y, z) and evaluate formula.
-
-Double_t TFormula::Eval(Double_t x, Double_t y , Double_t z) const
-{
-   double xxx[3] = {x,y,z};
-   return EvalPar(xxx, nullptr);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// Sets first 2  variables (e.g. x and y) and evaluate formula.
-
-Double_t TFormula::Eval(Double_t x, Double_t y) const
-{
-   double xxx[2] = {x,y};
-   return EvalPar(xxx, nullptr);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// Sets first variable (e.g. x) and evaluate formula.
-
-Double_t TFormula::Eval(Double_t x) const
-{
-   double * xxx = &x;
-   return EvalPar(xxx, nullptr);
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// Evaluate formula.
 /// If formula is not ready to execute(missing parameters/variables),
 /// print these which are not known.
@@ -3489,11 +3411,11 @@ Double_t TFormula::DoEval(const double * x, const double * params) const
    double * vars = (x) ? const_cast<double*>(x) : const_cast<double*>(fClingVariables.data());
    args[0] = &vars;
    if (fNpar <= 0) {
-      (*fFuncPtr)(0, 1, args, &result);
+      (*fFuncPtr)(nullptr, 1, args, &result);
    } else {
       double *pars = (params) ? const_cast<double *>(params) : const_cast<double *>(fClingParameters.data());
       args[1] = &pars;
-      (*fFuncPtr)(0, 2, args, &result);
+      (*fFuncPtr)(nullptr, 2, args, &result);
    }
    return result;
 }
@@ -3624,7 +3546,7 @@ TString TFormula::GetExpFormula(Option_t *option) const
    if (opt.Contains("CLING") ) {
       std::string clingFunc = fClingInput.Data();
       std::size_t found = clingFunc.find("return");
-      std::size_t found2 = clingFunc.rfind(";");
+      std::size_t found2 = clingFunc.rfind(';');
       if (found == std::string::npos || found2 == std::string::npos) {
          Error("GetExpFormula","Invalid Cling expression - return default formula expression");
          return fFormula;

@@ -19,55 +19,54 @@
 \class RooConstVar
 \ingroup Roofitcore
 
-RooConstVar represent a constant real-valued object
+Represents a constant real-valued object.
 **/
 
 #include "RooConstVar.h"
-#include "RunContext.h"
-
-using namespace std;
+#include "RooNumber.h"
 
 ClassImp(RooConstVar);
 
 
-
 ////////////////////////////////////////////////////////////////////////////////
 /// Constructor with value
-RooConstVar::RooConstVar(const char *name, const char *title, Double_t value) : 
+RooConstVar::RooConstVar(const char *name, const char *title, double value) :
   RooAbsReal(name,title)
 {
   _fast = true;
   _value = value;
-  setAttribute("Constant",kTRUE) ;
+  setAttribute("Constant",true) ;
 }
 
 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Copy constructor
-RooConstVar::RooConstVar(const RooConstVar& other, const char* name) : 
+RooConstVar::RooConstVar(const RooConstVar& other, const char* name) :
   RooAbsReal(other, name)
 {
   _fast = true;
 }
 
-
-////////////////////////////////////////////////////////////////////////////////
-/// Return batch with 1 constant element.
-RooSpan<const double> RooConstVar::getValues(RooBatchCompute::RunContext& evalData, const RooArgSet*) const {
-  auto item = evalData.spans.find(this);
-  if (item == evalData.spans.end()) {
-    return evalData.spans[this] = {&_value, 1};
-  }
-
-  return evalData.spans[this];
-}
-
 ////////////////////////////////////////////////////////////////////////////////
 /// Write object contents to stream
 
-void RooConstVar::writeToStream(ostream& os, Bool_t /*compact*/) const
+void RooConstVar::writeToStream(std::ostream& os, bool /*compact*/) const
 {
   os << _value ;
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
+void RooConstVar::translate(RooFit::Detail::CodeSquashContext &ctx) const
+{
+   // Just return a stringy-field version of the const value.
+   // Formats to the maximum precision.
+   constexpr auto max_precision{std::numeric_limits<double>::digits10 + 1};
+   std::stringstream ss;
+   ss.precision(max_precision);
+   // Just use toString to make sure we do not output 'inf'.
+   // This is really ugly for large numbers...
+   ss << std::fixed << RooNumber::toString(_value);
+   ctx.addResult(this, ss.str());
+}

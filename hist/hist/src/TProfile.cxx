@@ -44,7 +44,7 @@ ClassImp(TProfile);
   \begin{align}
        H(j)  &=  \sum w \cdot Y \\
        E(j)  &=  \sum w \cdot Y^2 \\
-       W(j)  &=  \sum w \\
+       W(j)  &=  \sum w                   & &\text{if weights different from 1, the number of bin effective entries is used} \\
        h(j)  &=  H(j) / W(j)              & &\text{mean of Y,} \\
        s(j)  &=  \sqrt{E(j)/W(j)- h(j)^2} & &\text{standard deviation of Y} \\
        e(j)  &=  s(j)/\sqrt{W(j)}         & &\text{standard error on the mean} \\
@@ -243,12 +243,13 @@ void TProfile::BuildOptions(Double_t ymin, Double_t ymax, Option_t *option)
 
 TProfile::TProfile(const TProfile &profile) : TH1D()
 {
-   ((TProfile&)profile).Copy(*this);
+   profile.TProfile::Copy(*this);
 }
 
 TProfile &TProfile::operator=(const TProfile &profile)
 {
-   ((TProfile &)profile).Copy(*this);
+   if (this != &profile)
+      profile.TProfile::Copy(*this);
    return *this;
 }
 
@@ -301,7 +302,10 @@ Bool_t TProfile::Add(const TH1 *h1, const TH1 *h2, Double_t c1, Double_t c2)
       Error("Add","Attempt to add a non-profile object");
       return kFALSE;
    }
-   return TProfileHelper::Add(this, h1, h2, c1, c2);
+   Bool_t ret = TProfileHelper::Add(this, h1, h2, c1, c2);
+   if (c1 < 0 || c2 < 0)
+      ResetStats();
+   return ret;
 }
 
 
@@ -341,7 +345,7 @@ Int_t TProfile::BufferEmpty(Int_t action)
    if (nbentries < 0) {
       if (action == 0) return 0;
       nbentries  = -nbentries;
-      fBuffer=0;
+      fBuffer=nullptr;
       Reset("ICES"); // reset without deleting the functions
       fBuffer = buffer;
    }
@@ -357,7 +361,7 @@ Int_t TProfile::BufferEmpty(Int_t action)
       if (fXaxis.GetXmax() <= fXaxis.GetXmin()) {
          THLimitsFinder::GetLimitsFinder()->FindGoodLimits(this,xmin,xmax);
       } else {
-         fBuffer = 0;
+         fBuffer = nullptr;
          Int_t keep = fBufferSize; fBufferSize = 0;
          if (xmin <  fXaxis.GetXmin()) ExtendAxis(xmin,&fXaxis);
          if (xmax >= fXaxis.GetXmax()) ExtendAxis(xmax,&fXaxis);
@@ -366,14 +370,14 @@ Int_t TProfile::BufferEmpty(Int_t action)
       }
    }
 
-   fBuffer = 0;
+   fBuffer = nullptr;
 
    for (Int_t i=0;i<nbentries;i++) {
       Fill(buffer[3*i+2],buffer[3*i+3],buffer[3*i+1]);
    }
    fBuffer = buffer;
 
-   if (action > 0) { delete [] fBuffer; fBuffer = 0; fBufferSize = 0;}
+   if (action > 0) { delete [] fBuffer; fBuffer = nullptr; fBufferSize = 0;}
    else {
       if (nbentries == (Int_t)fEntries) fBuffer[0] = -nbentries;
       else                              fBuffer[0] = 0;
@@ -397,7 +401,7 @@ Int_t TProfile::BufferFill(Double_t x, Double_t y, Double_t w)
       nbentries  = -nbentries;
       fBuffer[0] =  nbentries;
       if (fEntries > 0) {
-         Double_t *buffer = fBuffer; fBuffer=0;
+         Double_t *buffer = fBuffer; fBuffer=nullptr;
          Reset("ICES");  // reset without deleting the functions
          fBuffer = buffer;
       }
@@ -419,7 +423,7 @@ Int_t TProfile::BufferFill(Double_t x, Double_t y, Double_t w)
 void TProfile::Copy(TObject &obj) const
 {
    try {
-      TProfile & pobj = dynamic_cast<TProfile&>(obj);
+      TProfile &pobj = dynamic_cast<TProfile&>(obj);
       TH1D::Copy(pobj);
       fBinEntries.Copy(pobj.fBinEntries);
       fBinSumw2.Copy(pobj.fBinSumw2);
@@ -489,7 +493,7 @@ Bool_t TProfile::Divide(const TH1 *h1)
 
    //- Loop on bins (including underflows/overflows)
    Int_t bin;
-   Double_t *cu1=0, *er1=0, *en1=0;
+   Double_t *cu1=nullptr, *er1=nullptr, *en1=nullptr;
    Double_t e0,e1,c12;
    if (h1->InheritsFrom(TProfile::Class())) {
       cu1 = p1->GetW();
@@ -783,7 +787,7 @@ void TProfile::FillN(Int_t ntimes, const Double_t *x, const Double_t *y, const D
          else BufferFill(x[i], y[i], 1.);
       }
       // fill the remaining entries if the buffer has been deleted
-      if (i < ntimes && fBuffer==0)
+      if (i < ntimes && fBuffer==nullptr)
          ifirst = i;  // start from i
       else
          return;
@@ -879,7 +883,7 @@ Double_t TProfile::GetBinEffectiveEntries(Int_t bin) const
 ///
 ///  Ideas for improvements of this algorithm are welcome. No suggestions
 /// received since our call for advice to roottalk in Jul 2002.
-/// see for instance: http://root.cern.ch/root/roottalk/roottalk02/2916.html
+/// see for instance: http://root.cern/root/roottalk/roottalk02/2916.html
 
 Double_t TProfile::GetBinError(Int_t bin) const
 {
@@ -1410,11 +1414,11 @@ TH1 *TProfile::Rebin(Int_t ngroup, const char*newname, const Double_t *xbins)
    Double_t xmax  = fXaxis.GetXmax();
    if ((ngroup <= 0) || (ngroup > nbins)) {
       Error("Rebin", "Illegal value of ngroup=%d",ngroup);
-      return 0;
+      return nullptr;
    }
    if (!newname && xbins) {
       Error("Rebin","if xbins is specified, newname must be given");
-      return 0;
+      return nullptr;
    }
 
    Int_t newbins = nbins/ngroup;
@@ -1437,7 +1441,7 @@ TH1 *TProfile::Rebin(Int_t ngroup, const char*newname, const Double_t *xbins)
    Double_t *oldBins   = new Double_t[nbins+2];
    Double_t *oldCount  = new Double_t[nbins+2];
    Double_t *oldErrors = new Double_t[nbins+2];
-   Double_t *oldBinw2  = (fBinSumw2.fN ? new Double_t[nbins+2] : 0  );
+   Double_t *oldBinw2  = (fBinSumw2.fN ? new Double_t[nbins+2] : nullptr  );
    Int_t bin, i;
    Double_t *cu1 = GetW();
    Double_t *er1 = GetW2();
@@ -1736,7 +1740,7 @@ void TProfile::SetBuffer(Int_t buffersize, Option_t *)
    if (fBuffer) {
       BufferEmpty();
       delete [] fBuffer;
-      fBuffer = 0;
+      fBuffer = nullptr;
    }
    if (buffersize <= 0) {
       fBufferSize = 0;

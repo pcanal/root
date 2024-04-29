@@ -38,9 +38,11 @@ namespace Math {
     when E >>> m
     The metric used is (-,-,-,+)
     Spacelike particles (M2 < 0) are described with negative mass values,
-    but in this case m2 must alwasy be less than P2 to preserve a positive value of E2
+    but in this case m2 must always be less than P2 to preserve a positive value of E2
 
     @ingroup GenVector
+
+    @sa Overview of the @ref GenVector "physics vector library"
 */
 
 template <class ScalarType = double>
@@ -49,6 +51,7 @@ class PxPyPzM4D {
 public :
 
    typedef ScalarType Scalar;
+   static constexpr unsigned int Dimension = 4U;
 
    // --------- Constructors ---------------
 
@@ -72,7 +75,7 @@ public :
       implementing X(), Y(), X() and M()
    */
    template <class CoordSystem>
-   explicit PxPyPzM4D(const CoordSystem & v) :
+   explicit constexpr PxPyPzM4D(const CoordSystem & v) :
       fX( v.X() ), fY( v.Y() ), fZ( v.Z() ), fM( v.M() )
    { }
 
@@ -366,7 +369,7 @@ private:
 
 
    /**
-      (contigous) data containing the coordinate values x,y,z,t
+      (contiguous) data containing the coordinate values x,y,z,t
    */
 
    ScalarType fX;

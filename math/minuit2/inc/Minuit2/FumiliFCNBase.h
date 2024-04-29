@@ -10,7 +10,7 @@
 #ifndef ROOT_Minuit2_FumiliFCNBase
 #define ROOT_Minuit2_FumiliFCNBase
 
-#include "Minuit2/FCNBase.h"
+#include "Minuit2/FCNGradientBase.h"
 #include <cassert>
 #include <vector>
 
@@ -43,7 +43,7 @@ section 5
 
  */
 
-class FumiliFCNBase : public FCNBase {
+class FumiliFCNBase : public FCNGradientBase {
 
 public:
    /**
@@ -70,12 +70,12 @@ public:
 
    //   FumiliFCNBase(const ParametricFunction& modelFCN) { fModelFunction = &modelFCN; }
 
-   virtual ~FumiliFCNBase() {}
+   ~FumiliFCNBase() override {}
 
    /**
 
       Evaluate function Value, Gradient and Hessian using Fumili approximation, for values of parameters p
-      The resul is cached inside and is return from the FumiliFCNBase::Value ,  FumiliFCNBase::Gradient and
+      The result is cached inside and is return from the FumiliFCNBase::Value ,  FumiliFCNBase::Gradient and
       FumiliFCNBase::Hessian methods
 
       @param par vector of parameters
@@ -96,6 +96,7 @@ public:
    **/
 
    virtual const std::vector<double> &Gradient() const { return fGradient; }
+   std::vector<double> Gradient(const std::vector<double> &) const override { return fGradient;}
 
    /**
       Return Value of the i-th j-th element of the Hessian matrix estimated previously using the
@@ -104,6 +105,7 @@ public:
       @param col col Index of the matrix
    **/
 
+   std::vector<double> Hessian(const std::vector<double> &) const override { return fHessian;}
    virtual double Hessian(unsigned int row, unsigned int col) const
    {
       assert(row < fGradient.size() && col < fGradient.size());

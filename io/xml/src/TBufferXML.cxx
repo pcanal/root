@@ -395,7 +395,7 @@ void TBufferXML::XmlWriteBlock(XMLNodePointer_t node)
    const char *src = Buffer();
    int srcSize = Length();
 
-   char *fZipBuffer = 0;
+   char *fZipBuffer = nullptr;
 
    Int_t compressionLevel = GetCompressionLevel();
    ROOT::RCompressionSetting::EAlgorithm::EValues compressionAlgorithm =
@@ -418,13 +418,14 @@ void TBufferXML::XmlWriteBlock(XMLNodePointer_t node)
    }
 
    TString res;
-   char sbuf[500];
+   constexpr std::size_t sbufSize = 500;
+   char sbuf[sbufSize];
    int block = 0;
    char *tgt = sbuf;
    int srcCnt = 0;
 
    while (srcCnt++ < srcSize) {
-      tgt += sprintf(tgt, " %02x", (unsigned char)*src);
+      tgt += snprintf(tgt, sbufSize - (tgt - sbuf), " %02x", (unsigned char)*src);
       src++;
       if (block++ == 100) {
          res += sbuf;
@@ -1057,7 +1058,7 @@ void TBufferXML::ClassBegin(const TClass *cl, Version_t)
 
 void TBufferXML::ClassEnd(const TClass *)
 {
-   DecrementLevel(0);
+   DecrementLevel(nullptr);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -2154,10 +2155,18 @@ void TBufferXML::WriteArray(const Double_t *d, Int_t n)
 /// Write array without size attribute
 /// Also treat situation, when instead of one single array
 /// chain of several elements should be produced
-
+/// \note Due to the current limit of the buffer size, the function aborts execution of the program in case of underflow or overflow. See https://github.com/root-project/root/issues/6734 for more details.
+///
 template <typename T>
-R__ALWAYS_INLINE void TBufferXML::XmlWriteFastArray(const T *arr, Int_t n)
+R__ALWAYS_INLINE void TBufferXML::XmlWriteFastArray(const T *arr, Long64_t n)
 {
+   constexpr Int_t dataWidth = 1; // at least 1
+   const Int_t maxElements = (std::numeric_limits<Int_t>::max() - Length())/dataWidth;
+   if (n < 0 || n > maxElements)
+   {
+      Fatal("XmlWriteFastArray", "Not enough space left in the buffer (1GB limit). %lld elements is greater than the max left of %d", n, maxElements);
+      return; // In case the user re-routes the error handler to not die when Fatal is called)
+   }
    BeforeIOoperation();
    if (n <= 0)
       return;
@@ -2170,7 +2179,7 @@ R__ALWAYS_INLINE void TBufferXML::XmlWriteFastArray(const T *arr, Int_t n)
 ////////////////////////////////////////////////////////////////////////////////
 /// Write array of Bool_t to buffer
 
-void TBufferXML::WriteFastArray(const Bool_t *b, Int_t n)
+void TBufferXML::WriteFastArray(const Bool_t *b, Long64_t n)
 {
    XmlWriteFastArray(b, n);
 }
@@ -2180,12 +2189,12 @@ void TBufferXML::WriteFastArray(const Bool_t *b, Int_t n)
 /// If array does not include any special characters,
 /// it will be reproduced as CharStar node with string as attribute
 
-void TBufferXML::WriteFastArray(const Char_t *c, Int_t n)
+void TBufferXML::WriteFastArray(const Char_t *c, Long64_t n)
 {
    Bool_t usedefault = (n == 0);
    const Char_t *buf = c;
    if (!usedefault)
-      for (int i = 0; i < n; i++) {
+      for (Long64_t i = 0; i < n; i++) {
          if (*buf < 27) {
             usedefault = kTRUE;
             break;
@@ -2206,7 +2215,7 @@ void TBufferXML::WriteFastArray(const Char_t *c, Int_t n)
 ////////////////////////////////////////////////////////////////////////////////
 /// Write array of UChar_t to buffer
 
-void TBufferXML::WriteFastArray(const UChar_t *c, Int_t n)
+void TBufferXML::WriteFastArray(const UChar_t *c, Long64_t n)
 {
    XmlWriteFastArray(c, n);
 }
@@ -2214,7 +2223,7 @@ void TBufferXML::WriteFastArray(const UChar_t *c, Int_t n)
 ////////////////////////////////////////////////////////////////////////////////
 /// Write array of Short_t to buffer
 
-void TBufferXML::WriteFastArray(const Short_t *h, Int_t n)
+void TBufferXML::WriteFastArray(const Short_t *h, Long64_t n)
 {
    XmlWriteFastArray(h, n);
 }
@@ -2222,7 +2231,7 @@ void TBufferXML::WriteFastArray(const Short_t *h, Int_t n)
 ////////////////////////////////////////////////////////////////////////////////
 /// Write array of UShort_t to buffer
 
-void TBufferXML::WriteFastArray(const UShort_t *h, Int_t n)
+void TBufferXML::WriteFastArray(const UShort_t *h, Long64_t n)
 {
    XmlWriteFastArray(h, n);
 }
@@ -2230,7 +2239,7 @@ void TBufferXML::WriteFastArray(const UShort_t *h, Int_t n)
 ////////////////////////////////////////////////////////////////////////////////
 /// Write array of Int_t to buffer
 
-void TBufferXML::WriteFastArray(const Int_t *i, Int_t n)
+void TBufferXML::WriteFastArray(const Int_t *i, Long64_t n)
 {
    XmlWriteFastArray(i, n);
 }
@@ -2238,7 +2247,7 @@ void TBufferXML::WriteFastArray(const Int_t *i, Int_t n)
 ////////////////////////////////////////////////////////////////////////////////
 /// Write array of UInt_t to buffer
 
-void TBufferXML::WriteFastArray(const UInt_t *i, Int_t n)
+void TBufferXML::WriteFastArray(const UInt_t *i, Long64_t n)
 {
    XmlWriteFastArray(i, n);
 }
@@ -2246,7 +2255,7 @@ void TBufferXML::WriteFastArray(const UInt_t *i, Int_t n)
 ////////////////////////////////////////////////////////////////////////////////
 /// Write array of Long_t to buffer
 
-void TBufferXML::WriteFastArray(const Long_t *l, Int_t n)
+void TBufferXML::WriteFastArray(const Long_t *l, Long64_t n)
 {
    XmlWriteFastArray(l, n);
 }
@@ -2254,7 +2263,7 @@ void TBufferXML::WriteFastArray(const Long_t *l, Int_t n)
 ////////////////////////////////////////////////////////////////////////////////
 /// Write array of ULong_t to buffer
 
-void TBufferXML::WriteFastArray(const ULong_t *l, Int_t n)
+void TBufferXML::WriteFastArray(const ULong_t *l, Long64_t n)
 {
    XmlWriteFastArray(l, n);
 }
@@ -2262,7 +2271,7 @@ void TBufferXML::WriteFastArray(const ULong_t *l, Int_t n)
 ////////////////////////////////////////////////////////////////////////////////
 /// Write array of Long64_t to buffer
 
-void TBufferXML::WriteFastArray(const Long64_t *l, Int_t n)
+void TBufferXML::WriteFastArray(const Long64_t *l, Long64_t n)
 {
    XmlWriteFastArray(l, n);
 }
@@ -2270,7 +2279,7 @@ void TBufferXML::WriteFastArray(const Long64_t *l, Int_t n)
 ////////////////////////////////////////////////////////////////////////////////
 /// Write array of ULong64_t to buffer
 
-void TBufferXML::WriteFastArray(const ULong64_t *l, Int_t n)
+void TBufferXML::WriteFastArray(const ULong64_t *l, Long64_t n)
 {
    XmlWriteFastArray(l, n);
 }
@@ -2278,7 +2287,7 @@ void TBufferXML::WriteFastArray(const ULong64_t *l, Int_t n)
 ////////////////////////////////////////////////////////////////////////////////
 /// Write array of Float_t to buffer
 
-void TBufferXML::WriteFastArray(const Float_t *f, Int_t n)
+void TBufferXML::WriteFastArray(const Float_t *f, Long64_t n)
 {
    XmlWriteFastArray(f, n);
 }
@@ -2286,7 +2295,7 @@ void TBufferXML::WriteFastArray(const Float_t *f, Int_t n)
 ////////////////////////////////////////////////////////////////////////////////
 /// Write array of Double_t to buffer
 
-void TBufferXML::WriteFastArray(const Double_t *d, Int_t n)
+void TBufferXML::WriteFastArray(const Double_t *d, Long64_t n)
 {
    XmlWriteFastArray(d, n);
 }
@@ -2295,7 +2304,7 @@ void TBufferXML::WriteFastArray(const Double_t *d, Int_t n)
 /// Write array of n characters into the I/O buffer.
 /// Used only by TLeafC, just dummy implementation here
 
-void TBufferXML::WriteFastArrayString(const Char_t *c, Int_t n)
+void TBufferXML::WriteFastArrayString(const Char_t *c, Long64_t n)
 {
    WriteFastArray(c, n);
 }
@@ -2304,7 +2313,7 @@ void TBufferXML::WriteFastArrayString(const Char_t *c, Int_t n)
 /// Write an array of object starting at the address 'start' and of length 'n'
 /// the objects in the array are assumed to be of class 'cl'
 
-void TBufferXML::WriteFastArray(void *start, const TClass *cl, Int_t n, TMemberStreamer *streamer)
+void TBufferXML::WriteFastArray(void *start, const TClass *cl, Long64_t n, TMemberStreamer *streamer)
 {
    if (streamer) {
       (*streamer)(*this, start, 0);
@@ -2316,7 +2325,7 @@ void TBufferXML::WriteFastArray(void *start, const TClass *cl, Int_t n, TMemberS
       n = 1;
    int size = cl->Size();
 
-   for (Int_t j = 0; j < n; j++, obj += size) {
+   for (Long64_t j = 0; j < n; j++, obj += size) {
       ((TClass *)cl)->Streamer(obj, *this);
    }
 }
@@ -2329,7 +2338,7 @@ void TBufferXML::WriteFastArray(void *start, const TClass *cl, Int_t n, TMemberS
 ///   - 0: success
 ///   - 2: truncated success (i.e actual class is missing. Only ptrClass saved.)
 
-Int_t TBufferXML::WriteFastArray(void **start, const TClass *cl, Int_t n, Bool_t isPreAlloc, TMemberStreamer *streamer)
+Int_t TBufferXML::WriteFastArray(void **start, const TClass *cl, Long64_t n, Bool_t isPreAlloc, TMemberStreamer *streamer)
 {
    // if isPreAlloc is true (data member has a ->) we can assume that the pointer
    // is never 0.
@@ -2354,7 +2363,7 @@ Int_t TBufferXML::WriteFastArray(void **start, const TClass *cl, Int_t n, Bool_t
 
    if (!isPreAlloc) {
 
-      for (Int_t j = 0; j < n; j++) {
+      for (Long64_t j = 0; j < n; j++) {
          // must write StreamerInfo if pointer is null
          if (!strInfo && !start[j] && !oldStyle) {
             if (cl->Property() & kIsAbstract) {
@@ -2374,7 +2383,7 @@ Int_t TBufferXML::WriteFastArray(void **start, const TClass *cl, Int_t n, Bool_t
    } else {
       // case //-> in comment
 
-      for (Int_t j = 0; j < n; j++) {
+      for (Long64_t j = 0; j < n; j++) {
          if (!start[j])
             start[j] = ((TClass *)cl)->New();
          ((TClass *)cl)->Streamer(start[j], *this);
@@ -3129,7 +3138,7 @@ void TBufferXML::XmlReadBasic(ULong64_t &value)
 const char *TBufferXML::XmlReadValue(const char *name)
 {
    if (fErrorFlag > 0)
-      return 0;
+      return nullptr;
 
    Bool_t trysimple = fCanUseCompact;
    fCanUseCompact = kFALSE;
@@ -3143,7 +3152,7 @@ const char *TBufferXML::XmlReadValue(const char *name)
 
    if (!trysimple) {
       if (!VerifyItemNode(name, "XmlReadValue"))
-         return 0;
+         return nullptr;
       fValueBuf = fXML->GetAttr(StackNode(), xmlio::v);
    }
 

@@ -57,13 +57,9 @@ class TFileOpenReadWrite(unittest.TestCase):
 
     def test_caching_getattr(self):
         f = ROOT.TFile.Open(self.filename)
-        # check that __dict__ of self.dir_caching is initially empty
-        self.assertFalse(f.__dict__)
+        # check that object is not cached initially
+        self.assertFalse("h" in f.__dict__)
         f.h
-        # check that after call is not empty anymore
-        self.assertTrue(f.__dict__)
-        # check that __dict__ has only one entry
-        self.assertEqual(len(f.__dict__), 1)
         # check that the value in __dict__ is actually the object
         # inside the directory
         self.assertEqual(f.__dict__['h'], f.h)
@@ -74,6 +70,20 @@ class TFileOpenReadWrite(unittest.TestCase):
         self.assertRaises(OSError, ROOT.TFile.Open, 'inexistent_file.root')
         handle = ROOT.TFile.AsyncOpen("inexistent_file.root")
         self.assertRaises(OSError, ROOT.TFile.Open, handle)
+
+    def test_keys_title(self):
+        """
+        Test that the TKey related to a histogram in the file contains the
+        histogram title as described in #9989.
+        """
+        finput = ROOT.TFile.Open(self.filename)
+        key1 = finput.GetListOfKeys().At(0)
+        key2 = finput.Get("dir1").GetListOfKeys().At(0)
+        key3 = finput.Get("dir1/dir2").GetListOfKeys().At(0)
+        self.assertEqual(key1.GetTitle(), "h")
+        self.assertEqual(key2.GetTitle(), "h1")
+        self.assertEqual(key3.GetTitle(), "h2")
+        finput.Close()
 
 
 if __name__ == '__main__':

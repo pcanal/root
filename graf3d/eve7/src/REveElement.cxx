@@ -549,10 +549,17 @@ void REveElement::CheckReferenceCount(const std::string& from)
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Return class for this element
+/// Return REveElement class in case dicitonary is not exisiting
+////////////////////////////////////////////////////////////////////////////////
 
 TClass *REveElement::IsA() const
 {
-   return TClass::GetClass(typeid(*this), kTRUE, kTRUE);
+   TClass* res = TClass::GetClass(typeid(*this), kTRUE, kTRUE);
+   if (!res) {
+      R__LOG_WARNING(REveLog()) << "REveElement::IsA() no dictionary found for " << typeid(*this).name();
+      res = TClass::GetClass("ROOT::Experimental::REveElement");
+   }
+   return res;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1374,7 +1381,7 @@ REveElement *REveElement::GetSelectionMaster()
 /// Note that this also takes care of projections of REveCompound
 /// class, which is also a projectable.
 
-void REveElement::FillImpliedSelectedSet(Set_t &impSelSet)
+void REveElement::FillImpliedSelectedSet(Set_t &impSelSet, const std::set<int>&)
 {
    REveProjectable* p = dynamic_cast<REveProjectable*>(this);
    if (p)

@@ -80,12 +80,14 @@ protected:
 
    std::vector<SceneCommand> fCommands;   ///<!
 
+   bool fMandatory{true};
    // void RetransHierarchicallyRecurse(REveElement* el, const REveTrans& tp);
 
 public:
    REveScene(const std::string &n = "REveScene", const std::string &t = "");
-   virtual ~REveScene();
+   ~REveScene() override;
 
+   Int_t WriteCoreJson(nlohmann::json &cj, Int_t rnr_offset) override;
    Bool_t SingleRnrState() const override { return kTRUE; }
 
    void   SetHierarchical(Bool_t h) { fHierarchical = h; }
@@ -99,7 +101,6 @@ public:
    void SceneElementChanged(REveElement *element);
    void SceneElementRemoved(ElementId_t id);
    void EndAcceptingChanges();
-   void ProcessChanges();
 
    void StreamElements();
    void StreamJsonRecurse(REveElement *el, nlohmann::json &jobj);
@@ -118,6 +119,9 @@ public:
    void AddSubscriber(std::unique_ptr<REveClient> &&sub);
    void RemoveSubscriber(unsigned int);
 
+   bool GetMandatory() { return fMandatory; }
+   void SetMandatory(bool x) { fMandatory = x; }
+
    void AddCommand(const std::string &name, const std::string &icon, const REveElement *element, const std::string &action);
 };
 
@@ -135,7 +139,7 @@ private:
 protected:
 public:
    REveSceneList(const std::string &n = "REveSceneList", const std::string &t = "");
-   virtual ~REveSceneList() {}
+   ~REveSceneList() override {}
 
    void DestroyScenes();
 
@@ -145,7 +149,6 @@ public:
    // void DestroyElementRenderers(REveElement* element);
    void AcceptChanges(bool);
    bool AnyChanges() const;
-   void ProcessSceneChanges();
 };
 
 } // namespace Experimental

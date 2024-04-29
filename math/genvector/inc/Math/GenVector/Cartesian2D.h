@@ -31,6 +31,8 @@ namespace Math {
        (x, y coordinates)
 
        @ingroup GenVector
+
+       @sa Overview of the @ref GenVector "physics vector library"
    */
 
 template <class T = double>
@@ -39,6 +41,8 @@ class Cartesian2D {
 public :
 
    typedef T Scalar;
+
+   static constexpr unsigned int Dimension = 2U;
 
    /**
       Default constructor  with x=y=0
@@ -55,7 +59,7 @@ public :
       X() and Y()
    */
    template <class CoordSystem>
-   explicit Cartesian2D(const CoordSystem & v)
+   explicit constexpr Cartesian2D(const CoordSystem & v)
       : fX(v.X()), fY(v.Y()) {  }
 
 
@@ -161,7 +165,7 @@ public :
    // ============= Overloads for improved speed ==================
 
    template <class T2>
-   explicit Cartesian2D( const Polar2D<T2> & v )
+   explicit constexpr Cartesian2D( const Polar2D<T2> & v )
    {
       const Scalar r = v.R(); // re-using this instead of calling v.X() and v.Y()
       // is the speed improvement

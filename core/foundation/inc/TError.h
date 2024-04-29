@@ -39,14 +39,14 @@
 
 class TVirtualMutex;
 
-const Int_t kUnset    =  -1;
-const Int_t kPrint    =   0;
-const Int_t kInfo     =   1000;
-const Int_t kWarning  =   2000;
-const Int_t kError    =   3000;
-const Int_t kBreak    =   4000;
-const Int_t kSysError =   5000;
-const Int_t kFatal    =   6000;
+constexpr Int_t kUnset    =  -1;
+constexpr Int_t kPrint    =   0;
+constexpr Int_t kInfo     =   1000;
+constexpr Int_t kWarning  =   2000;
+constexpr Int_t kError    =   3000;
+constexpr Int_t kBreak    =   4000;
+constexpr Int_t kSysError =   5000;
+constexpr Int_t kFatal    =   6000;
 
 
 // TROOT sets the error ignore level handler, the system error message handler, and the error abort handler on
@@ -78,32 +78,32 @@ extern ErrorHandlerFunc_t SetErrorHandler(ErrorHandlerFunc_t newhandler);
 extern ErrorHandlerFunc_t GetErrorHandler();
 
 extern void Info(const char *location, const char *msgfmt, ...)
-#if defined(__GNUC__) && !defined(__CINT__)
+#if defined(__GNUC__)
 __attribute__((format(printf, 2, 3)))
 #endif
 ;
 extern void Warning(const char *location, const char *msgfmt, ...)
-#if defined(__GNUC__) && !defined(__CINT__)
+#if defined(__GNUC__)
 __attribute__((format(printf, 2, 3)))
 #endif
 ;
 extern void Error(const char *location, const char *msgfmt, ...)
-#if defined(__GNUC__) && !defined(__CINT__)
+#if defined(__GNUC__)
 __attribute__((format(printf, 2, 3)))
 #endif
 ;
 extern void Break(const char *location, const char *msgfmt, ...)
-#if defined(__GNUC__) && !defined(__CINT__)
+#if defined(__GNUC__)
 __attribute__((format(printf, 2, 3)))
 #endif
 ;
 extern void SysError(const char *location, const char *msgfmt, ...)
-#if defined(__GNUC__) && !defined(__CINT__)
+#if defined(__GNUC__)
 __attribute__((format(printf, 2, 3)))
 #endif
 ;
 extern void Fatal(const char *location, const char *msgfmt, ...)
-#if defined(__GNUC__) && !defined(__CINT__)
+#if defined(__GNUC__)
 __attribute__((format(printf, 2, 3)))
 #endif
 ;

@@ -54,7 +54,7 @@ namespace {
     // * CallExpr
     // * MemberExpr
     // * CXXDependentScopeMemberExpr
-    virtual bool handledStmt(Stmt* S, llvm::raw_ostream& OS) {
+    bool handledStmt(Stmt* S, llvm::raw_ostream& OS) override {
       if (DeclRefExpr* Node = dyn_cast<DeclRefExpr>(S))
         // Exclude the artificially dependent DeclRefExprs, created by the
         // Lookup
@@ -153,9 +153,9 @@ namespace cling {
 
   // Constructors
   EvaluateTSynthesizer::EvaluateTSynthesizer(Sema* S)
-    : ASTTransformer(S), m_EvalDecl(0), m_LifetimeHandlerDecl(0),
-      m_LHgetMemoryDecl(0), m_DynamicExprInfoDecl(0), m_DeclContextDecl(0),
-      m_gCling(0), m_CurDeclContext(0), m_Context(&S->getASTContext()),
+    : ASTTransformer(S), m_EvalDecl(nullptr), m_LifetimeHandlerDecl(nullptr),
+      m_LHgetMemoryDecl(nullptr), m_DynamicExprInfoDecl(nullptr), m_DeclContextDecl(nullptr),
+      m_gCling(nullptr), m_CurDeclContext(nullptr), m_Context(&S->getASTContext()),
       m_UniqueNameCounter(0), m_NestedCompoundStmts(0)
   { }
 
@@ -266,7 +266,7 @@ namespace cling {
           D->dump();
           if (NewBody.hasSingleNode())
             NewBody.getAs<Expr>()->dump();
-          return Result(0, false); // Signal a fatal error.
+          return Result(nullptr, false); // Signal a fatal error.
         }
         FD->setBody(NewBody.getAsSingleNode());
       }
@@ -389,7 +389,11 @@ namespace cling {
       }
     }
 
-    auto* NewCS = CompoundStmt::Create(*m_Context, NewChildren,
+    FPOptionsOverride FPFeatures;
+    if (Node->hasStoredFPFeatures()) {
+      FPFeatures = Node->getStoredFPFeatures();
+    }
+    auto* NewCS = CompoundStmt::Create(*m_Context, NewChildren, FPFeatures,
                                        Node->getLBracLoc(),
                                        Node->getRBracLoc());
 
@@ -527,9 +531,9 @@ namespace cling {
                                               /*IsArrow=*/false,
                                               SS,
                                               m_NoSLoc,
-                                              /*FirstQualifierInScope=*/0,
+                                              /*FirstQualifierInScope=*/nullptr,
                                               MemberLookup,
-                                              /*TemplateArgs=*/0,
+                                              /*TemplateArgs=*/nullptr,
                                               /*Scope*/nullptr).get();
         // 3.3 Build the actual call
         Scope* S = m_Sema->getScopeForContext(m_Sema->CurContext);
@@ -621,8 +625,7 @@ namespace cling {
         if (!IsArtificiallyDependent(LHSExpr)) {
           const QualType LHSTy = LHSExpr->getType();
           Node->setRHS(SubstituteUnknownSymbol(LHSTy, rhs.castTo<Expr>()));
-          Node->setTypeDependent(false);
-          Node->setValueDependent(false);
+          assert(Node->getDependence() == ExprDependence::None);
           return ASTNodeInfo(Node, /*needs eval*/false);
         }
     }
@@ -720,7 +723,7 @@ namespace cling {
     // 3. Build the array of addresses
     QualType VarAddrTy = m_Sema->BuildArrayType(m_Context->VoidPtrTy,
                                                 ArrayType::Normal,
-                                                /*ArraySize*/0,
+                                                /*ArraySize*/nullptr,
                                                 /*IndexTypeQuals*/0,
                                                 m_NoRange,
                                                 DeclarationName() );
@@ -735,13 +738,13 @@ namespace cling {
       if (!UnOp) {
         // Not good, return what we had.
         cling::errs() << "Error while creating dynamic expression for:\n  ";
-        SubTree->printPretty(cling::errs(), 0 /*PrinterHelper*/,
+        SubTree->printPretty(cling::errs(), nullptr /*PrinterHelper*/,
                              m_Context->getPrintingPolicy(), 2);
         cling::errs() << "\n";
 #ifndef NDEBUG
         cling::errs() <<
           "with internal representation (look for <dependent type>):\n";
-        SubTree->dump(cling::errs(), m_Sema->getSourceManager());
+        SubTree->dump(cling::errs(), m_Sema->getASTContext());
 #endif
         return SubTree;
       }
@@ -761,7 +764,6 @@ namespace cling {
                                                            TSI,
                                                            m_NoELoc,
                                                            ILE).get();
-    assert (ExprAddresses && "Could not build the void* array");
     if (!ExprAddresses)
        return SubTree;
 
@@ -770,7 +772,7 @@ namespace cling {
                               CK_ArrayToPointerDecay);
 
     // Is the result of the expression to be printed or not
-    Expr* VPReq = 0;
+    Expr* VPReq = nullptr;
     if (ValuePrinterReq)
       VPReq = m_Sema->ActOnCXXBoolLiteral(m_NoSLoc, tok::kw_true).get();
     else
@@ -811,11 +813,12 @@ namespace cling {
     unsigned bitSize = m_Context->getTypeSize(m_Context->VoidPtrTy);
     llvm::APInt ArraySize(bitSize, Value.size() + 1);
     const QualType CCArray = m_Context->getConstantArrayType(CChar,
-                                                            ArraySize,
-                                                            ArrayType::Normal,
+                                                             ArraySize,
+                                                           /*SizeExpr=*/nullptr,
+                                                             ArrayType::Normal,
                                                           /*IndexTypeQuals=*/0);
 
-    StringLiteral::StringKind Kind = StringLiteral::Ascii;
+    StringLiteral::StringKind Kind = StringLiteral::Ordinary;
     Expr* Result = StringLiteral::Create(*m_Context,
                                          Value,
                                          Kind,
@@ -846,12 +849,14 @@ namespace cling {
     // Before instantiation we need the canonical type
     TemplateArgument Arg(InstTy.getCanonicalType());
     TemplateArgumentList TemplateArgs(TemplateArgumentList::OnStack, Arg);
+    MultiLevelTemplateArgumentList MLTAL(m_EvalDecl, TemplateArgs.asArray(),
+                                         /*Final=*/false);
 
     // Substitute the declaration of the templated function, with the
     // specified template argument
     Decl* D = m_Sema->SubstDecl(m_EvalDecl,
                                 m_EvalDecl->getDeclContext(),
-                                MultiLevelTemplateArgumentList(TemplateArgs));
+                                MLTAL);
 
     FunctionDecl* Fn = dyn_cast<FunctionDecl>(D);
 
@@ -878,7 +883,7 @@ namespace cling {
                                                EPI);
     DeclRefExpr* DRE = m_Sema->BuildDeclRefExpr(Fn,
                                                 FnTy,
-                                                VK_RValue,
+                                                VK_PRValue,
                                                 m_NoSLoc
                                                 );
 #if 0
@@ -940,7 +945,7 @@ namespace cling {
          << m_UniqueNameCounter++;
     return Strm.str();
   }
-  
+
 
   // end Helpers
 
@@ -959,14 +964,14 @@ namespace cling {
       Value res = Interp->Evaluate(ctor.c_str(), DC,
                                    ExprInfo->isValuePrinterRequested()
                                    );
-      m_Memory = (void*)res.getAs<void*>();
+      m_Memory = res.getPtr();
     }
 
     LifetimeHandler::~LifetimeHandler() {
       ostrstream stream;
       stream << "delete (" << m_Type << "*) " << m_Memory << ";";
       LockCompilationDuringUserCodeExecutionRAII LCDUCER(*m_Interpreter);
-      m_Interpreter->execute(stream.str());
+      m_Interpreter->execute(stream.str().str());
     }
   } // end namespace internal
   } // end namespace runtime

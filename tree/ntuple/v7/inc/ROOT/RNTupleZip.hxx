@@ -28,11 +28,11 @@
 
 namespace ROOT {
 namespace Experimental {
-namespace Detail {
+namespace Internal {
 
 // clang-format off
 /**
-\class ROOT::Experimental::Detail::RNTupleCompressor
+\class ROOT::Experimental::Internal::RNTupleCompressor
 \ingroup NTuple
 \brief Helper class to compress data blocks in the ROOT compression frame format
 */
@@ -46,9 +46,13 @@ public:
    /// Data might be overwritten, if a zipped block in the middle of a large input data stream
    /// turns out to be uncompressible
    using Writer_t = std::function<void(const void *buffer, size_t nbytes, size_t offset)>;
+   static Writer_t MakeMemCopyWriter(unsigned char *dest)
+   {
+      return [=](const void *b, size_t n, size_t o) { memcpy(dest + o, b, n); };
+   }
    static constexpr size_t kMaxSingleBlock = kMAXZIPBUF;
 
-   RNTupleCompressor() : fZipBuffer(std::unique_ptr<Buffer_t>(new Buffer_t())) {}
+   RNTupleCompressor() : fZipBuffer(std::make_unique<Buffer_t>()) {}
    RNTupleCompressor(const RNTupleCompressor &other) = delete;
    RNTupleCompressor &operator =(const RNTupleCompressor &other) = delete;
    RNTupleCompressor(RNTupleCompressor &&other) = default;
@@ -150,6 +154,7 @@ public:
 
          szZipData += szOutBlock;
          source += szSource;
+         target += szOutBlock;
          szRemaining -= szSource;
       }
       R__ASSERT(szRemaining == 0);
@@ -163,7 +168,7 @@ public:
 
 // clang-format off
 /**
-\class ROOT::Experimental::Detail::RNTupleDecompressor
+\class ROOT::Experimental::Internal::RNTupleDecompressor
 \ingroup NTuple
 \brief Helper class to uncompress data blocks in the ROOT compression frame format
 */
@@ -174,7 +179,7 @@ private:
    std::unique_ptr<Buffer_t> fUnzipBuffer;
 
 public:
-   RNTupleDecompressor() : fUnzipBuffer(std::unique_ptr<Buffer_t>(new Buffer_t())) {}
+   RNTupleDecompressor() : fUnzipBuffer(std::make_unique<Buffer_t>()) {}
    RNTupleDecompressor(const RNTupleDecompressor &other) = delete;
    RNTupleDecompressor &operator =(const RNTupleDecompressor &other) = delete;
    RNTupleDecompressor(RNTupleDecompressor &&other) = default;
@@ -225,7 +230,7 @@ public:
    }
 };
 
-} // namespace Detail
+} // namespace Internal
 } // namespace Experimental
 } // namespace ROOT
 

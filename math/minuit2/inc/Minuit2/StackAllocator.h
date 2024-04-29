@@ -34,7 +34,6 @@ class StackOverflow {
 };
 class StackError {
 };
-//  using namespace std;
 
 /** StackAllocator controls the memory allocation/deallocation of Minuit. If
     _MN_NO_THREAD_SAVE_ is defined, memory is taken from a pre-allocated piece
@@ -49,7 +48,7 @@ public:
    //   enum {default_size = 1048576};
    enum { default_size = 524288 };
 
-   StackAllocator() : fStack(0)
+   StackAllocator() : fStack(nullptr)
    {
 #ifdef _MN_NO_THREAD_SAVE_
       // std::cout<<"StackAllocator Allocate "<<default_size<<std::endl;
@@ -152,7 +151,7 @@ public:
       unsigned char *pc = static_cast<unsigned char *>(p);
 
       // std::cout << "toInt: p = " << p << " fStack = " << (void*) fStack << std::endl;
-      // VC 7.1 warning:conversin from __w64 int to int
+      // VC 7.1 warning:conversion from __w64 int to int
       int userBlock = pc - fStack;
       return userBlock - sizeof(int); // correct for starting int
    }

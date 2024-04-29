@@ -55,12 +55,18 @@ void TMVARegressionApplication( TString myMethodList = "" )
    //
    // --- Neural Network
    Use["MLP"] = 0;
+   // Deep neural network
+#ifdef R__HAS_TMVAGPU
+   Use["DNN_GPU"] = 1;
+   Use["DNN_CPU"] = 0;
+#else
+   Use["DNN_GPU"] = 0;
 #ifdef R__HAS_TMVACPU
    Use["DNN_CPU"] = 1;
 #else
    Use["DNN_CPU"] = 0;
 #endif
-
+#endif
    //
    // --- Support Vector Machine
    Use["SVM"]             = 0;
@@ -110,7 +116,7 @@ void TMVARegressionApplication( TString myMethodList = "" )
 
    // --- Book the MVA methods
 
-   TString dir    = "dataset/weights/";
+   TString dir    = "datasetreg/weights/";
    TString prefix = "TMVARegression";
 
    // Book method(s)
@@ -142,7 +148,7 @@ void TMVARegressionApplication( TString myMethodList = "" )
    }
    else {
       TFile::SetCacheFileDir(".");
-      input = TFile::Open("http://root.cern.ch/files/tmva_reg_example.root", "CACHEREAD"); // if not: download from ROOT server
+      input = TFile::Open("http://root.cern/files/tmva_reg_example.root", "CACHEREAD"); // if not: download from ROOT server
    }
    if (!input) {
       std::cout << "ERROR: could not open data file" << std::endl;

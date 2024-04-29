@@ -91,9 +91,11 @@
 
 #include "RooBinSamplingPdf.h"
 
-#include "RooHelpers.h"
+#include "RooFitImplHelpers.h"
 #include "RooRealBinding.h"
-#include "RunContext.h"
+#include "RooRealVar.h"
+#include "RooGlobalFunc.h"
+#include "RooDataHist.h"
 
 #include "Math/Integrator.h"
 
@@ -144,7 +146,7 @@ double RooBinSamplingPdf::evaluate() const {
   double result;
   {
     // Important: When the integrator samples x, caching of sub-tree values needs to be off.
-    RooHelpers::DisableCachingRAII disableCaching(inhibitDirty());
+    DisableCachingRAII disableCaching(inhibitDirty());
     result = integrate(_normSet, low, high) / (high-low);
   }
 
@@ -158,33 +160,33 @@ double RooBinSamplingPdf::evaluate() const {
 /// Integrate the PDF over all its bins, and return a batch with those values.
 /// \param[in,out] evalData Struct with evaluation data.
 /// \param[in] normSet Normalisation set that's used to evaluate the PDF.
-RooSpan<double> RooBinSamplingPdf::evaluateSpan(RooBatchCompute::RunContext& evalData, const RooArgSet* normSet) const {
-  // Retrieve binning, which we need to compute the probabilities
-  auto boundaries = binBoundaries();
-  auto xValues = _observable->getValues(evalData, normSet);
-  auto results = evalData.makeBatch(this, xValues.size());
+void RooBinSamplingPdf::doEval(RooFit::EvalContext &ctx) const
+{
+   std::span<double> output = ctx.output();
 
-  // Important: When the integrator samples x, caching of sub-tree values needs to be off.
-  RooHelpers::DisableCachingRAII disableCaching(inhibitDirty());
+   // Retrieve binning, which we need to compute the probabilities
+   auto boundaries = binBoundaries();
+   auto xValues = ctx.at(_observable);
 
-  // Now integrate PDF in each bin:
-  for (unsigned int i=0; i < xValues.size(); ++i) {
-    const double x = xValues[i];
-    const auto upperIt = std::upper_bound(boundaries.begin(), boundaries.end(), x);
-    const unsigned int bin = std::distance(boundaries.begin(), upperIt) - 1;
-    assert(bin < boundaries.size());
+   // Important: When the integrator samples x, caching of sub-tree values needs to be off.
+   DisableCachingRAII disableCaching(inhibitDirty());
 
-    results[i] = integrate(normSet, boundaries[bin], boundaries[bin+1]) / (boundaries[bin+1]-boundaries[bin]);
-  }
+   // Now integrate PDF in each bin:
+   for (unsigned int i = 0; i < xValues.size(); ++i) {
+      const double x = xValues[i];
+      const auto upperIt = std::upper_bound(boundaries.begin(), boundaries.end(), x);
+      const unsigned int bin = std::distance(boundaries.begin(), upperIt) - 1;
+      assert(bin < boundaries.size());
 
-  return results;
+      output[i] = integrate(nullptr, boundaries[bin], boundaries[bin + 1]) / (boundaries[bin + 1] - boundaries[bin]);
+   }
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Get the bin boundaries for the observable.
 /// These will be recomputed whenever the shape of this object is dirty.
-RooSpan<const double> RooBinSamplingPdf::binBoundaries() const {
+std::span<const double> RooBinSamplingPdf::binBoundaries() const {
   if (isShapeDirty() || _binBoundaries.empty()) {
     _binBoundaries.clear();
     const RooAbsBinning& binning = _observable->getBinning(nullptr);
@@ -209,7 +211,7 @@ RooSpan<const double> RooBinSamplingPdf::binBoundaries() const {
 /// \param[in] xlo Beginning of range to create list of boundaries for.
 /// \param[in] xhi End of range to create to create list of boundaries for.
 /// \return Pointer to a list to be deleted by caller.
-std::list<double>* RooBinSamplingPdf::binBoundaries(RooAbsRealLValue& obs, Double_t xlo, Double_t xhi) const {
+std::list<double>* RooBinSamplingPdf::binBoundaries(RooAbsRealLValue& obs, double xlo, double xhi) const {
   if (obs.namePtr() != _observable->namePtr()) {
     coutE(Plotting) << "RooBinSamplingPdf::binBoundaries(" << GetName() << "): observable '" << obs.GetName()
         << "' is not the observable of this PDF ('" << _observable->GetName() << "')." << std::endl;
@@ -232,7 +234,7 @@ std::list<double>* RooBinSamplingPdf::binBoundaries(RooAbsRealLValue& obs, Doubl
 /// \param[in] xlo Beginning of range to create sampling hint for.
 /// \param[in] xhi End of range to create sampling hint for.
 /// \return Pointer to a list to be deleted by caller.
-std::list<double>* RooBinSamplingPdf::plotSamplingHint(RooAbsRealLValue& obs, Double_t xlo, Double_t xhi) const {
+std::list<double>* RooBinSamplingPdf::plotSamplingHint(RooAbsRealLValue& obs, double xlo, double xhi) const {
   if (obs.namePtr() != _observable->namePtr()) {
     coutE(Plotting) << "RooBinSamplingPdf::plotSamplingHint(" << GetName() << "): observable '" << obs.GetName()
         << "' is not the observable of this PDF ('" << _observable->GetName() << "')." << std::endl;
@@ -275,12 +277,12 @@ std::list<double>* RooBinSamplingPdf::plotSamplingHint(RooAbsRealLValue& obs, Do
 /// \note When RooBinSamplingPdf is loaded from files, integrator options will fall back to the default values.
 std::unique_ptr<ROOT::Math::IntegratorOneDim>& RooBinSamplingPdf::integrator() const {
   if (!_integrator) {
-    _integrator.reset(new ROOT::Math::IntegratorOneDim(*this,
+    _integrator = std::make_unique<ROOT::Math::IntegratorOneDim>(*this,
         ROOT::Math::IntegrationOneDim::kADAPTIVE, // GSL Integrator. Will really get it only if MathMore enabled.
         -1., _relEpsilon, // Abs epsilon = default, rel epsilon set by us.
         0, // We don't limit the sub-intervals. Steer run time via _relEpsilon.
         2 // This should read ROOT::Math::Integration::kGAUSS21, but this is in MathMore, so we cannot include it here.
-        ));
+        );
   }
 
   return _integrator;
@@ -291,16 +293,61 @@ std::unique_ptr<ROOT::Math::IntegratorOneDim>& RooBinSamplingPdf::integrator() c
 /// Binding used by the integrator to evaluate the PDF.
 double RooBinSamplingPdf::operator()(double x) const {
   _observable->setVal(x);
-  return _pdf->getVal(_normSetForIntegrator);
+  return _pdf;
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Integrate the wrapped PDF using our current integrator, with given norm set and limits.
-double RooBinSamplingPdf::integrate(const RooArgSet* normSet, double low, double high) const {
-  // Need to set this because operator() only takes one argument.
-  _normSetForIntegrator = normSet;
-
+double RooBinSamplingPdf::integrate(const RooArgSet* /*normSet*/, double low, double high) const {
   return integrator()->Integral(low, high);
 }
 
+
+/// Creates a wrapping RooBinSamplingPdf if appropriate.
+/// \param[in] pdf The input pdf.
+/// \param[in] data The dataset to be used in the fit, used to figure out the
+///            observables and whether the dataset is binned.
+/// \param[in] precision Precision argument for all created RooBinSamplingPdfs.
+std::unique_ptr<RooAbsPdf> RooBinSamplingPdf::create(RooAbsPdf& pdf, RooAbsData const &data, double precision) {
+  if (precision < 0.)
+    return nullptr;
+
+  std::unique_ptr<RooArgSet> funcObservables( pdf.getObservables(data) );
+  const bool oneDimAndBinned = (1 == std::count_if(funcObservables->begin(), funcObservables->end(), [](const RooAbsArg* arg) {
+    auto var = dynamic_cast<const RooRealVar*>(arg);
+    return var && var->numBins() > 1;
+  }));
+
+  if (!oneDimAndBinned) {
+    if (precision > 0.) {
+      oocoutE(&pdf, Fitting)
+          << "Integration over bins was requested, but this is currently only implemented for 1-D fits." << std::endl;
+    }
+    return nullptr;
+  }
+
+  // Find the real-valued observable. We don't care about categories.
+  auto theObs = std::find_if(funcObservables->begin(), funcObservables->end(), [](const RooAbsArg* arg){
+    return dynamic_cast<const RooAbsRealLValue*>(arg);
+  });
+  assert(theObs != funcObservables->end());
+
+  std::unique_ptr<RooAbsPdf> newPdf;
+
+  if (precision > 0.) {
+    // User forced integration. Let just apply it.
+    newPdf = std::make_unique<RooBinSamplingPdf>(
+        (std::string(pdf.GetName()) + "_binSampling").c_str(), pdf.GetTitle(),
+        *static_cast<RooAbsRealLValue *>(*theObs), pdf, precision);
+  } else if (dynamic_cast<RooDataHist const *>(&data) != nullptr &&
+             precision == 0. && !pdf.isBinnedDistribution(*data.get())) {
+    // User didn't forbid integration, and it seems appropriate with a
+    // RooDataHist.
+    newPdf = std::make_unique<RooBinSamplingPdf>(
+        (std::string(pdf.GetName()) + "_binSampling").c_str(), pdf.GetTitle(),
+        *static_cast<RooAbsRealLValue *>(*theObs), pdf);
+  }
+
+  return newPdf;
+}

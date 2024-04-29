@@ -5,6 +5,7 @@
 ## that is built of variations of an input pdf
 ##
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -46,7 +47,7 @@ d.defineType("bar")
 
 # Import ingredients in a workspace
 w = ROOT.RooWorkspace("w", "w")
-w.Import(ROOT.RooArgSet(model, c, d))
+w.Import({model, c, d})
 
 # Make Sim builder tool
 sct = ROOT.RooSimWSTool(w)

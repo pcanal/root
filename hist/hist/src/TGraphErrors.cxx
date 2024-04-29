@@ -224,9 +224,9 @@ TGraphErrors::TGraphErrors(const TH1 *h)
 ///   - format = `%lg %lg %lg`     read only 3 first columns into X,Y and EY
 ///   - format = `%lg %lg %lg %lg` read only 4 first columns into X,Y,EX,EY.
 ///
-/// For files separated by a specific delimiter different from ' ' and `\t` (e.g. `;` in csv files)
+/// For files separated by a specific delimiter different from ' ' and `\\t` (e.g. `;` in csv files)
 /// you can avoid using `%*s` to bypass this delimiter by explicitly specify the `option` argument,
-/// e.g. `option=" \t,;"` for columns of figures separated by any of these characters (`' ', '\t', ',', ';'`)
+/// e.g. `option=" \\t,;"` for columns of figures separated by any of these characters (`' ', '\\t', ',', ';'`)
 /// used once (e.g. `"1;1"`) or in a combined way (`" 1;,;;  1"`).
 ///
 /// Note in that case, the instantiation is about 2 times slower.
@@ -305,25 +305,24 @@ TGraphErrors::TGraphErrors(const char *filename, const char *format, Option_t *o
       }
 
       // Initializing loop variables
-      Bool_t isLineToBeSkipped = kFALSE ; //empty and ill-formed lines
-      char * token = NULL ;
-      TString token_str = "" ;
-      Int_t token_idx = 0 ;
-      Double_t * value = new Double_t [4] ; //x,y,ex,ey buffers
-      for (Int_t k = 0; k < 4; k++) {
-         value[k] = 0. ;
-      }
-      Int_t value_idx = 0 ;
+      Bool_t isLineToBeSkipped = kFALSE; //empty and ill-formed lines
+      char *token = nullptr;
+      TString token_str = "";
+      Int_t token_idx = 0;
+      Double_t value[4]; //x,y,ex,ey buffers
+      for (Int_t k = 0; k < 4; k++)
+         value[k] = 0.;
+      Int_t value_idx = 0;
 
       // Looping
       char *rest;
       while (std::getline(infile, line, '\n')) {
-         if (line != "") {
+         if (!line.empty()) {
             if (line[line.size() - 1] == char(13)) {  // removing DOS CR character
                line.erase(line.end() - 1, line.end()) ;
             }
             token = R__STRTOK_R(const_cast<char *>(line.c_str()), option, &rest);
-            while (token != NULL && value_idx < ntokensToBeSaved) {
+            while (token != nullptr && value_idx < ntokensToBeSaved) {
                if (isTokenToBeSaved[token_idx]) {
                   token_str = TString(token) ;
                   token_str.ReplaceAll("\t", "") ;
@@ -335,30 +334,29 @@ TGraphErrors::TGraphErrors(const char *filename, const char *format, Option_t *o
                      value_idx++ ;
                   }
                }
-               token = R__STRTOK_R(NULL, option, &rest); // next token
+               token = R__STRTOK_R(nullptr, option, &rest); // next token
                token_idx++ ;
             }
             if (!isLineToBeSkipped && value_idx > 1) { //i.e. 2,3 or 4
-               x = value[0] ;
-               y = value[1] ;
-               ex = value[2] ;
-               ey = value[3] ;
-               SetPoint(np, x, y) ;
+               x = value[0];
+               y = value[1];
+               ex = value[2];
+               ey = value[3];
+               SetPoint(np, x, y);
                SetPointError(np, ex, ey);
                np++ ;
             }
          }
-         isLineToBeSkipped = kFALSE ;
-         token = NULL ;
-         token_idx = 0 ;
-         value_idx = 0 ;
+         isLineToBeSkipped = kFALSE;
+         token = nullptr;
+         token_idx = 0;
+         value_idx = 0;
       }
       Set(np) ;
 
       // Cleaning
-      delete [] isTokenToBeSaved ;
-      delete [] value ;
-      delete token ;
+      delete [] isTokenToBeSaved;
+      delete token;
    }
    infile.close();
 }
@@ -393,7 +391,7 @@ void TGraphErrors::Apply(TF1 *f)
 
    if (fHistogram) {
       delete fHistogram;
-      fHistogram = 0;
+      fHistogram = nullptr;
    }
    for (Int_t i = 0; i < GetN(); i++) {
       GetPoint(i, x, y);
@@ -423,7 +421,7 @@ void TGraphErrors::ApplyX(TF1 *f)
 
    if (fHistogram) {
       delete fHistogram;
-      fHistogram = 0;
+      fHistogram = nullptr;
    }
    for (Int_t i = 0; i < GetN(); i++) {
       GetPoint(i, x, y);
@@ -526,7 +524,7 @@ void TGraphErrors::CopyAndRelease(Double_t **newarrays,
 Bool_t TGraphErrors::CopyPoints(Double_t **arrays, Int_t ibegin, Int_t iend,
                                 Int_t obegin)
 {
-   if (TGraph::CopyPoints(arrays ? arrays + 2 : 0, ibegin, iend, obegin)) {
+   if (TGraph::CopyPoints(arrays ? arrays + 2 : nullptr, ibegin, iend, obegin)) {
       Int_t n = (iend - ibegin) * sizeof(Double_t);
       if (arrays) {
          memmove(&arrays[0][obegin], &fEX[ibegin], n);
@@ -552,7 +550,7 @@ Bool_t TGraphErrors::CtorAllocate()
 {
 
    if (!fNpoints) {
-      fEX = fEY = 0;
+      fEX = fEY = nullptr;
       return kFALSE;
    } else {
       fEX = new Double_t[fMaxSize];
@@ -570,7 +568,7 @@ Bool_t TGraphErrors::DoMerge(const TGraph *g)
 
    Double_t * ex = g->GetEX();
    Double_t * ey = g->GetEY();
-   if (ex == 0 || ey == 0 ) {
+   if (ex == nullptr || ey == nullptr) {
       if (g->IsA() != TGraph::Class() )
          Warning("DoMerge","Merging a %s is not compatible with a TGraphErrors - errors will be ignored",g->IsA()->GetName());
       return TGraph::DoMerge(g);
@@ -601,7 +599,6 @@ void TGraphErrors::FillZero(Int_t begin, Int_t end, Bool_t from_ctor)
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// This function is called by GraphFitChisquare.
 /// It returns the error along X at point `i`.
 
 Double_t TGraphErrors::GetErrorX(Int_t i) const
@@ -613,7 +610,6 @@ Double_t TGraphErrors::GetErrorX(Int_t i) const
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// This function is called by GraphFitChisquare.
 /// It returns the error along Y at point `i`.
 
 Double_t TGraphErrors::GetErrorY(Int_t i) const
@@ -625,8 +621,8 @@ Double_t TGraphErrors::GetErrorY(Int_t i) const
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// This function is called by GraphFitChisquare.
-/// It returns the error along X at point `i`.
+/// It returns the error along X at point `i`. For TGraphErrors this method is
+/// the same as GetErrorX.
 
 Double_t TGraphErrors::GetErrorXhigh(Int_t i) const
 {
@@ -637,8 +633,8 @@ Double_t TGraphErrors::GetErrorXhigh(Int_t i) const
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// This function is called by GraphFitChisquare.
-/// It returns the error along X at point `i`.
+/// It returns the error along X at point `i`. For TGraphErrors this method is
+/// the same as GetErrorX.
 
 Double_t TGraphErrors::GetErrorXlow(Int_t i) const
 {
@@ -649,8 +645,8 @@ Double_t TGraphErrors::GetErrorXlow(Int_t i) const
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// This function is called by GraphFitChisquare.
-/// It returns the error along X at point `i`.
+/// It returns the error along Y at point `i`. For TGraphErrors this method is
+/// the same as GetErrorY.
 
 Double_t TGraphErrors::GetErrorYhigh(Int_t i) const
 {
@@ -661,8 +657,8 @@ Double_t TGraphErrors::GetErrorYhigh(Int_t i) const
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// This function is called by GraphFitChisquare.
-/// It returns the error along X at point `i`.
+/// It returns the error along Y at point `i`. For TGraphErrors this method is
+/// the same as GetErrorY.
 
 Double_t TGraphErrors::GetErrorYlow(Int_t i) const
 {
@@ -717,85 +713,58 @@ void TGraphErrors::Print(Option_t *) const
 
 void TGraphErrors::SavePrimitive(std::ostream &out, Option_t *option /*= ""*/)
 {
-   char quote = '"';
    out << "   " << std::endl;
    static Int_t frameNumber = 1000;
    frameNumber++;
 
-   Int_t i;
-   TString fXName  = TString(GetName()) + Form("_fx%d",frameNumber);
-   TString fYName  = TString(GetName()) + Form("_fy%d",frameNumber);
-   TString fEXName = TString(GetName()) + Form("_fex%d",frameNumber);
-   TString fEYName = TString(GetName()) + Form("_fey%d",frameNumber);
-   out << "   Double_t " << fXName << "[" << fNpoints << "] = {" << std::endl;
-   for (i = 0; i < fNpoints-1; i++) out << "   " << fX[i] << "," << std::endl;
-   out << "   " << fX[fNpoints-1] << "};" << std::endl;
-   out << "   Double_t " << fYName << "[" << fNpoints << "] = {" << std::endl;
-   for (i = 0; i < fNpoints-1; i++) out << "   " << fY[i] << "," << std::endl;
-   out << "   " << fY[fNpoints-1] << "};" << std::endl;
-   out << "   Double_t " << fEXName << "[" << fNpoints << "] = {" << std::endl;
-   for (i = 0; i < fNpoints-1; i++) out << "   " << fEX[i] << "," << std::endl;
-   out << "   " << fEX[fNpoints-1] << "};" << std::endl;
-   out << "   Double_t " << fEYName << "[" << fNpoints << "] = {" << std::endl;
-   for (i = 0; i < fNpoints-1; i++) out << "   " << fEY[i] << "," << std::endl;
-   out << "   " << fEY[fNpoints-1] << "};" << std::endl;
+   auto fXName  = SaveArray(out, "fx", frameNumber, fX);
+   auto fYName  = SaveArray(out, "fy", frameNumber, fY);
+   auto fEXName = SaveArray(out, "fex", frameNumber, fEX);
+   auto fEYName = SaveArray(out, "fey", frameNumber, fEY);
 
-   if (gROOT->ClassSaved(TGraphErrors::Class())) out << "   ";
-   else out << "   TGraphErrors *";
+   if (gROOT->ClassSaved(TGraphErrors::Class()))
+      out << "   ";
+   else
+      out << "   TGraphErrors *";
    out << "gre = new TGraphErrors(" << fNpoints << ","
                                     << fXName   << ","  << fYName  << ","
                                     << fEXName  << ","  << fEYName << ");"
                                     << std::endl;
 
-   out << "   gre->SetName(" << quote << GetName() << quote << ");" << std::endl;
-   out << "   gre->SetTitle(" << quote << GetTitle() << quote << ");" << std::endl;
-
-   SaveFillAttributes(out, "gre", 0, 1001);
-   SaveLineAttributes(out, "gre", 1, 1, 1);
-   SaveMarkerAttributes(out, "gre", 1, 1, 1);
-
-   if (fHistogram) {
-      TString hname = fHistogram->GetName();
-      hname += frameNumber;
-      fHistogram->SetName(Form("Graph_%s", hname.Data()));
-      fHistogram->SavePrimitive(out, "nodraw");
-      out << "   gre->SetHistogram(" << fHistogram->GetName() << ");" << std::endl;
-      out << "   " << std::endl;
-   }
-
-   // save list of functions
-   TIter next(fFunctions);
-   TObject *obj;
-   while ((obj = next())) {
-      obj->SavePrimitive(out, Form("nodraw #%d\n",++frameNumber));
-      if (obj->InheritsFrom("TPaveStats")) {
-         out << "   gre->GetListOfFunctions()->Add(ptstats);" << std::endl;
-         out << "   ptstats->SetParent(gre->GetListOfFunctions());" << std::endl;
-      } else {
-         TString objname;
-         objname.Form("%s%d",obj->GetName(),frameNumber);
-         if (obj->InheritsFrom("TF1")) {
-            out << "   " << objname << "->SetParent(gre);\n";
-         }
-         out << "   gre->GetListOfFunctions()->Add("
-             << objname << ");" << std::endl;
-      }
-   }
-
-   const char *l = strstr(option, "multigraph");
-   if (l) {
-      out << "   multigraph->Add(gre," << quote << l + 10 << quote << ");" << std::endl;
-   } else {
-      out << "   gre->Draw(" << quote << option << quote << ");" << std::endl;
-   }
+   SaveHistogramAndFunctions(out, "gre", frameNumber, option);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+/// Multiply the values and errors of a TGraphErrors by a constant c1.
+///
+/// If option contains "x" the x values and errors are scaled
+/// If option contains "y" the y values and errors are scaled
+/// If option contains "xy" both x and y values and errors are scaled
+
+void TGraphErrors::Scale(Double_t c1, Option_t *option)
+{
+   TGraph::Scale(c1, option);
+   TString opt = option; opt.ToLower();
+   if (opt.Contains("x") && GetEX()) {
+      for (Int_t i=0; i<GetN(); i++)
+         GetEX()[i] *= c1;
+   }
+   if (opt.Contains("y") && GetEY()) {
+      for (Int_t i=0; i<GetN(); i++)
+         GetEY()[i] *= c1;
+   }
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Set `ex` and `ey` values for point pointed by the mouse.
 
 void TGraphErrors::SetPointError(Double_t ex, Double_t ey)
 {
+   if (!gPad) {
+      Error("SetPointError", "Cannot be used without gPad, requires last mouse position");
+      return;
+   }
+
    Int_t px = gPad->GetEventX();
    Int_t py = gPad->GetEventY();
 
@@ -873,7 +842,6 @@ void TGraphErrors::Streamer(TBuffer &b)
    }
 }
 
-
 ////////////////////////////////////////////////////////////////////////////////
 /// Swap points.
 
@@ -882,4 +850,25 @@ void TGraphErrors::SwapPoints(Int_t pos1, Int_t pos2)
    SwapValues(fEX, pos1, pos2);
    SwapValues(fEY, pos1, pos2);
    TGraph::SwapPoints(pos1, pos2);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Update the fX, fY, fEX, and fEY arrays with the sorted values.
+
+void TGraphErrors::UpdateArrays(const std::vector<Int_t> &sorting_indices, Int_t numSortedPoints, Int_t low)
+{
+   std::vector<Double_t> fEXSorted(numSortedPoints);
+   std::vector<Double_t> fEYSorted(numSortedPoints);
+
+   // Fill the sorted X and Y error values based on the sorted indices
+   std::generate(fEXSorted.begin(), fEXSorted.end(),
+                 [begin = low, &sorting_indices, this]() mutable { return fEX[sorting_indices[begin++]]; });
+   std::generate(fEYSorted.begin(), fEYSorted.end(),
+                 [begin = low, &sorting_indices, this]() mutable { return fEY[sorting_indices[begin++]]; });
+
+   // Copy the sorted X and Y error values back to the original arrays
+   std::copy(fEXSorted.begin(), fEXSorted.end(), fEX + low);
+   std::copy(fEYSorted.begin(), fEYSorted.end(), fEY + low);
+
+   TGraph::UpdateArrays(sorting_indices, numSortedPoints, low);
 }

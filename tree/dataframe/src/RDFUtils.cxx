@@ -53,7 +53,7 @@ const std::type_info &TypeName2TypeID(const std::string &name)
    if (auto c = TClass::GetClass(name.c_str())) {
       if (!c->GetTypeInfo()) {
          std::string msg("Cannot extract type_info of type ");
-         msg += name.c_str();
+         msg += name;
          msg += ".";
          throw std::runtime_error(msg);
       }
@@ -86,7 +86,7 @@ const std::type_info &TypeName2TypeID(const std::string &name)
       return typeid(bool);
    else {
       std::string msg("Cannot extract type_info of type ");
-      msg += name.c_str();
+      msg += name;
       msg += ".";
       throw std::runtime_error(msg);
    }
@@ -219,22 +219,17 @@ std::string GetBranchOrLeafTypeName(TTree &t, const std::string &colName)
 /// column created by Define. Throws if type name deduction fails.
 /// Note that for fixed- or variable-sized c-style arrays the returned type name will be RVec<T>.
 /// vector2rvec specifies whether typename 'std::vector<T>' should be converted to 'RVec<T>' or returned as is
-/// customColID is only used if isDefine is true, and must correspond to the custom column's unique identifier
-/// returned by its `GetID()` method.
 std::string ColumnName2ColumnTypeName(const std::string &colName, TTree *tree, RDataSource *ds, RDefineBase *define,
                                       bool vector2rvec)
 {
    std::string colType;
 
    // must check defines first: we want Redefines to have precedence over everything else
-   if (colType.empty() && define) {
+   if (define) {
       colType = define->GetTypeName();
-   }
-
-   if (ds && ds->HasColumn(colName))
+   } else if (ds && ds->HasColumn(colName)) {
       colType = ds->GetTypeName(colName);
-
-   if (colType.empty() && tree) {
+   } else if (tree) {
       colType = GetBranchOrLeafTypeName(*tree, colName);
       if (vector2rvec && TClassEdit::IsSTLCont(colType) == ROOT::ESTLType::kSTLvector) {
          std::vector<std::string> split;
@@ -333,17 +328,36 @@ Long64_t InterpreterCalc(const std::string &code, const std::string &context)
 {
    R__LOG_DEBUG(10, RDFLogChannel()) << "Jitting and executing the following code:\n\n" << code << '\n';
 
-   TInterpreter::EErrorCode errorCode(TInterpreter::kNoError);
-   auto res = gInterpreter->Calc(code.c_str(), &errorCode);
-   if (errorCode != TInterpreter::EErrorCode::kNoError) {
-      std::string msg = "\nAn error occurred during just-in-time compilation";
-      if (!context.empty())
-         msg += " in " + context;
-      msg += ". The lines above might indicate the cause of the crash\nAll RDF objects that have not run their event "
-             "loop yet should be considered in an invalid state.\n";
-      throw std::runtime_error(msg);
+   TInterpreter::EErrorCode errorCode(TInterpreter::kNoError); // storage for cling errors
+
+   auto callCalc = [&errorCode, &context](const std::string &codeSlice) {
+      gInterpreter->Calc(codeSlice.c_str(), &errorCode);
+      if (errorCode != TInterpreter::EErrorCode::kNoError) {
+         std::string msg = "\nAn error occurred during just-in-time compilation";
+         if (!context.empty())
+            msg += " in " + context;
+         msg +=
+            ". The lines above might indicate the cause of the crash\nAll RDF objects that have not run their event "
+            "loop yet should be considered in an invalid state.\n";
+         throw std::runtime_error(msg);
+      }
+   };
+
+   // Call Calc every 1000 newlines in order to avoid jitting a very large function body, which is slow:
+   // see https://github.com/root-project/root/issues/9312 and https://github.com/root-project/root/issues/7604
+   std::size_t substr_start = 0;
+   std::size_t substr_end = 0;
+   while (substr_end != std::string::npos && substr_start != code.size() - 1) {
+      for (std::size_t i = 0u; i < 1000u && substr_end != std::string::npos; ++i) {
+         substr_end = code.find('\n', substr_end + 1);
+      }
+      const std::string subs = code.substr(substr_start, substr_end - substr_start);
+      substr_start = substr_end;
+
+      callCalc(subs);
    }
-   return res;
+
+   return 0; // we used to forward the return value of Calc, but that's not possible anymore.
 }
 
 bool IsInternalColumn(std::string_view colName)
@@ -365,6 +379,51 @@ unsigned int GetColumnWidth(const std::vector<std::string>& names, const unsigne
    }
    columnWidth = (columnWidth / minColumnSpace + 1) * minColumnSpace;
    return columnWidth;
+}
+
+void CheckReaderTypeMatches(const std::type_info &colType, const std::type_info &requestedType,
+                            const std::string &colName)
+{
+   bool explicitlySupported = false;
+   // We want to explicitly support the reading of bools as unsigned char, as
+   // this is quite common to circumvent the std::vector<bool> specialization.
+   if (TypeID2TypeName(colType) == "bool" && TypeID2TypeName(requestedType) == "unsigned char") {
+      explicitlySupported = true;
+   }
+
+   // Here we compare names and not typeinfos since they may come from two different contexts: a compiled
+   // and a jitted one.
+   const auto diffTypes = (0 != std::strcmp(colType.name(), requestedType.name()));
+   auto inheritedType = [&]() {
+      auto colTClass = TClass::GetClass(colType);
+      return colTClass && colTClass->InheritsFrom(TClass::GetClass(requestedType));
+   };
+
+   if (!explicitlySupported && diffTypes && !inheritedType()) {
+      const auto tName = TypeID2TypeName(requestedType);
+      const auto colTypeName = TypeID2TypeName(colType);
+      std::string errMsg = "RDataFrame: type mismatch: column \"" + colName + "\" is being used as ";
+      if (tName.empty()) {
+         errMsg += requestedType.name();
+         errMsg += " (extracted from type info)";
+      } else {
+         errMsg += tName;
+      }
+      errMsg += " but the Define or Vary node advertises it as ";
+      if (colTypeName.empty()) {
+         auto &id = colType;
+         errMsg += id.name();
+         errMsg += " (extracted from type info)";
+      } else {
+         errMsg += colTypeName;
+      }
+      throw std::runtime_error(errMsg);
+   }
+}
+
+bool IsStrInVec(const std::string &str, const std::vector<std::string> &vec)
+{
+   return std::find(vec.cbegin(), vec.cend(), str) != vec.cend();
 }
 
 } // end NS RDF

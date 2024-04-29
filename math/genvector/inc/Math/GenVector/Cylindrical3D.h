@@ -34,6 +34,8 @@ namespace Math {
       Phi is restricted to be in the range [-PI,PI)
 
       @ingroup GenVector
+
+      @sa Overview of the @ref GenVector "physics vector library"
   */
 
 template <class T>
@@ -42,6 +44,7 @@ class Cylindrical3D {
 public :
 
    typedef T Scalar;
+   static constexpr unsigned int Dimension = 3U;
 
    /**
       Default constructor with rho=z=phi=0
@@ -59,7 +62,7 @@ public :
       Rho(), Z() and Phi()
    */
    template <class CoordSystem >
-   explicit Cylindrical3D( const CoordSystem & v ) :
+   explicit constexpr Cylindrical3D( const CoordSystem & v ) :
       fRho( v.Rho() ),  fZ( v.Z() ),  fPhi( v.Phi() ) { Restrict(); }
 
    // for g++  3.2 and 3.4 on 32 bits found that the compiler generated copy ctor and assignment are much slower

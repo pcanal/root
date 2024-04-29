@@ -352,10 +352,9 @@ Longptr_t TClingDataMemberInfo::Offset()
       //   static constexpr Long64_t something = std::numeric_limits<Long64_t>::max();
       cling::Interpreter::PushTransactionRAII RAII(fInterp);
 
-      if (Longptr_t addr = reinterpret_cast<Longptr_t>(fInterp->getAddressOfGlobal(GlobalDecl(VD))))
-         return addr;
-      auto evalStmt = VD->ensureEvaluatedStmt();
-      if (evalStmt && evalStmt->Value) {
+      // We can't reassign constexpr or const variables. We can compute the
+      // initializer.
+      if (VD->hasInit() && (VD->isConstexpr() || VD->getType().isConstQualified())) {
          if (const APValue* val = VD->evaluateValue()) {
             if (VD->getType()->isIntegralType(C)) {
                return reinterpret_cast<Longptr_t>(val->getInt().getRawData());
@@ -388,6 +387,10 @@ Longptr_t TClingDataMemberInfo::Offset()
             } // not integral type
          } // have an APValue
       } // have an initializing value
+
+      // Try the slow operation.
+      if (Longptr_t addr = reinterpret_cast<Longptr_t>(fInterp->getAddressOfGlobal(GlobalDecl(VD))))
+         return addr;
    }
    // FIXME: We have to explicitly check for not enum constant because the
    // implementation of getAddressOfGlobal relies on mangling the name and in
@@ -560,7 +563,7 @@ int TClingDataMemberInfo::TypeSize() const
 const char *TClingDataMemberInfo::TypeName() const
 {
    if (!IsValid()) {
-      return 0;
+      return nullptr;
    }
 
    CheckForIoTypeAndName();
@@ -588,7 +591,7 @@ const char *TClingDataMemberInfo::TypeName() const
 const char *TClingDataMemberInfo::TypeTrueName(const ROOT::TMetaUtils::TNormalizedCtxt &normCtxt) const
 {
    if (!IsValid()) {
-      return 0;
+      return nullptr;
    }
 
    CheckForIoTypeAndName();
@@ -618,7 +621,7 @@ const char *TClingDataMemberInfo::TypeTrueName(const ROOT::TMetaUtils::TNormaliz
 const char *TClingDataMemberInfo::Name() const
 {
    if (!IsValid()) {
-      return 0;
+      return nullptr;
    }
 
    CheckForIoTypeAndName();
@@ -630,7 +633,7 @@ const char *TClingDataMemberInfo::Name() const
 const char *TClingDataMemberInfo::Title()
 {
    if (!IsValid()) {
-      return 0;
+      return nullptr;
    }
 
    //NOTE: We can't use it as a cache due to the "thoughtful" self iterator
@@ -669,7 +672,8 @@ llvm::StringRef TClingDataMemberInfo::ValidArrayIndex() const
       return llvm::StringRef();
    }
    const clang::DeclaratorDecl *FD = llvm::dyn_cast<clang::DeclaratorDecl>(GetTargetValueDecl());
-   if (FD) return ROOT::TMetaUtils::DataMemberInfo__ValidArrayIndex(*FD);
-   else return llvm::StringRef();
+   if (FD)
+      return ROOT::TMetaUtils::DataMemberInfo__ValidArrayIndex(*fInterp, *FD);
+   return {};
 }
 

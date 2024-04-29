@@ -3,7 +3,9 @@
 ## \notebook
 ## Numeric algorithm tuning: caching of slow numeric integrals and parameterizations of slow numeric integrals
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -44,7 +46,7 @@ def getWorkspace(mode):
         model.setStringAttribute("CACHEPARMINT", "x:y:z")
 
         # Evaluate pdf once to trigger filling of cache
-        normSet = ROOT.RooArgSet(w["x"], w["y"], w["z"])
+        normSet = {w["x"], w["y"], w["z"]}
         model.getVal(normSet)
         w.writeToFile("rf903_numintcache.root")
 
@@ -87,10 +89,10 @@ if mode == 1:
 # ROOT.This is always slow (need to find maximum function value
 # empirically in 3D space)
 model = w["model"]
-d = model.generate(ROOT.RooArgSet(w["x"], w["y"], w["z"]), 1000)
+d = model.generate({w["x"], w["y"], w["z"]}, 1000)
 
 # ROOT.This is slow in mode 0, fast in mode 1
-model.fitTo(d, Verbose=True, Timer=True)
+model.fitTo(d, Verbose=True, Timer=True, PrintLevel=-1)
 
 # Projection on x (always slow as 2D integral over Y, at fitted value of a
 # is not cached)

@@ -4,8 +4,8 @@
 /// Likelihood and minimization: visualization of errors from a covariance matrix
 ///
 /// \macro_image
-/// \macro_output
 /// \macro_code
+/// \macro_output
 ///
 /// \date April 2009
 /// \author Wouter Verkerke
@@ -41,10 +41,10 @@ void rf610_visualerror()
 
    // Create binned dataset
    x.setBins(25);
-   RooAbsData *d = model.generateBinned(x, 1000);
+   std::unique_ptr<RooAbsData> d{model.generateBinned(x, 1000)};
 
    // Perform fit and save fit result
-   RooFitResult *r = model.fitTo(*d, Save());
+   std::unique_ptr<RooFitResult> r{model.fitTo(*d, Save(), PrintLevel(-1))};
 
    // V i s u a l i z e   f i t   e r r o r
    // -------------------------------------
@@ -81,13 +81,13 @@ void rf610_visualerror()
    // is chosen to be such that at least 100 curves are expected to be outside the N% interval, and is minimally
    // 100 (e.g. Z=1->Ncurve=356, Z=2->Ncurve=2156)) Intervals from the sampling method can be asymmetric,
    // and may perform better in the presence of strong correlations, but may take (much) longer to calculate
-   model.plotOn(frame, VisualizeError(*r, 1, kFALSE), DrawOption("L"), LineWidth(2), LineColor(kRed));
+   model.plotOn(frame, VisualizeError(*r, 1, false), DrawOption("L"), LineWidth(2), LineColor(kRed));
 
    // Perform the same type of error visualization on the background component only.
    // The VisualizeError() option can generally applied to _any_ kind of plot (components, asymmetries, efficiencies
    // etc..)
    model.plotOn(frame, VisualizeError(*r, 1), FillColor(kOrange), Components("bkg"));
-   model.plotOn(frame, VisualizeError(*r, 1, kFALSE), DrawOption("L"), LineWidth(2), LineColor(kRed), Components("bkg"),
+   model.plotOn(frame, VisualizeError(*r, 1, false), DrawOption("L"), LineWidth(2), LineColor(kRed), Components("bkg"),
                 LineStyle(kDashed));
 
    // Overlay central value

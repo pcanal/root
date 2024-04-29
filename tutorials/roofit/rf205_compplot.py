@@ -3,7 +3,9 @@
 ## \notebook
 ## Addition and convolution: options for plotting components of composite pdfs.
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -38,8 +40,8 @@ alpha = ROOT.RooRealVar("alpha", "alpha", -1)
 bkg2 = ROOT.RooExponential("bkg2", "Background 2", x, alpha)
 
 # Sum the background components into a composite background pdf
-bkg1frac = ROOT.RooRealVar("sig1frac", "fraction of component 1 in background", 0.2, 0.0, 1.0)
-bkg = ROOT.RooAddPdf("bkg", "Signal", [bkg1, bkg2], [sig1frac])
+bkg1frac = ROOT.RooRealVar("bkg1frac", "fraction of component 1 in background", 0.8, 0.0, 1.0)
+bkg = ROOT.RooAddPdf("bkg", "Total background", [bkg1, bkg2], [bkg1frac])
 
 # Sum the composite signal and background
 bkgfrac = ROOT.RooRealVar("bkgfrac", "fraction of background", 0.5, 0.0, 1.0)
@@ -49,7 +51,7 @@ model = ROOT.RooAddPdf("model", "g1+g2+a", [bkg, sig], [bkgfrac])
 # ------------------------------------------------------------------------------
 
 # Generate a data sample of 1000 events in x from model
-data = model.generate(ROOT.RooArgSet(x), 1000)
+data = model.generate({x}, 1000)
 
 # Plot data and complete PDF overlaid
 xframe = x.frame(Title="Component plotting of pdf=(sig1+sig2)+(bkg1+bkg2)")
@@ -63,17 +65,17 @@ xframe2 = xframe.Clone("xframe2")
 # --------------------------------------------------------------------
 
 # Plot single background component specified by object reference
-ras_bkg = ROOT.RooArgSet(bkg)
+ras_bkg = {bkg}
 model.plotOn(xframe, Components=ras_bkg, LineColor="r")
 
 # Plot single background component specified by object reference
-ras_bkg2 = ROOT.RooArgSet(bkg2)
+ras_bkg2 = {bkg2}
 model.plotOn(xframe, Components=ras_bkg2, LineStyle="--", LineColor="r")
 
 # Plot multiple background components specified by object reference
 # Note that specified components may occur at any level in object tree
 # (e.g bkg is component of 'model' and 'sig2' is component 'sig')
-ras_bkg_sig2 = ROOT.RooArgSet(bkg, sig2)
+ras_bkg_sig2 = {bkg, sig2}
 model.plotOn(xframe, Components=ras_bkg_sig2, LineStyle=":")
 
 # Make component by name/regexp

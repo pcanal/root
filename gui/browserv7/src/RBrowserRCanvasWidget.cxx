@@ -16,28 +16,27 @@
 
 #include <ROOT/RCanvas.hxx>
 
-using namespace ROOT::Experimental;
-
 using namespace std::string_literals;
+using namespace ROOT::Browsable;
 
 
-class RBrowserRCanvasWidget : public RBrowserWidget {
+class RBrowserRCanvasWidget : public ROOT::RBrowserWidget {
 
-   std::shared_ptr<RCanvas> fCanvas; ///<! drawn canvas
+   std::shared_ptr<ROOT::Experimental::RCanvas> fCanvas; ///<! drawn canvas
 
 public:
 
-   RBrowserRCanvasWidget(const std::string &name) : RBrowserWidget(name)
+   RBrowserRCanvasWidget(const std::string &name) : ROOT::RBrowserWidget(name)
    {
-      fCanvas = RCanvas::Create(name);
+      fCanvas = ROOT::Experimental::RCanvas::Create(name);
    }
 
-   RBrowserRCanvasWidget(const std::string &name, std::shared_ptr<RCanvas> &canv) : RBrowserWidget(name)
+   RBrowserRCanvasWidget(const std::string &name, std::shared_ptr<ROOT::Experimental::RCanvas> &canv) : ROOT::RBrowserWidget(name)
    {
       fCanvas = std::move(canv);
    }
 
-   virtual ~RBrowserRCanvasWidget() = default;
+   ~RBrowserRCanvasWidget() override = default;
 
    std::string GetKind() const override { return "rcanvas"s; }
 
@@ -48,7 +47,7 @@ public:
 
    std::string GetUrl() override
    {
-      return "../"s + fCanvas->GetWindowAddr() + "/"s;
+      return fCanvas->GetWindowUrl(false);
    }
 
    std::string GetTitle() override
@@ -56,18 +55,33 @@ public:
       return fCanvas->GetTitle();
    }
 
-   bool DrawElement(std::shared_ptr<Browsable::RElement> &elem, const std::string &opt) override
+   bool DrawElement(std::shared_ptr<RElement> &elem, const std::string &opt = "") override
    {
-      if (!elem->IsCapable(Browsable::RElement::kActDraw7))
+      if (!elem->IsCapable(RElement::kActDraw7))
          return false;
 
       auto obj = elem->GetObject();
       if (!obj)
          return false;
 
-      std::shared_ptr<RPadBase> subpad = fCanvas;
+      RProvider::ExtendProgressHandle(elem.get(), obj.get());
 
-      if (obj && Browsable::RProvider::Draw7(subpad, obj, opt)) {
+      std::shared_ptr<ROOT::Experimental::RPadBase> subpad = fCanvas;
+
+      std::string drawopt = opt;
+
+      if (drawopt.compare(0,8,"<append>") == 0) {
+         drawopt.erase(0,8);
+      } else if (subpad->NumPrimitives() > 0) {
+         subpad->Wipe();
+         fCanvas->Modified();
+         fCanvas->Update(true);
+      }
+
+      if (drawopt == "<dflt>")
+         drawopt = RProvider::GetClassDrawOption(obj->GetClass());
+
+      if (RProvider::Draw7(subpad, obj, drawopt)) {
          fCanvas->Modified();
          fCanvas->Update(true);
          return true;
@@ -76,29 +90,35 @@ public:
       return false;
    }
 
+   void CheckModified() override
+   {
+      if (fCanvas->IsModified())
+         fCanvas->Update();
+   }
+
 };
 
 // ======================================================================
 
-class RBrowserRCanvasProvider : public RBrowserWidgetProvider {
+class RBrowserRCanvasProvider : public ROOT::RBrowserWidgetProvider {
 protected:
-   std::shared_ptr<RBrowserWidget> Create(const std::string &name) final
+   std::shared_ptr<ROOT::RBrowserWidget> Create(const std::string &name) final
    {
       return std::make_shared<RBrowserRCanvasWidget>(name);
    }
 
-   std::shared_ptr<RBrowserWidget> CreateFor(const std::string &name, std::shared_ptr<Browsable::RElement> &elem) final
+   std::shared_ptr<ROOT::RBrowserWidget> CreateFor(const std::string &name, std::shared_ptr<RElement> &elem) final
    {
       auto holder = elem->GetObject();
       if (!holder) return nullptr;
 
-      auto canv = holder->get_shared<RCanvas>();
+      auto canv = holder->get_shared<ROOT::Experimental::RCanvas>();
       if (!canv) return nullptr;
 
       return std::make_shared<RBrowserRCanvasWidget>(name, canv);
    }
 
 public:
-   RBrowserRCanvasProvider() : RBrowserWidgetProvider("rcanvas") {}
-   ~RBrowserRCanvasProvider() = default;
+   RBrowserRCanvasProvider() : ROOT::RBrowserWidgetProvider("rcanvas") {}
+   ~RBrowserRCanvasProvider() override = default;
 } sRBrowserRCanvasProvider;

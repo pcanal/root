@@ -5,8 +5,8 @@
 /// parameters of the fitted pdf
 ///
 /// \macro_image
-/// \macro_output
 /// \macro_code
+/// \macro_output
 ///
 /// \date July 2008
 /// \author Wouter Verkerke
@@ -47,12 +47,12 @@ void rf608_fitresultaspdf()
    RooAddPdf model("model", "model", RooArgList(g1, g2), frac);
 
    // Generate 1000 events
-   RooDataSet *data = model.generate(x, 1000);
+   std::unique_ptr<RooDataSet> data{model.generate(x, 1000)};
 
    // F i t   m o d e l   t o   d a t a
    // ----------------------------------
 
-   RooFitResult *r = model.fitTo(*data, Save());
+   std::unique_ptr<RooFitResult> r{model.fitTo(*data, Save(), PrintLevel(-1))};
 
    // C r e a t e M V   G a u s s i a n   p d f   o f   f i t t e d    p a r a m e t e r s
    // ------------------------------------------------------------------------------------
@@ -63,7 +63,7 @@ void rf608_fitresultaspdf()
    // -----------------------------------------------------------------------------
 
    // Generate 100K points in the parameter space, sampled from the MVGaussian pdf
-   RooDataSet *d = parabPdf->generate(RooArgSet(mean, sigma_g2, frac), 100000);
+   std::unique_ptr<RooDataSet> d{parabPdf->generate({mean, sigma_g2, frac}, 100000)};
 
    // Sample a 3-D histogram of the pdf to be visualized as an error ellipsoid using the GLISO draw option
    TH3 *hh_3d = (TH3 *)parabPdf->createHistogram("mean,sigma_g2,frac", 25, 25, 25);
@@ -105,9 +105,9 @@ void rf608_fitresultaspdf()
    hh_mean_frac->Draw("surf3");
 
    // Draw the distributions of parameter points sampled from the pdf
-   TH1 *tmp1 = d->createHistogram("mean,sigma_g2", 50, 50);
-   TH1 *tmp2 = d->createHistogram("sigma_g2,frac", 50, 50);
-   TH1 *tmp3 = d->createHistogram("mean,frac", 50, 50);
+   TH1 *tmp1 = d->createHistogram("mean,sigma_g2", Binning(50), Binning(50));
+   TH1 *tmp2 = d->createHistogram("sigma_g2,frac", Binning(50), Binning(50));
+   TH1 *tmp3 = d->createHistogram("mean,frac", Binning(50), Binning(50));
 
    c2->cd(4);
    gPad->SetLeftMargin(0.15);

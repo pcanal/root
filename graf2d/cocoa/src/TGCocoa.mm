@@ -363,11 +363,7 @@ void SetFillPattern(CGContextRef ctx, const PatternContext *patternContext)
 bool ParentRendersToChild(NSView<X11Window> *child)
 {
    assert(child != nil && "ParentRendersToChild, parameter 'child' is nil");
-
-   //Adovo poluchaetsia, tashhem-ta! ;)
-   return (X11::ViewIsTextViewFrame(child, true) || X11::ViewIsHtmlViewFrame(child, true)) && !child.fContext &&
-           child.fMapState == kIsViewable && child.fParentView.fContext &&
-           !child.fIsOverlapped;
+   return X11::ViewIsTextViewFrame(child, true) || X11::ViewIsHtmlViewFrame(child, true);
 }
 
 class ViewFixer final {
@@ -507,7 +503,10 @@ Bool_t TGCocoa::Init(void * /*display*/)
 //______________________________________________________________________________
 Int_t TGCocoa::OpenDisplay(const char * /*dpyName*/)
 {
-   //Noop.
+   // return <0 in case of "error". The only error we have is: no interactive
+   // session, i.e no windows message handler etc.
+   if (CGMainDisplayID() == kCGNullDirectDisplay)
+      return -1;
    return 0;
 }
 
@@ -2853,7 +2852,7 @@ Bool_t TGCocoa::HasTTFonts() const
 //______________________________________________________________________________
 Int_t TGCocoa::TextWidth(FontStruct_t font, const char *s, Int_t len)
 {
-   // Return lenght of the string "s" in pixels. Size depends on font.
+   // Return length of the string "s" in pixels. Size depends on font.
    return fPimpl->fFontManager.GetTextWidth(font, s, len);
 }
 

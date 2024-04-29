@@ -252,9 +252,6 @@ def isDirForPCH(dirName, legacyPyROOT):
                            "math/vdt",
                            "tmva/rmva"]
 
-   if (sys.platform != 'win32' and sys.maxsize <= 2**32): # https://docs.python.org/3/library/platform.html#cross-platform
-      PCHPatternsBlacklist.append("tree/dataframe")
-
    accepted = isAnyPatternInString(PCHPatternsWhitelist,dirName) and \
                not isAnyPatternInString(PCHPatternsBlacklist,dirName)
 
@@ -459,6 +456,11 @@ def makePCHInput():
 
    allHeadersContent = getSTLIncludes()
    allHeadersContent += getExtraIncludes(clingetpchList)
+
+   # Make sure we don't get warnings from the old RooFit test statistics
+   # headers that are deprecated. This line can be removed once the deprecaded
+   # headers are gone (ROOT 6.32.00):
+   allHeadersContent += "#define ROOFIT_BUILDS_ITSELF\n"
 
    allLinkdefsContent = ""
 

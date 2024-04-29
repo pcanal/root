@@ -6,11 +6,12 @@
 ##
 ## Interactive minimization with MINUIT
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
-## \author Clemens Lange
-## \author Wouter Verkerke (C version)
+## \authors Clemens Lange, Wouter Verkerke (C version)
 
 
 import ROOT
@@ -34,7 +35,7 @@ frac = ROOT.RooRealVar("frac", "frac", 0.5, 0.0, 1.0)
 model = ROOT.RooAddPdf("model", "model", [g1, g2], [frac])
 
 # Generate 1000 events
-data = model.generate(ROOT.RooArgSet(x), 1000)
+data = model.generate({x}, 1000)
 
 # Construct unbinned likelihood of model w.r.t. data
 nll = model.createNLL(data)
@@ -53,7 +54,7 @@ m.migrad()
 
 # Print values of all parameters, reflect values (and error estimates)
 # that are back propagated from MINUIT
-model.getParameters(ROOT.RooArgSet(x)).Print("s")
+model.getParameters({x}).Print("s")
 
 # Disable verbose logging
 m.setVerbose(False)
@@ -66,7 +67,7 @@ m.hesse()
 sigma_g2.Print()
 
 # Run MINOS on sigma_g2 parameter only
-m.minos(ROOT.RooArgSet(sigma_g2))
+m.minos({sigma_g2})
 
 # Print value (and error) of sigma_g2 parameter, reflects
 # value and error back propagated from MINUIT

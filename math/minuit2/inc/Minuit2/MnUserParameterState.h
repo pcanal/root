@@ -56,35 +56,6 @@ public:
    /// construct from internal parameters (after minimization)
    MnUserParameterState(const MinimumState &, double, const MnUserTransformation &);
 
-   ~MnUserParameterState() {}
-
-   MnUserParameterState(const MnUserParameterState &state)
-      : fValid(state.fValid), fCovarianceValid(state.fCovarianceValid), fGCCValid(state.fGCCValid),
-        fCovStatus(state.fCovStatus), fFVal(state.fFVal), fEDM(state.fEDM), fNFcn(state.fNFcn),
-        fParameters(state.fParameters), fCovariance(state.fCovariance), fGlobalCC(state.fGlobalCC),
-        fIntParameters(state.fIntParameters), fIntCovariance(state.fIntCovariance)
-   {
-   }
-
-   MnUserParameterState &operator=(const MnUserParameterState &state)
-   {
-      if (this != &state) {
-         fValid = state.fValid;
-         fCovarianceValid = state.fCovarianceValid;
-         fGCCValid = state.fGCCValid;
-         fCovStatus = state.fCovStatus;
-         fFVal = state.fFVal;
-         fEDM = state.fEDM;
-         fNFcn = state.fNFcn;
-         fParameters = state.fParameters;
-         fCovariance = state.fCovariance;
-         fGlobalCC = state.fGlobalCC;
-         fIntParameters = state.fIntParameters;
-         fIntCovariance = state.fIntCovariance;
-      }
-      return *this;
-   }
-
    // user external representation
    const MnUserParameters &Parameters() const { return fParameters; }
    const MnUserCovariance &Covariance() const { return fCovariance; }
@@ -161,7 +132,7 @@ public:
    unsigned int Index(const std::string &) const;
    // convert external number into Name of Parameter
    const std::string &GetName(unsigned int) const;
-   // mantain interface with const char * for backward compatibility
+   // maintain interface with const char * for backward compatibility
    const char *Name(unsigned int) const;
 
    // transformation internal <-> external

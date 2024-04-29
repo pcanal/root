@@ -23,12 +23,14 @@
 
 #define R__NOTFN_BACKPORT
 
+#include "ROOT/TypeTraits.hxx" // InvokeInvokeResult_t
+                               //
 #include <type_traits> // std::decay
 #include <utility>     // std::forward, std::declval
 
 namespace std {
 
-namespace Detail {
+namespace __ROOT_noinline {
 template <typename F>
 class not_fn_t {
    std::decay_t<F> fFun;
@@ -39,14 +41,14 @@ public:
    not_fn_t(const not_fn_t &f) = default;
 
    template <class... Args>
-   auto operator()(Args &&... args) & -> decltype(
-      !std::declval<std::result_of_t<std::decay_t<F>(Args...)>>())
+   auto
+   operator()(Args &&...args) & -> decltype(!std::declval<ROOT::TypeTraits::InvokeResult_t<std::decay_t<F>, Args...>>())
    {
       return !fFun(std::forward<Args>(args)...);
    }
    template <class... Args>
-   auto operator()(Args &&... args) const & -> decltype(
-      !std::declval<std::result_of_t<std::decay_t<F> const(Args...)>>())
+   auto operator()(Args &&...args)
+      const & -> decltype(!std::declval<ROOT::TypeTraits::InvokeResult_t<std::decay_t<F> const, Args...>>())
    {
       return !fFun(std::forward<Args>(args)...);
    }
@@ -55,9 +57,9 @@ public:
 
 
 template <typename F>
-Detail::not_fn_t<F> not_fn(F &&f)
+__ROOT_noinline::not_fn_t<F> not_fn(F &&f)
 {
-   return Detail::not_fn_t<F>(std::forward<F>(f));
+   return __ROOT_noinline::not_fn_t<F>(std::forward<F>(f));
 }
 }
 

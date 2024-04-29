@@ -42,7 +42,7 @@ The `$ROOTSYS/tutorials` directory includes several sub-directories:
 \ingroup Tutorials
 \brief Example code which illustrates how to use ROOT trees and ntuples.
 
-\defgroup tutorial_dataframe Data Frame tutorials
+\defgroup tutorial_dataframe Dataframe tutorials
 \ingroup Tutorials
 \brief These examples show various features of [RDataFrame](classROOT_1_1RDataFrame.html): ROOT's declarative analysis interface.
 
@@ -76,7 +76,7 @@ The `$ROOTSYS/tutorials` directory includes several sub-directories:
 
 \defgroup tutorial_roofit RooFit Tutorials
 \ingroup Tutorials
-\brief These tutorials illustrate the main features of RooFit: the name of the examples and their short description help in figuring out their objective.
+\brief These tutorials illustrate the main features of [RooFit](group__Roofitmain.html): the name of the examples and their short description help in figuring out their objective.
 
 \defgroup tutorial_graphs Graphs tutorials
 \ingroup Tutorials

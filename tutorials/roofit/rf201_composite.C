@@ -8,8 +8,8 @@
 /// ```
 ///
 /// \macro_image
-/// \macro_output
 /// \macro_code
+/// \macro_output
 ///
 /// \date July 2008
 /// \author Wouter Verkerke
@@ -67,10 +67,10 @@ void rf201_composite()
    // ---------------------------------------------------
 
    // Generate a data sample of 1000 events in x from model
-   RooDataSet *data = model.generate(x, 1000);
+   std::unique_ptr<RooDataSet> data{model.generate(x, 1000)};
 
    // Fit model to data
-   model.fitTo(*data);
+   model.fitTo(*data, PrintLevel(-1));
 
    // Plot data and PDF overlaid
    RooPlot *xframe = x.frame(Title("Example of composite pdf=(sig1+sig2)+bkg"));
@@ -94,7 +94,7 @@ void rf201_composite()
    //
    //   model2 = bkg + (sig1 + sig2)
    //
-   RooAddPdf model2("model", "g1+g2+a", RooArgList(bkg, sig1, sig2), RooArgList(bkgfrac, sig1frac), kTRUE);
+   RooAddPdf model2("model", "g1+g2+a", RooArgList(bkg, sig1, sig2), RooArgList(bkgfrac, sig1frac), true);
 
    // NB: Each coefficient is interpreted as the fraction of the
    // left-hand component of the i-th recursive sum, i.e.

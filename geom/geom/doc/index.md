@@ -12,6 +12,7 @@ with simulation packages such as GEANT3, GEANT4 and FLUKA.
   - [Quick Start: Creating the world](\ref GP00)
     - [Example 1: Creating the World](\ref GP00a)
     - [Example 2: A Geometrical Hierarchy Look and Feel](\ref GP00b)
+  - [Selecting the System of Units in ROOT](\ref GPUNITS)
   - [Geometry Creation](\ref GP01)
     - [The Volume Hierarchy](\ref GP01a)
     - [Creating and Positioning Volumes](\ref GP01b)
@@ -334,6 +335,48 @@ TGeoVolume (mouse selecting a volume):
 Note that there are several additional methods for visibility and line
 attributes settings.
 
+\anchor GPUNITS
+## Selecting the System of Units in ROOT
+
+Historically the system of units in %ROOT was based on the three basic units
+centimeters, seconds and GigaElectronVolts.
+For the LHC era in Geant4 collaboration decided that a basic unit system based
+on millimeters, nanoseconds and MegaElectronVolts was better suited for the LHC
+experiments. All LHC experiments use Geant4 and effectively adopted this
+convention for all areas of data processing: simulation, reconstruction and
+data analysis. Hence experiments using the %ROOT geometry toolkit to describe
+the geometry had two different system of units in the application code.
+
+To allow users having the same system of units in the geometry description and the
+application it is now possible to choose the system of units at startup of the
+application:
+
+``` {.cpp}
+TGeoManager::SetDefaultUnits(xx);  xx = kG4Units, kRootUnits
+```
+
+To ensure backwards compatibility %ROOT's default system of units is - as it was before -
+based on centimeters, seconds and GigaElectronVolts, ie. the defaults are equivalent to:
+
+``` {.cpp}
+TGeoManager::SetDefaultUnits(kRootUnits);
+```
+
+To avoid confusion between materials described in %ROOT units and materials described
+in Geant4 units, this switch should by all means be set once, before any element or
+material is constructed. If for whatever reason it is necessary to change the
+system of units later, this is feasible disabling the otherwise fatal exception:
+
+``` {.cpp}
+TGeoManager::LockDefaultUnits(kFALSE);
+```
+
+followed later by a corresponding call to again lock the system of units:
+
+``` {.cpp}
+TGeoManager::LockDefaultUnits(kTRUE);
+```
+
 \anchor GP01
 ## Geometry Creation
 
@@ -361,7 +404,7 @@ There is also a list of specific rules:
     before closing the geometry and must not be positioned - it
     represents the global reference frame.
   - After building the full geometry tree, the geometry must be closed
-    (see the method **`TGeoManager`**`::CloseGeometry()`). Voxelization
+    (see the method **`TGeoManager::CloseGeometry()`**). Voxelization
     can be redone per volume after this process.
 
 The list is much bigger and we will describe in more detail the geometry
@@ -1494,7 +1537,7 @@ This implies by default that the point is also contained by `A_1`, since
 `B_1` have to be fully contained by this. After searching the point
 location, the modeller will consider that the point is located inside
 `B_1`, which will be considered as the representative object (node) for
-the current state. This is stored as: `TGeoNode *TGeoManager::fCurrentNode`
+the current state. This is stored as: `TGeoNode *TGeoNavigator::%fCurrentNode`
 and can be asked from the manager class
 only after the `'Where am I?'` was completed:
 
@@ -1902,9 +1945,9 @@ problems. These have to be properly handled by the stepping code.
 Supposing we have found out that a particle will cross a boundary during
 the next step, it is sometimes useful to compute the normal to the
 crossed surface. The modeller uses the following convention: we define
-as `normal` ($\vec{n}$) the unit vector perpendicular
+as `normal` (\f$\vec{n}\f$) the unit vector perpendicular
 to a surface in the `next crossing point`, having the orientation such
-that: $\vec{n}.\vec{d}>0$. Here $\vec{d}$
+that: \f$\vec{n}.\vec{d}>0\f$. Here \f$\vec{d}\f$
 represents the current direction. The next crossing point represents the
 point where a ray shot from the current point along the current
 direction crosses the surface.

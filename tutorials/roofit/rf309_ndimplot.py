@@ -3,7 +3,9 @@
 ## \notebook
 ## Multidimensional models: making 2/3 dimensional plots of pdfs and datasets
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -29,19 +31,16 @@ fy = ROOT.RooFormulaVar("fy", "a0-a1*sqrt(10*abs(y))", [y, a0, a1])
 model = ROOT.RooGaussian("model", "Gaussian with shifting mean", x, fy, sigma)
 
 # Sample dataset from gauss(x,y)
-data = model.generate(ROOT.RooArgSet(x, y), 10000)
+data = model.generate({x, y}, 10000)
 
 # Make 2D plots of data and model
 # -------------------------------------------------------------
 
 # Create and fill ROOT 2D histogram (20x20 bins) with contents of dataset
-# hh_data = data.createHistogram("hh_data",x, ROOT.RooFit.Binning(20), ROOT.RooFit.YVar(y, ROOT.RooFit.Binning(20)))
-# hh_data = data.createHistogram("x,y", 20, 20) # does not work, see
-# https://root.cern.ch/phpBB3/viewtopic.php?t=16648
-hh_data = ROOT.RooAbsData.createHistogram(data, "x,y", x, Binning=20, YVar=dict(var=y, Binning=20))
+hh_data = data.createHistogram("x,y", x, Binning=20, YVar=dict(var=y, Binning=20))
 
 # Create and fill ROOT 2D histogram (50x50 bins) with sampling of pdf
-# hh_pdf = model.createHistogram("hh_model",x, ROOT.RooFit.Binning(50), ROOT.RooFit.YVar(y, ROOT.RooFit.Binning(50)))
+# hh_pdf = model.createHistogram("hh_model", x, Binning=50, YVar=dict(var=y, Binning=50))
 hh_pdf = model.createHistogram("x,y", 50, 50)
 hh_pdf.SetLineColor(ROOT.kBlue)
 
@@ -51,18 +50,17 @@ hh_pdf.SetLineColor(ROOT.kBlue)
 # Create observables
 z = ROOT.RooRealVar("z", "z", -5, 5)
 
-gz = ROOT.RooGaussian("gz", "gz", z, ROOT.RooFit.RooConst(0), ROOT.RooFit.RooConst(2))
+gz = ROOT.RooGaussian("gz", "gz", z, 0.0, 2.0)
 model3 = ROOT.RooProdPdf("model3", "model3", [model, gz])
 
-data3 = model3.generate(ROOT.RooArgSet(x, y, z), 10000)
+data3 = model3.generate({x, y, z}, 10000)
 
 # Make 3D plots of data and model
 # -------------------------------------------------------------
 
 # Create and fill ROOT 2D histogram (8x8x8 bins) with contents of dataset
-# hh_data3 = data3.createHistogram("hh_data3", x, ROOT.RooFit.Binning(8), ROOT.RooFit.YVar(y, ROOT.RooFit.Binning(8)), ROOT.RooFit.ZVar(z, ROOT.RooFit.Binning(8)))
-hh_data3 = ROOT.RooAbsData.createHistogram(
-    data3,
+# hh_data3 = data3.createHistogram("hh_data3", x, Binning=8, YVar=(var=y, Binning=8), ZVar=(var=z, Binning=8))
+hh_data3 = data3.createHistogram(
     "hh_data3",
     x,
     Binning=8,

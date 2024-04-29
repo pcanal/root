@@ -5,11 +5,12 @@
 ## Calculating chi^2 from histograms and curves in ROOT.RooPlots,
 ## making histogram of residual and pull distributions
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
-## \author Clemens Lange
-## \author Wouter Verkerke (C version)
+## \authors Clemens Lange, Wouter Verkerke (C version)
 
 from __future__ import print_function
 import ROOT
@@ -26,7 +27,7 @@ mean = ROOT.RooRealVar("mean", "mean", 0, -10, 10)
 gauss = ROOT.RooGaussian("gauss", "gauss", x, mean, sigma)
 
 # Generate a sample of 1000 events with sigma=3
-data = gauss.generate(ROOT.RooArgSet(x), 10000)
+data = gauss.generate({x}, 10000)
 
 # Change sigma to 3.15
 sigma.setVal(3.15)
@@ -35,8 +36,8 @@ sigma.setVal(3.15)
 # ---------------------------------------------------------------------------
 
 # Overlay projection of gauss with sigma=3.15 on data with sigma=3.0
-frame1 = x.frame(ROOT.RooFit.Title("Data with distorted Gaussian pdf"), ROOT.RooFit.Bins(40))
-data.plotOn(frame1, ROOT.RooFit.DataError(ROOT.RooAbsData.SumW2))
+frame1 = x.frame(Title="Data with distorted Gaussian pdf", Bins=40)
+data.plotOn(frame1, DataError="SumW2")
 gauss.plotOn(frame1)
 
 # Calculate chi^2
@@ -58,12 +59,12 @@ hpull = frame1.pullHist()
 
 # Create a frame to draw the residual distribution and add the
 # distribution to the frame
-frame2 = x.frame(ROOT.RooFit.Title("Residual Distribution"))
+frame2 = x.frame(Title="Residual Distribution")
 frame2.addPlotable(hresid, "P")
 
 # Create a frame to draw the pull distribution and add the distribution to
 # the frame
-frame3 = x.frame(ROOT.RooFit.Title("Pull Distribution"))
+frame3 = x.frame(Title="Pull Distribution")
 frame3.addPlotable(hpull, "P")
 
 c = ROOT.TCanvas("rf109_chi2residpull", "rf109_chi2residpull", 900, 300)

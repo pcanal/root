@@ -19,11 +19,12 @@
 #include "TMVA/MsgLogger.h"
 #include "TMVA/Results.h"
 #include "TMVA/Timer.h"
+#include "TMVA/Tools.h"
+
+#include "TSystem.h"
 
 #define NPY_NO_DEPRECATED_API NPY_1_7_API_VERSION
 #include <numpy/arrayobject.h>
-
-#include <cwchar>
 
 using namespace TMVA;
 
@@ -37,6 +38,30 @@ public:
    ~PyGILRAII() { PyGILState_Release(m_GILState); }
 };
 } // namespace Internal
+
+/// get current Python executable used by ROOT
+TString Python_Executable() {
+   TString python_version = gSystem->GetFromPipe("root-config --python-version");
+   if (python_version.IsNull()) {
+      TMVA::gTools().Log() << kFATAL << "Can't find a valid Python version used to build ROOT" << Endl;
+      return nullptr;
+   }
+#ifdef _MSC_VER
+   // on Windows there is a space before the version and the executable is python.exe
+   // for both versions of Python
+   python_version.ReplaceAll(" ", "");
+   if (python_version[0] == '2' || python_version[0] == '3')
+      return "python";
+#endif
+   if (python_version[0] == '2')
+      return "python";
+   else if (python_version[0] == '3')
+      return "python3";
+
+   TMVA::gTools().Log() << kFATAL << "Invalid Python version used to build ROOT : " << python_version << Endl;
+   return nullptr;
+}
+
 } // namespace TMVA
 
 ClassImp(PyMethodBase);
@@ -95,6 +120,8 @@ PyMethodBase::PyMethodBase(Types::EMVA methodType,
 PyMethodBase::~PyMethodBase()
 {
    // should we delete here fLocalNS ?
+   //PyFinalize();
+   if (fLocalNS) Py_DECREF(fLocalNS);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -219,40 +246,6 @@ void PyMethodBase::PyFinalize()
 }
 
 ///////////////////////////////////////////////////////////////////////////////
-/// Set program name for Python interpeter
-///
-/// \param[in] name Program name
-
-void PyMethodBase::PySetProgramName(TString name)
-{
-   #if PY_MAJOR_VERSION < 3
-   Py_SetProgramName(const_cast<char*>(name.Data()));
-   #else
-   Py_SetProgramName((wchar_t *)name.Data());
-   #endif
-}
-
-
-///////////////////////////////////////////////////////////////////////////////
-
-size_t mystrlen(const char* s) { return strlen(s); }
-
-///////////////////////////////////////////////////////////////////////////////
-
-size_t mystrlen(const wchar_t* s) { return wcslen(s); }
-
-///////////////////////////////////////////////////////////////////////////////
-/// Get program name from Python interpreter
-///
-/// \return Program name
-
-TString PyMethodBase::Py_GetProgramName()
-{
-   auto progName = ::Py_GetProgramName();
-   return std::string(progName, progName + mystrlen(progName));
-}
-
-///////////////////////////////////////////////////////////////////////////////
 /// Check Python interpreter initialization status
 ///
 /// \return Boolean whether interpreter is initialized
@@ -330,6 +323,7 @@ Int_t PyMethodBase::UnSerialize(TString path, PyObject **obj)
 /// Py_single_input, Py_file_input)
 
 void PyMethodBase::PyRunString(TString code, TString errorMessage, int start) {
+   //std::cout << "Run: >> " << code << std::endl;
    fPyReturn = PyRun_String(code, start, fGlobalNS, fLocalNS);
    if (!fPyReturn) {
       Log() << kWARNING << "Failed to run python code: " << code << Endl;
@@ -369,4 +363,50 @@ const char* PyMethodBase::PyStringAsString(PyObject* string){
    PyObject* encodedString = PyUnicode_AsUTF8String(string);
    const char* cstring = PyBytes_AsString(encodedString);
    return cstring;
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+/// \brief Utility function which retrieves and returns the values of the Tuple
+///        object as a vector of size_t
+///
+/// \param[in] tupleObject Python Tuple object
+/// \return vector of tuple members
+
+std::vector<size_t> PyMethodBase::GetDataFromTuple(PyObject* tupleObject){
+   std::vector<size_t>tupleVec;
+   for(Py_ssize_t tupleIter=0;tupleIter<PyTuple_Size(tupleObject);++tupleIter){
+      auto itemObj = PyTuple_GetItem(tupleObject,tupleIter);
+      if (itemObj == Py_None)
+         tupleVec.push_back(0);  // case shape is for example (None,2,3)
+      else
+         tupleVec.push_back((size_t)PyLong_AsLong(itemObj));
+   }
+   return tupleVec;
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+/// \brief Utility function which retrieves and returns the values of the List
+///        object as a vector of size_t
+///
+/// \param[in] listObject Python List object
+/// \return vector of list members
+
+std::vector<size_t> PyMethodBase::GetDataFromList(PyObject* listObject){
+   std::vector<size_t>listVec;
+   for(Py_ssize_t listIter=0; listIter<PyList_Size(listObject);++listIter){
+               listVec.push_back((size_t)PyLong_AsLong(PyList_GetItem(listObject,listIter)));
+         }
+   return listVec;
+}
+
+//////////////////////////////////////////////////////////////////////////////////
+/// \brief Utility function which checks if a given key is present in a Python
+///        dictionary object and returns the associated value or throws runtime
+///        error.
+///
+/// \param[in] listObject Python Dict object
+/// \return Associated value PyObject
+PyObject *PyMethodBase::GetValueFromDict(PyObject *dict, const char *key)
+{
+   return PyDict_GetItemWithError(dict, PyUnicode_FromString(key));
 }

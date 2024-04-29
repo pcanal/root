@@ -28,6 +28,7 @@ class MinimumState;
 class MnMachinePrecision;
 class MnFcn;
 class FunctionMinimum;
+class FCNGradientBase;
 
 //_______________________________________________________________________
 /**
@@ -73,7 +74,7 @@ public:
    /// FCN + MnUserParameterState
    MnUserParameterState operator()(const FCNBase &, const MnUserParameterState &, unsigned int maxcalls = 0) const;
    ///
-   /// API to use MnHesse after minimization when function mimimum is avalilable, otherwise information on the last
+   /// API to use MnHesse after minimization when function minimum is avalilable, otherwise information on the last
    /// state will be lost. (It would be needed to re-call the gradient and spend extra useless function calls) The
    /// Function Minimum is updated (modified) by adding the Hesse results as last state of minimization
    ///
@@ -90,6 +91,13 @@ public:
    double TolerG2() const { return fStrategy.HessianG2Tolerance(); }
 
 private:
+
+   /// internal function to compute the Hessian using numerical derivative computation
+   MinimumState ComputeNumerical(const MnFcn &, const MinimumState &, const MnUserTransformation &, unsigned int maxcalls) const;
+
+   /// internal function to compute the Hessian using an analytical computation or externally provided in the FCNGradientBase class
+   MinimumState ComputeAnalytical(const FCNGradientBase &, const MinimumState &, const MnUserTransformation &) const;
+
    MnStrategy fStrategy;
 };
 

@@ -3,6 +3,14 @@ import unittest
 from DistRDF import Node
 from DistRDF import Proxy
 from DistRDF.Backends import Base
+from DistRDF.HeadNode import get_headnode
+
+
+def create_dummy_headnode(*args):
+    """Create dummy head node instance needed in the test"""
+    # Pass None as `npartitions`. The tests will modify this member
+    # according to needs
+    return get_headnode(None, None, *args)
 
 
 class ProxyInitTest(unittest.TestCase):
@@ -22,24 +30,24 @@ class TypeReturnTest(unittest.TestCase):
 
     def test_type_return_transformation(self):
         """
-        TransformationProxy object is of type `DistRDF.TransformationProxy` and
+        NodeProxy object is of type `DistRDF.NodeProxy` and
         wraps a node object.
         """
-        node = Node.Node(None, None)
+        node = create_dummy_headnode(1)
         node.backend = None
-        proxy = Proxy.TransformationProxy(node)
-        self.assertIsInstance(proxy, Proxy.TransformationProxy)
+        proxy = Proxy.NodeProxy(node)
+        self.assertIsInstance(proxy, Proxy.NodeProxy)
         self.assertIsInstance(proxy.proxied_node, Node.Node)
 
     def test_type_return_action(self):
         """
-        ActionProxy object is of type `DistRDF.ActionProxy` and
+        ResultPtrProxy object is of type `DistRDF.ResultPtrProxy` and
         wraps a node object.
         """
-        node = Node.Node(None, None)
+        node = create_dummy_headnode(1)
         node.backend = None
-        proxy = Proxy.ActionProxy(node)
-        self.assertIsInstance(proxy, Proxy.ActionProxy)
+        proxy = Proxy.ResultPtrProxy(node)
+        self.assertIsInstance(proxy, Proxy.ResultPtrProxy)
         self.assertIsInstance(proxy.proxied_node, Node.Node)
 
 
@@ -69,11 +77,14 @@ class AttrReadTest(unittest.TestCase):
             """Dummy make_dataframe"""
             pass
 
+        def optimize_npartitions(self):
+            pass
+
     def test_attr_simple_action(self):
-        """ActionProxy object reads the right input attribute."""
-        node = Node.Node(None, None)
+        """ResultPtrProxy object reads the right input attribute."""
+        node = create_dummy_headnode(1)
         node.backend = None
-        proxy = Proxy.ActionProxy(node)
+        proxy = Proxy.ResultPtrProxy(node)
         func = proxy.attr
 
         self.assertEqual(proxy._cur_attr, "attr")
@@ -81,42 +92,42 @@ class AttrReadTest(unittest.TestCase):
 
     def test_supported_transformation(self):
         """
-        TransformationProxy object reads the right input attributes,
+        NodeProxy object reads the right input attributes,
         returning the methods of the proxied node.
         """
-        node = Node.Node(None, None)
+        node = create_dummy_headnode(1)
         node.backend = AttrReadTest.TestBackend()
-        proxy = Proxy.TransformationProxy(node)
+        proxy = Proxy.NodeProxy(node)
 
         transformations = {
-            "Define": ["x", "tdfentry_"],
-            "Filter": ["tdfentry_ > 0"],
+            "Define": ["x", "1"],
+            "Filter": ["x > 0"],
         }
 
         for transformation, args in transformations.items():
             newProxy = getattr(proxy, transformation)(*args)
             self.assertEqual(proxy.proxied_node._new_op_name, transformation)
-            self.assertIsInstance(newProxy, Proxy.TransformationProxy)
+            self.assertIsInstance(newProxy, Proxy.NodeProxy)
             self.assertEqual(newProxy.proxied_node.operation.name,
                              transformation)
             self.assertEqual(newProxy.proxied_node.operation.args, args)
 
     def test_node_attr_transformation(self):
         """
-        When a node attribute is called on a TransformationProxy object, it
+        When a node attribute is called on a NodeProxy object, it
         correctly returns the attribute of the proxied node.
         """
-        node = Node.Node(None, None)
+        node = create_dummy_headnode(1)
         node.backend = AttrReadTest.TestBackend()
-        proxy = Proxy.TransformationProxy(node)
+        proxy = Proxy.NodeProxy(node)
 
         node_attributes = [
             "get_head",
             "operation",
-            "children",
+            "nchildren",
             "_new_op_name",
             "value",
-            "pyroot_node",
+            "rdf_node",
             "has_user_references"
         ]
 
@@ -127,11 +138,11 @@ class AttrReadTest(unittest.TestCase):
     def test_undefined_attr_transformation(self):
         """
         When a non-defined Node class attribute is called on a
-        TransformationProxy object, it raises an AttributeError.
+        NodeProxy object, it raises an AttributeError.
         """
-        node = Node.Node(None, None)
+        node = create_dummy_headnode(1)
         node.backend = None
-        proxy = Proxy.TransformationProxy(node)
+        proxy = Proxy.NodeProxy(node)
         with self.assertRaises(AttributeError):
             proxy.attribute
 
@@ -142,9 +153,9 @@ class AttrReadTest(unittest.TestCase):
         `__del__` method switches the node attribute `has_user_references` from
         `True` to `False`.
         """
-        node = Node.Node(None, None)
+        node = create_dummy_headnode(1)
         node.backend = None
-        proxy = Proxy.TransformationProxy(node)
+        proxy = Proxy.NodeProxy(node)
         self.assertTrue(node.has_user_references)
         proxy = None  # noqa: avoid PEP8 F841
         self.assertFalse(node.has_user_references)
@@ -155,10 +166,10 @@ class AttrReadTest(unittest.TestCase):
         function call.
         """
         t = AttrReadTest.Temp()
-        node = Node.Node(None, None)
+        node = create_dummy_headnode(1)
         node.backend = None
         node.value = t
-        proxy = Proxy.ActionProxy(node)
+        proxy = Proxy.ResultPtrProxy(node)
 
         self.assertEqual(proxy.val(21), 144)
 
@@ -194,9 +205,9 @@ class GetValueTests(unittest.TestCase):
         method in Proxy when the current action node
         already houses a value.
         """
-        node = Node.Node(None, None)
+        node = create_dummy_headnode(1)
         node.backend = None
-        proxy = Proxy.ActionProxy(node)
+        proxy = Proxy.ResultPtrProxy(node)
         node.value = 5
 
         self.assertEqual(proxy.GetValue(), 5)

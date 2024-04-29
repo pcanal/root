@@ -56,6 +56,21 @@ protected:
    void  *GetSender() override { return this; }  //used to set gTQSender
 
 public:
+
+   /** small helper class to store/restore gPad context in TPad methods */
+   class TContext {
+       Bool_t fInteractive{kFALSE};
+       TVirtualPad *fSaved{nullptr};
+   public:
+       TContext(Bool_t _interactive = kFALSE);
+       TContext(TVirtualPad *gpad, Bool_t interactive = kFALSE, Bool_t not_null = kFALSE);
+       ~TContext();
+       auto IsInteractive() const { return fInteractive; }
+       auto GetSaved() const { return fSaved; }
+       void PadDeleted(TVirtualPad *pad);
+   };
+
+
    TVirtualPad();
    TVirtualPad(const char *name, const char *title, Double_t xlow,
                Double_t ylow, Double_t xup, Double_t yup,
@@ -146,8 +161,10 @@ public:
    virtual Bool_t   IsModified() const = 0;
    virtual Bool_t   IsRetained() const = 0;
    virtual Bool_t   IsVertical() const = 0;
+   virtual Bool_t   IsWeb() const { return kFALSE; }
            void     ls(Option_t *option="") const override = 0;
    virtual void     Modified(Bool_t flag=1) = 0;
+   virtual void     ModifiedUpdate() = 0;
    virtual Bool_t   OpaqueMoving() const = 0;
    virtual Bool_t   OpaqueResizing() const = 0;
    virtual Double_t PadtoX(Double_t x) const = 0;
@@ -181,9 +198,10 @@ public:
    virtual void     Print(const char *filename, Option_t *option) = 0;
    virtual void     Range(Double_t x1, Double_t y1, Double_t x2, Double_t y2) = 0;
    virtual void     RangeAxis(Double_t xmin, Double_t ymin, Double_t xmax, Double_t ymax) = 0;
+   virtual void     RangeAxisChanged() { Emit("RangeAxisChanged()"); } // *SIGNAL*
            void     RecursiveRemove(TObject *obj) override = 0;
    virtual void     RedrawAxis(Option_t *option="") = 0;
-   virtual void     ResetView3D(TObject *view=0) = 0;
+   virtual void     ResetView3D(TObject *view = nullptr) = 0;
    virtual void     ResizePad(Option_t *option="") = 0;
            void     SaveAs(const char *filename="",Option_t *option="") const override = 0;
    virtual void     SetBatch(Bool_t batch=kTRUE) = 0;
@@ -221,11 +239,12 @@ public:
    virtual void     SetPhi(Double_t phi=30) = 0;
    virtual void     SetToolTipText(const char *text, Long_t delayms = 1000) = 0;
    virtual void     SetVertical(Bool_t vert=kTRUE) = 0;
-   virtual void     SetView(TView *view=0) = 0;
+   virtual void     SetView(TView *view = nullptr) = 0;
    virtual void     SetViewer3D(TVirtualViewer3D * /*viewer3d*/) {}
    virtual void     ShowGuidelines(TObject *object, const Int_t event, const char mode = 'i', const bool cling = true) = 0;
    virtual TObject *WaitPrimitive(const char *pname="", const char *emode="") = 0;
    virtual void     Update() = 0;
+   virtual void     UpdateAsync() = 0;
    virtual Int_t    UtoAbsPixel(Double_t u) const = 0;
    virtual Int_t    VtoAbsPixel(Double_t v) const = 0;
    virtual Int_t    UtoPixel(Double_t u) const = 0;
@@ -240,7 +259,7 @@ public:
    virtual Int_t    IncrementPaletteColor(Int_t i, TString opt) = 0;
    virtual Int_t    NextPaletteColor() = 0;
 
-   virtual Bool_t   PlaceBox(TObject *o, Double_t w, Double_t h, Double_t &xl, Double_t &yb) = 0;
+   virtual Bool_t   PlaceBox(TObject *o, Double_t w, Double_t h, Double_t &xl, Double_t &yb, Option_t* opt = "lb") = 0;
 
    virtual TObject *CreateToolTip(const TBox *b, const char *text, Long_t delayms) = 0;
    virtual void     DeleteToolTip(TObject *tip) = 0;
@@ -283,9 +302,7 @@ private:
 };
 
 
-#ifndef __CINT__
 #define gPad (TVirtualPad::Pad())
-#endif
 R__EXTERN Int_t (*gThreadXAR)(const char *xact, Int_t nb, void **ar, Int_t *iret);
 
 #endif

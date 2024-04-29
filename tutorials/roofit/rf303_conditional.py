@@ -6,11 +6,12 @@
 ##
 ## pdf = gauss(x,f(y),sx | y ) with f(y) = a0 + a1*y
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
-## \author Clemens Lange
-## \author Wouter Verkerke (C version)
+## \authors Clemens Lange, Wouter Verkerke (C version)
 
 import ROOT
 
@@ -18,7 +19,7 @@ import ROOT
 def makeFakeDataXY():
     x = ROOT.RooRealVar("x", "x", -10, 10)
     y = ROOT.RooRealVar("y", "y", -10, 10)
-    coord = ROOT.RooArgSet(x, y)
+    coord = {x, y}
 
     d = ROOT.RooDataSet("d", "d", coord)
 
@@ -56,17 +57,17 @@ expDataXY = makeFakeDataXY()
 # ---------------------------------------------------------------------------------------------
 
 # Make subset of experimental data with only y values
-expDataY = expDataXY.reduce(ROOT.RooArgSet(y))
+expDataY = expDataXY.reduce({y})
 
 # Generate 10000 events in x obtained from _conditional_ model(x|y) with y
 # values taken from experimental data
-data = model.generate(ROOT.RooArgSet(x), ProtoData=expDataY)
+data = model.generate({x}, ProtoData=expDataY)
 data.Print()
 
 # Fit conditional p.d.f model(x|y) to data
 # ---------------------------------------------------------------------------------------------
 
-model.fitTo(expDataXY, ConditionalObservables=ROOT.RooArgSet(y))
+model.fitTo(expDataXY, ConditionalObservables={y}, PrintLevel=-1)
 
 # Project conditional p.d.f on x and y dimensions
 # ---------------------------------------------------------------------------------------------

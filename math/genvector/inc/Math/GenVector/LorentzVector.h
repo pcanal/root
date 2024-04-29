@@ -32,7 +32,7 @@ namespace ROOT {
   namespace Math {
 
 //__________________________________________________________________________________________
-/** \ingroup GenVector
+/** @ingroup GenVector
 
 Class describing a generic LorentzVector in the 4D space-time,
 using the specified coordinate system for the spatial vector part.
@@ -52,7 +52,7 @@ ROOT provides specialisations and aliases to them of the ROOT::Math::LorentzVect
 - ROOT::Math::XYZTVector based on x,y,z,t coordinates (cartesian) in double precision (same as PxPyPzEVector)
 - ROOT::Math::XYZTVectorF based on x,y,z,t coordinates (cartesian) in float precision (same as PxPyPzEVector but float)
 
-More details about the GenVector package can be found \ref GenVector "here".
+@sa Overview of the @ref GenVector "physics vector library"
 */
 
     template< class CoordSystem >
@@ -90,15 +90,19 @@ More details about the GenVector package can be found \ref GenVector "here".
           coordinates, or using a different Scalar type
        */
        template< class Coords >
-       explicit LorentzVector(const LorentzVector<Coords> & v ) :
+       explicit constexpr LorentzVector(const LorentzVector<Coords> & v ) :
           fCoordinates( v.Coordinates() ) { }
 
        /**
           Construct from a foreign 4D vector type, for example, HepLorentzVector
           Precondition: v must implement methods x(), y(), z(), and t()
        */
-       template<class ForeignLorentzVector>
-       explicit LorentzVector( const ForeignLorentzVector & v) :
+       template<class ForeignLorentzVector,
+                typename = decltype(std::declval<ForeignLorentzVector>().x()
+                                    + std::declval<ForeignLorentzVector>().y()
+                                    + std::declval<ForeignLorentzVector>().z()
+                                    + std::declval<ForeignLorentzVector>().t())>
+       explicit constexpr LorentzVector( const ForeignLorentzVector & v) :
           fCoordinates(PxPyPzE4D<Scalar>( v.x(), v.y(), v.z(), v.t()  ) ) { }
 
 #ifdef LATER
@@ -111,7 +115,7 @@ More details about the GenVector package can be found \ref GenVector "here".
           \param index0 index of first vector element (Px)
        */
        template< class LAVector >
-       explicit LorentzVector(const LAVector & v, size_t index0 ) {
+       explicit constexpr LorentzVector(const LAVector & v, size_t index0 ) {
           fCoordinates = CoordSystem ( v[index0], v[index0+1], v[index0+2], v[index0+3] );
        }
 #endif
@@ -132,7 +136,11 @@ More details about the GenVector package can be found \ref GenVector "here".
           assignment from any other Lorentz vector  implementing
           x(), y(), z() and t()
        */
-       template<class ForeignLorentzVector>
+       template<class ForeignLorentzVector,
+                typename = decltype(std::declval<ForeignLorentzVector>().x()
+                                    + std::declval<ForeignLorentzVector>().y()
+                                    + std::declval<ForeignLorentzVector>().z()
+                                    + std::declval<ForeignLorentzVector>().t())>
        LorentzVector & operator = ( const ForeignLorentzVector & v) {
           SetXYZT( v.x(), v.y(), v.z(), v.t() );
           return *this;
@@ -254,6 +262,14 @@ More details about the GenVector package can be found \ref GenVector "here".
        }
 
        // ------ Individual element access, in various coordinate systems ------
+
+       /**
+          dimension
+       */
+       unsigned int Dimension() const
+       {
+          return fDimension;
+       };
 
        // individual coordinate accessors in various coordinate systems
 
@@ -667,17 +683,17 @@ More details about the GenVector package can be found \ref GenVector "here".
     private:
 
        CoordSystem  fCoordinates;    // internal coordinate system
-
+       static constexpr unsigned int fDimension = CoordinateType::Dimension;
 
     };  // LorentzVector<>
 
 
 
-  // global nethods
+  // global methods
 
   /**
      Scale of a LorentzVector with a scalar quantity a
-     \param a  scalar quantity of typpe a
+     \param a  scalar quantity of type a
      \param v  mathcore::LorentzVector based on any coordinate system
      \return a new mathcoreLorentzVector q = v * a same type as v
    */

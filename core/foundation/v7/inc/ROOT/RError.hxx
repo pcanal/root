@@ -27,42 +27,6 @@
 #include <utility>
 #include <vector>
 
-// The RResult<T> class and their related classes are used for call chains that can throw exceptions,
-// such as I/O code paths.  Throwing of the exception is deferred to allow for `if (result)` style error
-// checking where it makes sense.
-//
-// A function returning an RResult might look like this:
-//
-//     RResult<int> MyIOFunc()
-//     {
-//        int rv = syscall(...);
-//        if (rv == -1)
-//           return R__FAIL("user-facing error message");
-//        if (rv == kShortcut)
-//           return 42;
-//        return R__FORWARD_RESULT(FuncThatReturnsRResultOfInt());
-//     }
-//
-// Code using MyIOFunc might look like this:
-//
-//     auto result = MyIOOperation();
-//     if (!result) {
-//        /* custom error handling or result.Throw() */
-//     }
-//     switch (result.Inspect()) {
-//        ...
-//     }
-//
-// Note that RResult<void> can be used for a function without return value, like this
-//
-//     RResult<void> DoSomething()
-//     {
-//        if (failure)
-//           return R__FAIL("user-facing error messge");
-//        return RResult<void>::Success();
-//     }
-
-
 namespace ROOT {
 namespace Experimental {
 
@@ -118,11 +82,9 @@ public:
    const RError &GetError() const { return fError; }
 };
 
-
-namespace Internal {
 // clang-format off
 /**
-\class ROOT::Experimental::Internal::RResultBase
+\class ROOT::Experimental::RResultBase
 \ingroup Base
 \brief Common handling of the error case for RResult<T> (T != void) and RResult<void>
 
@@ -168,18 +130,7 @@ public:
       result.fError->AddFrame(std::move(sourceLocation));
       return *result.fError;
    }
-
-   // Help to prevent heap construction of RResult objects. Unchecked RResult objects in failure state should throw
-   // an exception close to the error location. For stack allocated RResult objects, an exception is thrown
-   // the latest when leaving the scope. Heap allocated RResult objects in failure state can live much longer making it
-   // difficult to trace back the original error.
-   void *operator new(std::size_t size) = delete;
-   void *operator new(std::size_t, void *) = delete;
-   void *operator new[](std::size_t) = delete;
-   void *operator new[](std::size_t, void *) = delete;
 }; // class RResultBase
-} // namespace Internal
-
 
 // clang-format off
 /**
@@ -187,12 +138,60 @@ public:
 \ingroup Base
 \brief The class is used as a return type for operations that can fail; wraps a value of type T or an RError
 
-RResult enforces checking whether it contains a valid value or an error state. If the RResult leaves the scope
-unchecked, it will throw an exception (due to ~RResultBase).
+The RResult<T> class and their related classes are used for call chains that can throw exceptions,
+such as I/O code paths.  Throwing of the exception is deferred to allow for `if (result)` style error
+checking where it makes sense.  If an RResult in error state leaves the scope unchecked, it will throw.
+
+A function returning an RResult might look like this:
+
+~~~ {.cpp}
+RResult<int> MyIOFunc()
+{
+   int rv = syscall(...);
+   if (rv == -1)
+      return R__FAIL("user-facing error message");
+   if (rv == kShortcut)
+      return 42;
+   return R__FORWARD_RESULT(FuncThatReturnsRResultOfInt());
+}
+~~~
+
+Code using MyIOFunc might look like this:
+
+~~~ {.cpp}
+auto result = MyIOOperation();
+if (!result) {
+   // custom error handling or result.Throw()
+}
+switch (result.Inspect()) {
+   ...
+}
+~~~
+
+Note that RResult<void> can be used for a function without return value, like this
+
+~~~ {.cpp}
+RResult<void> DoSomething()
+{
+   if (failure)
+      return R__FAIL("user-facing error messge");
+   return RResult<void>::Success();
+}
+~~~
+
+RResult<T>::Unwrap() can be used as a short hand for
+"give me the wrapped value or, in case of an error, throw". For instance:
+
+~~~ {.cpp}
+int value = FuncThatReturnsRResultOfInt().Unwrap();  // may throw
+~~~
+
+There is no implict operator that converts RResult<T> to T. This is intentional to make it clear in the calling code
+where an exception may be thrown.
 */
 // clang-format on
 template <typename T>
-class RResult : public Internal::RResultBase {
+class RResult : public RResultBase {
 private:
    /// The result value in case of successful execution
    T fValue;
@@ -253,8 +252,8 @@ public:
 };
 
 /// RResult<void> has no data member and no Inspect() method but instead a Success() factory method
-template<>
-class RResult<void> : public Internal::RResultBase {
+template <>
+class RResult<void> : public RResultBase {
 private:
    RResult() = default;
 

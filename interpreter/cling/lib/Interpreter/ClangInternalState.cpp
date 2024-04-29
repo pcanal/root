@@ -120,7 +120,7 @@ namespace cling {
     if (llvm::sys::fs::createUniqueFile(TempPath.str(), fd, TempPath)
         != std::errc::no_such_file_or_directory) {
       OS.reset(new llvm::raw_fd_ostream(fd, /*shouldClose=*/true));
-      OSFile = TempPath.str();
+      OSFile = TempPath.str().str();
     }
 
     // Make sure the out stream file gets removed if we crash.
@@ -144,13 +144,13 @@ namespace cling {
     for (auto i = clang::Builtin::NotBuiltin+1;
          i != clang::Builtin::FirstTSBuiltin; ++i) {
       llvm::StringRef Name(BuiltinCtx.getName(i));
-      if (Name.startswith("__builtin"))
+      if (Name.starts_with("__builtin"))
         builtinNames.emplace_back(Name);
     }
 
     for (auto&& BuiltinInfo: m_ASTContext.getTargetInfo().getTargetBuiltins()) {
       llvm::StringRef Name(BuiltinInfo.Name);
-      if (!Name.startswith("__builtin"))
+      if (!Name.starts_with("__builtin"))
         builtinNames.emplace_back(Name);
 #ifndef NDEBUG
       else // Make sure it's already in the list
@@ -267,7 +267,7 @@ namespace cling {
       if (!(fileName.compare(0, 5, "/usr/") == 0 &&
             fileName.find("/bits/") != std::string::npos) &&
           fileName.compare("-")) {
-        if (I->second->getRawBuffer()) {
+        if (I->second->getBufferDataIfLoaded()) {
           // There is content - a memory buffer or a file.
           // We know it's a file because we started off the FileEntry.
           if (FE->isOpen())
@@ -308,7 +308,7 @@ namespace cling {
   void ClangInternalState::printLLVMModule(llvm::raw_ostream& Out,
                                            const llvm::Module& M,
                                            CodeGenerator& CG) {
-    M.print(Out, /*AssemblyAnnotationWriter*/ 0);
+    M.print(Out, /*AssemblyAnnotationWriter*/ nullptr);
     CG.print(Out);
   }
 

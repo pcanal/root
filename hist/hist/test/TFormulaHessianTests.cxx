@@ -15,10 +15,13 @@
  * For the list of contributors see $ROOTSYS/README/CREDITS.             *
  *************************************************************************/
 
-#include "ROOTUnitTestSupport.h"
+#include "ROOT/TestSupport.hxx"
 
 #include <Math/MinimizerOptions.h>
 #include <TFormula.h>
+
+#include "gtest/gtest.h"
+#include "gmock/gmock.h"
 
 TEST(TFormulaHessianPar, Sanity)
 {
@@ -43,7 +46,7 @@ TEST(TFormulaHessianPar, ResultUpsize)
    TFormula::CladStorage result;
    double x[] = {2, 1};
 
-   ASSERT_TRUE(0 == result.size());
+   ASSERT_TRUE(result.empty());
    ROOT_EXPECT_WARNING(f.HessianPar(x, result),
    "TFormula::HessianPar",
    "The size of hessian result is 0 but 4 is required. Resizing."

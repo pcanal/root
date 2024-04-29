@@ -1,10 +1,12 @@
 ## \file
 ## \ingroup tutorial_roofit
 ## \notebook
-## Multidimensional models: using the likelihood ratio techique to construct a signal
+## Multidimensional models: using the likelihood ratio technique to construct a signal
 ## enhanced one-dimensional projection of a multi-dimensional pdf
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -21,9 +23,9 @@ y = ROOT.RooRealVar("y", "y", -5, 5)
 z = ROOT.RooRealVar("z", "z", -5, 5)
 
 # Create signal pdf gauss(x)*gauss(y)*gauss(z)
-gx = ROOT.RooGaussian("gx", "gx", x, ROOT.RooFit.RooConst(0), ROOT.RooFit.RooConst(1))
-gy = ROOT.RooGaussian("gy", "gy", y, ROOT.RooFit.RooConst(0), ROOT.RooFit.RooConst(1))
-gz = ROOT.RooGaussian("gz", "gz", z, ROOT.RooFit.RooConst(0), ROOT.RooFit.RooConst(1))
+gx = ROOT.RooGaussian("gx", "gx", x, 0.0, 1.0)
+gy = ROOT.RooGaussian("gy", "gy", y, 0.0, 1.0)
+gz = ROOT.RooGaussian("gz", "gz", z, 0.0, 1.0)
 sig = ROOT.RooProdPdf("sig", "sig", [gx, gy, gz])
 
 # Create background pdf poly(x)*poly(y)*poly(z)
@@ -36,7 +38,7 @@ bkg = ROOT.RooProdPdf("bkg", "bkg", [px, py, pz])
 fsig = ROOT.RooRealVar("fsig", "signal fraction", 0.1, 0.0, 1.0)
 model = ROOT.RooAddPdf("model", "model", [sig, bkg], [fsig])
 
-data = model.generate(ROOT.RooArgSet(x, y, z), 20000)
+data = model.generate({x, y, z}, 20000)
 
 # Project pdf and data on x
 # -------------------------------------------------
@@ -51,8 +53,8 @@ model.plotOn(frame)
 
 # Calculate projection of signal and total likelihood on (y,z) observables
 # i.e. integrate signal and composite model over x
-sigyz = sig.createProjection(ROOT.RooArgSet(x))
-totyz = model.createProjection(ROOT.RooArgSet(x))
+sigyz = sig.createProjection({x})
+totyz = model.createProjection({x})
 
 # Construct the log of the signal / signal+background probability
 llratio_func = ROOT.RooFormulaVar("llratio", "log10(@0)-log10(@1)", [sigyz, totyz])
@@ -76,7 +78,7 @@ dataSel.plotOn(frame2)
 # ---------------------------------------------------------------------------------------------
 
 # Generate large number of events for MC integration of pdf projection
-mcprojData = model.generate(ROOT.RooArgSet(x, y, z), 10000)
+mcprojData = model.generate({x, y, z}, 10000)
 
 # Calculate LL ratio for each generated event and select MC events with
 # llratio)0.7

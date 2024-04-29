@@ -9,7 +9,6 @@
 #include <ROOT/RDF/Utils.hxx>
 #include <ROOT/TSeq.hxx>
 #include <ROOT/RTrivialDS.hxx>
-#include <TError.h>
 
 #include <limits>
 #include <memory>
@@ -88,14 +87,14 @@ bool RTrivialDS::SetEntry(unsigned int slot, ULong64_t entry)
 
 void RTrivialDS::SetNSlots(unsigned int nSlots)
 {
-   R__ASSERT(0U == fNSlots && "Setting the number of slots even if the number of slots is different from zero.");
+   assert(0U == fNSlots && "Setting the number of slots even if the number of slots is different from zero.");
 
    fNSlots = nSlots;
    fCounter.resize(fNSlots);
    fCounterAddr.resize(fNSlots);
 }
 
-void RTrivialDS::Initialise()
+void RTrivialDS::Initialize()
 {
    if (fSize == std::numeric_limits<ULong64_t>::max()) {
       // infinite source, nothing to do here

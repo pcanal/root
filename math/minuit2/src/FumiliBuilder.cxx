@@ -130,7 +130,7 @@ FunctionMinimum FumiliBuilder::Minimum(const MnFcn &fcn, const GradientCalculato
       if (edm > edmval) {
          print.Debug("Tolerance not sufficient, continue minimization; Edm", edm, "Requested", edmval);
       } else {
-         // Case when edm < edmval after Heasse but min is flagged eith a  bad edm:
+         // Case when edm < edmval after Heasse but min is flagged with a bad edm:
          // make then a new Function minimum since now edm is ok
          if (min.IsAboveMaxEdm()) {
             min = FunctionMinimum(min.Seed(), min.States(), min.Up());
@@ -265,13 +265,12 @@ FunctionMinimum FumiliBuilder::Minimum(const MnFcn &fcn, const GradientCalculato
          p = MinimumParameters(s0.Vec() + pp.X() * step, pp.Y());
       }
 
-      print.Debug("Before Gradient", fcn.NumOfCalls());
+      print.Debug("Before Gradient - NCalls = ", fcn.NumOfCalls());
 
       FunctionGradient g = gc(p, s0.Gradient());
 
-      print.Debug("After Gradient", fcn.NumOfCalls());
+      print.Debug("After Gradient - NCalls = ", fcn.NumOfCalls());
 
-      // FunctionGradient g = gc(s0.Parameters(), s0.Gradient());
 
       // move Error updator after Gradient since the Value is cached inside
 
@@ -280,7 +279,7 @@ FunctionMinimum FumiliBuilder::Minimum(const MnFcn &fcn, const GradientCalculato
       edm = Estimator().Estimate(g, s0.Error());
 
       print.Debug("Updated new point:", "\n  FVAL     ", p.Fval(), "\n  Parameter", p.Vec(), "\n  Gradient", g.Vec(),
-                  "\n  InvHessian", e.Matrix(), "\n  Hessian", e.Hessian(), "\n  Edm", edm);
+                  "\n  InvHessian", e.InvHessian(), "\n  Hessian", e.Hessian(), "\n  Edm", edm);
 
       if (edm < 0.) {
          print.Warn("Matrix not pos.def., Edm < 0");

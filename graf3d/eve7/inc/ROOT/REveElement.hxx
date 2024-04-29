@@ -17,12 +17,12 @@
 #include <ROOT/REveProjectionBases.hxx>
 
 #include <memory>
+#include <list>
+#include <ostream>
+#include <set>
+#include <string>
 
-#ifdef NLOHMANN_JSON_PROVIDES_FWD_HPP
-#include <nlohmann/json_fwd.hpp>
-#else
 #include <nlohmann/json.hpp>
-#endif
 
 class TGeoMatrix;
 
@@ -286,7 +286,7 @@ protected:
    };
 
    Short_t fImpliedSelected{0};   // How many times the element is implied selected -- needed during destruction.
-   Bool_t  fPickable{0};          // Can element be selected.
+   Bool_t  fPickable{false};          // Can element be selected.
    UChar_t fCSCBits{0};           // Compound Selection Color flags.
 
 public:
@@ -297,7 +297,7 @@ public:
    virtual REveElement* GetSelectionMaster();
    void         SetSelectionMaster(REveElement *el) { fSelectionMaster = el; }
 
-   virtual void FillImpliedSelectedSet(Set_t& impSelSet);
+   virtual void FillImpliedSelectedSet(Set_t& impSelSet, const std::set<int>&);
 
    void   IncImpliedSelected() { ++fImpliedSelected; }
    void   DecImpliedSelected() { --fImpliedSelected; }
@@ -404,7 +404,7 @@ protected:
    REveElement::List_t fNieces;
 
 public:
-   virtual ~REveAuntAsList()
+   ~REveAuntAsList() override
    {
       for (auto &n : fNieces) n->RemoveAunt(this);
    }

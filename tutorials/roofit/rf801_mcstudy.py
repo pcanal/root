@@ -3,7 +3,9 @@
 ## \notebook
 ## Validation and MC studies: toy Monte Carlo study that perform cycles of event generation and fitting
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -61,7 +63,7 @@ model = ROOT.RooAddPdf("model", "g1+g2+a", [bkg, sig], [nbkg, nsig])
 
 mcstudy = ROOT.RooMCStudy(
     model,
-    ROOT.RooArgSet(x),
+    {x},
     Binned=True,
     Silence=True,
     Extended=True,
@@ -87,8 +89,8 @@ frame3 = mcstudy.plotPull(mean, Bins=40, FitGauss=True)
 frame4 = mcstudy.plotNLL(Bins=40)
 
 # Make some histograms from the parameter dataset
-hh_cor_a0_s1f = ROOT.RooAbsData.createHistogram(mcstudy.fitParDataSet(), "hh", a1, YVar=sig1frac)
-hh_cor_a0_a1 = ROOT.RooAbsData.createHistogram(mcstudy.fitParDataSet(), "hh", a0, YVar=a1)
+hh_cor_a0_s1f = mcstudy.fitParDataSet().createHistogram("hh", a1, YVar=sig1frac)
+hh_cor_a0_a1 = mcstudy.fitParDataSet().createHistogram("hh", a0, YVar=a1)
 
 # Access some of the saved fit results from individual toys
 corrHist000 = mcstudy.fitResult(0).correlationHist("c000")

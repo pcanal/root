@@ -12,16 +12,6 @@ set(clad_install_dir ${CMAKE_BINARY_DIR}/etc/cling/)
 # Specify include dirs for clad
 set(CLAD_INCLUDE_DIRS ${clad_install_dir})
 # Clad Libraries
-set(_CLAD_LIBRARY_PATH ${clad_install_dir}/plugins/lib)
-
-# build byproducts only needed by Ninja
-if("${CMAKE_GENERATOR}" STREQUAL "Ninja")
-  set(CLAD_BYPRODUCTS
-     ${_CLAD_LIBRARY_PATH}/${CMAKE_STATIC_LIBRARY_PREFIX}cladPlugin${CMAKE_STATIC_LIBRARY_SUFFIX}
-    ${_CLAD_LIBRARY_PATH}/${CMAKE_STATIC_LIBRARY_PREFIX}cladDifferentiator${CMAKE_STATIC_LIBRARY_SUFFIX}
-  )
-endif()
-
 set(_clad_build_type ${CMAKE_CFG_INTDIR})
 if(MSVC)
   if (winrtdebug)
@@ -30,6 +20,15 @@ if(MSVC)
     set(_clad_build_type Release)
   endif()
 endif(MSVC)
+set(_CLAD_LIBRARY_PATH ${CMAKE_CURRENT_BINARY_DIR}/clad-prefix/src/clad-build/${_clad_build_type}/lib${LLVM_LIBDIR_SUFFIX})
+
+# build byproducts only needed by Ninja
+if("${CMAKE_GENERATOR}" STREQUAL "Ninja")
+  set(CLAD_BYPRODUCTS
+     ${_CLAD_LIBRARY_PATH}/${CMAKE_STATIC_LIBRARY_PREFIX}cladPlugin${CMAKE_STATIC_LIBRARY_SUFFIX}
+    ${_CLAD_LIBRARY_PATH}/${CMAKE_STATIC_LIBRARY_PREFIX}cladDifferentiator${CMAKE_STATIC_LIBRARY_SUFFIX}
+  )
+endif()
 
 if(APPLE)
   set(_clad_extra_cmake_args -DCMAKE_OSX_SYSROOT=${CMAKE_OSX_SYSROOT})
@@ -43,9 +42,9 @@ if (Clang_DIR)
   list(APPEND _clad_extra_cmake_args -DClang_DIR=${Clang_DIR} -DClang_CONFIG_EXTRA_PATH_HINTS=${Clang_Config_ExtraPathHints})
 endif(Clang_DIR)
 
-if (LLVM_TEMPORARILY_ALLOW_OLD_TOOLCHAIN)
-  list(APPEND _clad_extra_cmake_args -DLLVM_TEMPORARILY_ALLOW_OLD_TOOLCHAIN=${LLVM_TEMPORARILY_ALLOW_OLD_TOOLCHAIN})
-endif(LLVM_TEMPORARILY_ALLOW_OLD_TOOLCHAIN)
+if (LLVM_FORCE_USE_OLD_TOOLCHAIN)
+  list(APPEND _clad_extra_cmake_args -DLLVM_FORCE_USE_OLD_TOOLCHAIN=${LLVM_FORCE_USE_OLD_TOOLCHAIN})
+endif(LLVM_FORCE_USE_OLD_TOOLCHAIN)
 
 if (CLING_INCLUDE_TESTS)
   list(APPEND _clad_extra_cmake_args -DLLVM_EXTERNAL_LIT=${LLVM_MAIN_SRC_DIR}/utils/lit/lit.py)
@@ -63,11 +62,20 @@ set(_clad_cmake_logging_settings
 
 list(APPEND _clad_cmake_logging_settings LOG_OUTPUT_ON_FAILURE ON)
 
+#list(APPEND _clad_patches_list "patch1.patch" "patch2.patch")
+#set(_clad_patch_command
+#      ${CMAKE_COMMAND} -E copy_directory
+#      ${CMAKE_SOURCE_DIR}/interpreter/cling/tools/plugins/clad/patches <SOURCE_DIR>
+#      && git checkout <SOURCE_DIR>
+#      && git apply --ignore-space-change --ignore-whitespace ${_clad_patches_list}
+#      )
+
 ExternalProject_Add(
   clad
   GIT_REPOSITORY https://github.com/vgvassilev/clad.git
-  GIT_TAG v0.9
+  GIT_TAG v1.4
   UPDATE_COMMAND ""
+  PATCH_COMMAND ${_clad_patch_command}
   CMAKE_ARGS -G ${CMAKE_GENERATOR}
              -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
              -DCMAKE_C_COMPILER=${CMAKE_C_COMPILER}

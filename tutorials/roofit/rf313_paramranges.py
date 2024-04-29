@@ -4,7 +4,9 @@
 ## Multidimensional models: working with parameterized ranges to define non-rectangular
 ## regions for fitting and integration
 ##
+## \macro_image
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C++ version)
@@ -48,7 +50,7 @@ z.setRange("R", zlo, zhi)
 # ----------------------------------------------------------------------------------
 
 # Create integral over normalized pdf model over x,y, in "R" region
-intPdf = pxyz.createIntegral(ROOT.RooArgSet(x, y, z), ROOT.RooArgSet(x, y, z), "R")
+intPdf = pxyz.createIntegral({x, y, z}, {x, y, z}, "R")
 
 # Plot value of integral as function of pdf parameter z0
 frame = z0.frame(Title="Integral of pxyz over x,y, in region R")

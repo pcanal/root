@@ -18,12 +18,13 @@
 #include "ROOT/RBrowser.hxx"
 
 namespace ROOT {
-namespace Experimental {
 
 class RWebBrowserImp : public TBrowserImp {
 
    std::shared_ptr<RBrowser> fWebBrowser;  ///< actual browser used
    Int_t fX{-1}, fY{-1}, fWidth{0}, fHeight{0}; ///< window coordinates
+
+   void ShowWarning();
 
 public:
    RWebBrowserImp(TBrowser *b = nullptr);
@@ -42,7 +43,6 @@ public:
    ClassDefOverride(RWebBrowserImp,0)  // browser implementation for RBrowser
 };
 
-} // namespace Experimental
 } // namespace ROOT
 
 #endif

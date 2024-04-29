@@ -6,7 +6,7 @@
  * For the list of contributors see $ROOTSYS/README/CREDITS.             *
  *************************************************************************/
 
-/// \file ROOT/RSysFile.cxx
+/// \file
 /// \ingroup rbrowser
 /// \author Sergey Linev <S.Linev@gsi.de>
 /// \date 2019-10-15
@@ -39,10 +39,9 @@
 
 using namespace std::string_literals;
 
-using namespace ROOT::Experimental::Browsable;
+using namespace ROOT::Browsable;
 
 namespace ROOT {
-namespace Experimental {
 namespace Browsable {
 
 
@@ -284,9 +283,9 @@ public:
          snprintf(tmp, sizeof(tmp), "%d-%02d-%02d %02d:%02d", newtime->tm_year + 1900,
                   newtime->tm_mon+1, newtime->tm_mday, newtime->tm_hour,
                   newtime->tm_min);
-         item->mtime = tmp;
+         item->SetMTime(tmp);
       } else {
-         item->mtime = "1901-01-01 00:00";
+         item->SetMTime("1901-01-01 00:00");
       }
 
       // file type
@@ -314,16 +313,16 @@ public:
                ((item->type & kS_IROTH) ? 'r' : '-'),
                ((item->type & kS_IWOTH) ? 'w' : '-'),
                ((item->type & kS_ISVTX) ? 't' : ((item->type & kS_IXOTH) ? 'x' : '-')));
-      item->ftype = tmp;
+      item->SetType(tmp);
 
       struct UserGroup_t *user_group = gSystem->GetUserInfo(item->uid);
       if (user_group) {
-         item->fuid = user_group->fUser;
-         item->fgid = user_group->fGroup;
+         item->SetUid(user_group->fUser.Data());
+         item->SetGid(user_group->fGroup.Data());
          delete user_group;
       } else {
-         item->fuid = std::to_string(item->uid);
-         item->fgid = std::to_string(item->gid);
+         item->SetUid(std::to_string(item->uid));
+         item->SetGid(std::to_string(item->gid));
       }
 
       return item;
@@ -348,7 +347,6 @@ public:
 
 
 } // namespace Browsable
-} // namespace Experimental
 } // namespace ROOT
 
 
@@ -369,7 +367,9 @@ std::string RSysFile::GetFileIcon(const std::string &fname)
        (EndsWith(".cxx")) ||
        (EndsWith(".c++")) ||
        (EndsWith(".cxx")) ||
+       (EndsWith(".cc")) ||
        (EndsWith(".h")) ||
+       (EndsWith(".hh")) ||
        (EndsWith(".hpp")) ||
        (EndsWith(".hxx")) ||
        (EndsWith(".h++")) ||
@@ -511,7 +511,11 @@ std::string RSysFile::GetContent(const std::string &kind)
 
       auto pos = GetName().rfind(".");
 
-      return "data:image/"s  + GetName().substr(pos+1) + ";base64,"s + encode.Data();
+      std::string image_kind = GetName().substr(pos+1);
+      std::transform(image_kind.begin(), image_kind.end(), image_kind.begin(), ::tolower);
+      if (image_kind == "svg") image_kind = "svg+xml";
+
+      return "data:image/"s  + image_kind + ";base64,"s + encode.Data();
    }
 
    if (GetContentKind(kind) == kFileName) {

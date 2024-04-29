@@ -20,9 +20,10 @@
 #include <ROOT/Browsable/RElement.hxx>
 
 namespace ROOT {
-namespace Experimental {
 
-/** \class ROOT::Experimental::RBrowserWidget
+class RBrowser;
+
+/** \class ROOT::RBrowserWidget
 \ingroup rbrowser
 Abstract Web-based widget, which can be used in the RBrowser
 Used to embed canvas, geometry viewer and potentially any other widgets
@@ -30,14 +31,20 @@ Used to embed canvas, geometry viewer and potentially any other widgets
 
 class RBrowserWidget {
 
+   friend class RBrowser;
+
    std::string fName;   ///<!  widget name
 
    Browsable::RElementPath_t  fPath;  ///<! path of drawn element
+
+   RBrowser  *fBrowser{nullptr};
 
 public:
 
    explicit RBrowserWidget(const std::string &name) : fName(name) {};
    virtual ~RBrowserWidget() = default;
+
+   RBrowser *GetBrowser() const { return fBrowser; }
 
    virtual void Show(const std::string &) = 0;
 
@@ -53,8 +60,11 @@ public:
    virtual std::string GetUrl() = 0;
    virtual std::string GetTitle() { return ""; }
 
-   virtual bool DrawElement(std::shared_ptr<Browsable::RElement> &, const std::string &) { return false; }
+   virtual bool DrawElement(std::shared_ptr<Browsable::RElement> &, const std::string & = "") { return false; }
    virtual std::string SendWidgetContent() { return ""; }
+   std::string SendWidgetTitle();
+
+   virtual void CheckModified() {}
 };
 
 class RBrowserWidgetProvider {
@@ -77,8 +87,6 @@ public:
    static std::shared_ptr<RBrowserWidget> CreateWidgetFor(const std::string &kind, const std::string &name, std::shared_ptr<Browsable::RElement> &element);
 };
 
-
-} // namespace Experimental
 } // namespace ROOT
 
 #endif

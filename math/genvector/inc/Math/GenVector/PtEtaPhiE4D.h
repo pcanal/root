@@ -46,6 +46,8 @@ namespace Math {
     Phi is restricted to be in the range [-PI,PI)
 
     @ingroup GenVector
+
+    @sa Overview of the @ref GenVector "physics vector library"
 */
 
 template <class ScalarType>
@@ -54,6 +56,7 @@ class PtEtaPhiE4D {
 public :
 
    typedef ScalarType Scalar;
+   static constexpr unsigned int Dimension = 4U;
 
    // --------- Constructors ---------------
 
@@ -73,7 +76,7 @@ public :
       Pt(), Eta(), Phi() and E()
    */
    template <class CoordSystem >
-   explicit PtEtaPhiE4D(const CoordSystem & c) :
+   explicit constexpr PtEtaPhiE4D(const CoordSystem & c) :
       fPt(c.Pt()), fEta(c.Eta()), fPhi(c.Phi()), fE(c.E())  { }
 
    // for g++  3.2 and 3.4 on 32 bits found that the compiler generated copy ctor and assignment are much slower

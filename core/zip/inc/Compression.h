@@ -16,6 +16,7 @@
 
 #include <cstring> // For mempcpy
 #include <vector>
+#include <string>
 
 namespace ROOT {
 
@@ -73,7 +74,7 @@ struct RCompressionSetting {
          kDefaultZLIB = 1,
          /// Compression level reserved for LZ4 compression algorithm (trade-off between file ratio/decompression speed)
          kDefaultLZ4 = 4,
-         /// Compression level reserved for ZSYD compression algorithm (trade-off between file ratio/decompression speed)
+         /// Compression level reserved for ZSTD compression algorithm (trade-off between file ratio/decompression speed)
          kDefaultZSTD = 5,
          /// Compression level reserved for old ROOT compression algorithm
          kDefaultOld = 6,
@@ -105,6 +106,8 @@ struct RCompressionSetting {
          kUndefined
       };
    };
+
+   static std::string AlgorithmToString(EAlgorithm::EValues algorithm);
 };
 
 enum ECompressionAlgorithm {

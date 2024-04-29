@@ -5,7 +5,7 @@
  * Project: TMVA - a Root-integrated toolkit for multivariate data analysis  *
  * Package: TMVA                                                             *
  * Class  : DataSetFactory                                                   *
- * Web    : http://tmva.sourceforge.net                                      *
+ *                                        *
  *                                                                           *
  * Description:                                                              *
  *      Implementation (see header for description)                          *
@@ -23,7 +23,7 @@
  *      U. of Bonn, Germany                                                  *
  * Redistribution and use in source and binary forms, with or without        *
  * modification, are permitted according to the terms listed in LICENSE      *
- * (http://tmva.sourceforge.net/LICENSE)                                     *
+ * (see tmva/doc/LICENSE)                                     *
  *****************************************************************************/
 
 /*! \class TMVA::DataSetFactory
@@ -70,7 +70,7 @@ Class that contains all the data information
 #include "TMVA/Types.h"
 #include "TMVA/VariableInfo.h"
 
-using namespace std;
+using std::setiosflags, std::ios;
 
 //TMVA::DataSetFactory* TMVA::DataSetFactory::fgInstance = 0;
 
@@ -129,7 +129,7 @@ TMVA::DataSet* TMVA::DataSetFactory::CreateDataSet( TMVA::DataSetInfo& dsi,
    if (ds->GetNEvents() > 1 && fComputeCorrelations ) {
       CalcMinMax(ds,dsi);
 
-      // from the the final dataset build the correlation matrix
+      // from the final dataset build the correlation matrix
       for (UInt_t cl = 0; cl< dsi.GetNClasses(); cl++) {
          const TString className = dsi.GetClassInfo(cl)->GetName();
          dsi.SetCorrelationMatrix( className, CalcCorrelationMatrix( ds, cl ) );
@@ -174,11 +174,16 @@ TMVA::DataSet* TMVA::DataSetFactory::BuildDynamicDataSet( TMVA::DataSetInfo& dsi
    }
 
    std::vector<VariableInfo>& spectatorinfos = dsi.GetSpectatorInfos();
-   it = spectatorinfos.begin();
-   for (;it!=spectatorinfos.end();++it) evdyn->push_back( (Float_t*)(*it).GetExternalLink() );
+   std::vector<char> spectatorTypes;
+   spectatorTypes.reserve(spectatorinfos.size());
+   for (auto &&info: spectatorinfos) {
+      evdyn->push_back( (Float_t*)info.GetExternalLink() );
+      spectatorTypes.push_back(info.GetVarType());
+   }
 
    TMVA::Event * ev = new Event((const std::vector<Float_t*>*&)evdyn, varinfos.size());
-   std::vector<Event*>* newEventVector = new std::vector<Event*>;
+   ev->SetSpectatorTypes(spectatorTypes);
+   std::vector<Event *> *newEventVector = new std::vector<Event *>;
    newEventVector->push_back(ev);
 
    ds->SetEventCollection(newEventVector, Types::kTraining);
@@ -349,7 +354,7 @@ void TMVA::DataSetFactory::ChangeToNewTree( TreeInfo& tinfo, const DataSetInfo &
    for (formIt = fTargetFormulas.begin(), formItEnd = fTargetFormulas.end(); formIt!=formItEnd; ++formIt) if (*formIt) delete *formIt;
    fTargetFormulas.clear();
    for (UInt_t i=0; i<dsi.GetNTargets(); i++) {
-      ttf = new TTreeFormula( Form( "Formula%s", dsi.GetTargetInfo(i).GetInternalName().Data() ),
+      ttf = new TTreeFormula( TString::Format( "Formula%s", dsi.GetTargetInfo(i).GetInternalName().Data() ),
                               dsi.GetTargetInfo(i).GetExpression().Data(), tr );
       CheckTTreeFormula( ttf, dsi.GetTargetInfo(i).GetExpression(), hasDollar );
       fTargetFormulas.push_back( ttf );
@@ -362,7 +367,7 @@ void TMVA::DataSetFactory::ChangeToNewTree( TreeInfo& tinfo, const DataSetInfo &
    for (formIt = fSpectatorFormulas.begin(), formItEnd = fSpectatorFormulas.end(); formIt!=formItEnd; ++formIt) if (*formIt) delete *formIt;
    fSpectatorFormulas.clear();
    for (UInt_t i=0; i<dsi.GetNSpectators(); i++) {
-      ttf = new TTreeFormula( Form( "Formula%s", dsi.GetSpectatorInfo(i).GetInternalName().Data() ),
+      ttf = new TTreeFormula( TString::Format( "Formula%s", dsi.GetSpectatorInfo(i).GetInternalName().Data() ),
                               dsi.GetSpectatorInfo(i).GetExpression().Data(), tr );
       CheckTTreeFormula( ttf, dsi.GetSpectatorInfo(i).GetExpression(), hasDollar );
       fSpectatorFormulas.push_back( ttf );
@@ -1254,7 +1259,6 @@ TMVA::DataSetFactory::MixEvents( DataSetInfo& dsi,
       if( splitMode == "ALTERNATE" ){
          Log() << kDEBUG << Form("Dataset[%s] : ",dsi.GetName())<< "split 'ALTERNATE'" << Endl;
          Int_t nTraining = availableTraining;
-         Int_t nTesting  = availableTesting;
          for( EventVector::iterator it = eventVectorUndefined.begin(), itEnd = eventVectorUndefined.end(); it != itEnd; ){
             ++nTraining;
             if( nTraining <= requestedTraining ){
@@ -1262,7 +1266,6 @@ TMVA::DataSetFactory::MixEvents( DataSetInfo& dsi,
                ++it;
             }
             if( it != itEnd ){
-               ++nTesting;
                eventVectorTesting.insert( eventVectorTesting.end(), (*it) );
                ++it;
             }
@@ -1491,10 +1494,7 @@ TMVA::DataSetFactory::RenormEvents( TMVA::DataSetInfo& dsi,
 
    // print rescaling info
    // ---------------------------------
-   // compute sizes and sums of weights
-   Int_t trainingSize = 0;
-   Int_t testingSize  = 0;
-
+   // compute sums of weights
    ValuePerClass trainingSumWeightsPerClass( dsi.GetNClasses() );
    ValuePerClass testingSumWeightsPerClass( dsi.GetNClasses() );
 
@@ -1511,9 +1511,6 @@ TMVA::DataSetFactory::RenormEvents( TMVA::DataSetInfo& dsi,
    for( UInt_t cls = 0, clsEnd = dsi.GetNClasses(); cls < clsEnd; ++cls ){
       trainingSizePerClass.at(cls) = tmpEventVector[Types::kTraining].at(cls).size();
       testingSizePerClass.at(cls)  = tmpEventVector[Types::kTesting].at(cls).size();
-
-      trainingSize += trainingSizePerClass.back();
-      testingSize  += testingSizePerClass.back();
 
       // the functional solution
       // sum up the weights in Double_t although the individual weights are Float_t to prevent rounding issues in addition of floating points

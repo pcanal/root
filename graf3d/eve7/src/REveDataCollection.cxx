@@ -22,7 +22,9 @@
 #include "TList.h"
 #include "TBaseClass.h"
 
+#include <memory>
 #include <sstream>
+#include <regex>
 
 #include <nlohmann/json.hpp>
 
@@ -43,8 +45,8 @@ REveDataItemList::REveDataItemList(const std::string& n, const std::string& t):
       REveDataItemList::DummyItemsChange(collection, ids);
    });
 
-   SetFillImpliedSelectedDelegate([&](REveDataItemList *collection, REveElement::Set_t &impSelSet) {
-      REveDataItemList::DummyFillImpliedSelected(collection, impSelSet);
+   SetFillImpliedSelectedDelegate([&](REveDataItemList *collection, REveElement::Set_t &impSelSet, const std::set<int>& sec_idcs) {
+      REveDataItemList::DummyFillImpliedSelected(collection, impSelSet, sec_idcs);
    });
 
    SetupDefaultColorAndTransparency(REveDataCollection::fgDefaultColor, true, true);
@@ -95,14 +97,11 @@ void REveDataItemList::ItemChanged(Int_t idx)
 
 //______________________________________________________________________________
 
-void REveDataItemList::FillImpliedSelectedSet( Set_t& impSelSet)
+void REveDataItemList::FillImpliedSelectedSet(Set_t &impSelSet, const std::set<int> &sec_idcs)
 {
-   /*
-   printf("REveDataCollection::FillImpliedSelectedSet colecction setsize %zu\n",   RefSelectedSet().size());
-   for (auto x : RefSelectedSet())
-      printf("%d \n", x);
-   */
-   fHandlerFillImplied( this ,  impSelSet);
+   // printf("REveDataItemList::FillImpliedSelectedSet colecction setsize %zu\n", sec_idcs.size());
+   RefSelectedSet() = sec_idcs;
+   fHandlerFillImplied(this, impSelSet, sec_idcs);
 }
 
 //______________________________________________________________________________
@@ -142,6 +141,28 @@ Bool_t REveDataItemList::SetRnrState(Bool_t iRnrSelf)
 
    return ret;
 }
+
+
+//______________________________________________________________________________
+void REveDataItemList::ProcessSelectionStr(ElementId_t id, bool multi, bool secondary, const char* secondary_idcs)
+{
+   static const REveException eh("REveDataItemList::ProcessSelectionStr ");
+   static const std::regex comma_re("\\s*,\\s*", std::regex::optimize);
+   std::string   str(secondary_idcs);
+   std::set<int> sis;
+   std::sregex_token_iterator itr(str.begin(), str.end(), comma_re, -1);
+   std::sregex_token_iterator end;
+
+   try {
+      while (itr != end) sis.insert(std::stoi(*itr++));
+   }
+   catch (const std::invalid_argument&) {
+      throw eh + "invalid secondary index argument '" + *itr + "' - must be int.";
+   }
+
+   ProcessSelection(id, multi, secondary, sis);
+}
+
 
 //______________________________________________________________________________
 void REveDataItemList::ProcessSelection(ElementId_t selectionId, bool multi, bool secondary, const std::set<int>& secondary_idcs)
@@ -187,7 +208,7 @@ std::string REveDataItemList::GetHighlightTooltip(const std::set<int>& secondary
 //______________________________________________________________________________
 void REveDataItemList::AddTooltipExpression(const std::string &title, const std::string &expr, bool init)
 {
-   fTooltipExpressions.push_back(std::unique_ptr<TTip>(new TTip()));
+   fTooltipExpressions.push_back(std::make_unique<TTip>());
    TTip *tt = fTooltipExpressions.back().get();
 
    tt->fTooltipTitle = title;
@@ -224,7 +245,7 @@ void REveDataItemList::DummyItemsChange(REveDataItemList*, const std::vector<int
 
 
 //______________________________________________________________________________
-void REveDataItemList::DummyFillImpliedSelected(REveDataItemList*, REveElement::Set_t&)
+void REveDataItemList::DummyFillImpliedSelected(REveDataItemList*, REveElement::Set_t&, const std::set<int>&)
 {
    if (gDebug) {
       printf("REveDataItemList::DummyFillImpliedSelectedDelegate not implemented\n");
@@ -239,7 +260,7 @@ REveDataCollection::REveDataCollection(const std::string& n, const std::string& 
    REveElement(n, t)
 {
    std::string lname = n + "Items";
-   fItemList = new REveDataItemList(lname.c_str());
+   fItemList = new REveDataItemList(lname);
    AddElement(fItemList);
 
    SetupDefaultColorAndTransparency(fgDefaultColor, true, true);
@@ -257,24 +278,55 @@ void REveDataCollection::SetFilterExpr(const char* filter)
 {
    static const REveException eh("REveDataCollection::SetFilterExpr ");
 
-   if (!fItemClass) throw eh + "item class has to be set before the filter expression.";
+   if (!fItemClass)
+      throw eh + "item class has to be set before the filter expression.";
 
-   fFilterExpr = filter;
-
-   std::stringstream s;
-   s << "*((std::function<bool(" << fItemClass->GetName() << "*)>*)" << std::hex << std::showbase << (size_t)&fFilterFoo
-     << ") = [](" << fItemClass->GetName() << "* p){" << fItemClass->GetName() << " &i=*p; return ("
-     << fFilterExpr.Data() << "); };";
-
-   // printf("%s\n", s.Data());
-   try {
-      gROOT->ProcessLine(s.str().c_str());
-      // AMT I don't know why ApplyFilter call is separated
-      ApplyFilter();
+   if (filter) {
+      // printf("filter '%s'\n", filter);
+      int ibeg = 0, iend = strlen(filter);
+      while (ibeg < iend && isspace(filter[ibeg])) ++ibeg;
+      while (iend > ibeg && isspace(filter[iend-1])) --iend;
+      // printf("cleaned up beg=%d end=%d len =%d\n", ibeg, iend, (int)strlen(filter));
+      fFilterExpr = TString(filter + ibeg, iend - ibeg);
+   } else {
+      fFilterExpr = "";
    }
-   catch (const std::exception &exc)
+
+   if (fFilterExpr.Length())
    {
-      R__LOG_ERROR(REveLog()) << "EveDataCollection::SetFilterExpr" << exc.what();
+      std::stringstream s;
+      s << "*((std::function<bool(" << fItemClass->GetName() << "*)>*)" << std::hex << std::showbase
+        << (size_t)&fFilterFoo << ") = [](" << fItemClass->GetName() << "* p){" << fItemClass->GetName()
+        << " &i=*p; return (" << fFilterExpr.Data() << "); };";
+
+      // printf("%s\n", s.Data());
+      try {
+         gROOT->ProcessLine(s.str().c_str());
+         // AMT I don't know why ApplyFilter call is separated
+         ApplyFilter();
+      }
+      catch (const std::exception &exc)
+      {
+         R__LOG_ERROR(REveLog()) << "EveDataCollection::SetFilterExpr" << exc.what();
+      }
+   }
+   else
+   {
+      // Remove filter
+      fFilterFoo = nullptr;
+      Ids_t ids;
+      int idx = 0;
+      for (auto &ii : fItemList->fItems) {
+         if (ii->GetFiltered()) {
+            ii->SetFiltered(false);
+            ids.push_back(idx);
+         }
+         idx++;
+      }
+
+      StampObjProps();
+      fItemList->StampObjProps();
+      fItemList->fHandlerItemsChange(fItemList, ids);
    }
 }
 
@@ -282,7 +334,7 @@ void REveDataCollection::ApplyFilter()
 {
    if (!fFilterFoo)
       return;
-   
+
    Ids_t ids;
    int idx = 0;
    for (auto &ii : fItemList->fItems)
@@ -304,68 +356,50 @@ void REveDataCollection::ApplyFilter()
 
 void  REveDataCollection::StreamPublicMethods(nlohmann::json &j) const
 {
-   struct PubMethods
-   {
-      void FillJSON(TClass* c, nlohmann::json & arr)
-      {
-         TString  ctor = c->GetName(), dtor = "~";
-         {
-            int i = ctor.Last(':');
-            if (i != kNPOS)
-            {
-               ctor.Replace(0, i + 1, "");
-            }
-            dtor += ctor;
-         }
+   j["fPublicFunctions"] = nlohmann::json::array();
+   TMethod *meth;
+   TIter next(fItemClass->GetListOfAllPublicMethods());
+   while ((meth = (TMethod *)next())) {
+      // Filter out ctor, dtor, some ROOT stuff.
 
-         TMethod *meth;
-         TIter    next(c->GetListOfMethods());
-         while ((meth = (TMethod*) next()))
-         {
-            // Filter out ctor, dtor, some ROOT stuff.
-            {
-               TString m(meth->GetName());
-               if (m == ctor || m == dtor ||
-                   m == "Class" || m == "Class_Name" || m == "Class_Version" || m == "Dictionary" || m == "IsA" ||
-                   m == "DeclFileName" || m == "ImplFileName" || m == "DeclFileLine" || m == "ImplFileLine" ||
-                   m == "Streamer" || m == "StreamerNVirtual" || m == "ShowMembers" ||
-                   m == "CheckTObjectHashConsistency")
-               {
-                  continue;
-               }
-            }
+      TString m(meth->GetName());
 
-            TString     ms;
-            TMethodArg *ma;
-            TIter       next_ma(meth->GetListOfMethodArgs());
-            while ((ma = (TMethodArg*) next_ma()))
-            {
-               if ( ! ms.IsNull()) ms += ", ";
-
-               ms += ma->GetTypeName();
-               ms += " ";
-               ms += ma->GetName();
-            }
-            std::string entry(TString::Format("i.%s(%s)",meth->GetName(),ms.Data()).Data());
-            nlohmann::json jm ;
-            jm["f"] = entry;
-            jm["r"] = meth->GetReturnTypeName();
-            jm["c"] = c->GetName();
-            arr.push_back(jm);
-         }
-         {
-            TBaseClass *base;
-            TIter       blnext(c->GetListOfBases());
-            while ((base = (TBaseClass*) blnext()))
-            {
-               FillJSON(base->GetClassPointer(), arr);
-            }
-         }
+      if (m == "Class" || m == "Class_Name" || m == "Class_Version" || m == "Dictionary" || m == "IsA" ||
+          m == "DeclFileName" || m == "ImplFileName" || m == "DeclFileLine" || m == "ImplFileLine" || m == "Streamer" ||
+          m == "StreamerNVirtual" || m == "ShowMembers" || m == "CheckTObjectHashConsistency") {
+         continue;
       }
-   };
-   j["fPublicFunctions"]  = nlohmann::json::array();
-   PubMethods pm;
-   pm.FillJSON(fItemClass, j["fPublicFunctions"]);
+
+      if (m.BeginsWith('~'))
+         continue;
+
+      if (m.Contains("operator"))
+         continue;
+
+      if (meth->GetListOfMethodArgs()->GetLast() > 1)
+         continue;
+
+      if (strcmp(meth->GetReturnTypeName(),"void") == 0)
+         continue;
+
+      TString ms;
+      TMethodArg *ma;
+      TIter next_ma(meth->GetListOfMethodArgs());
+      while ((ma = (TMethodArg *)next_ma())) {
+         if (!ms.IsNull())
+            ms += ", ";
+
+         ms += ma->GetTypeName();
+         ms += " ";
+         ms += ma->GetName();
+      }
+      std::string entry(TString::Format("i.%s(%s)", meth->GetName(), ms.Data()).Data());
+      nlohmann::json jm;
+      jm["f"] = entry;
+      jm["r"] = meth->GetReturnTypeName();
+      jm["c"] = meth->GetClass()->GetName();
+      j["fPublicFunctions"].push_back(jm);
+   }
 }
 
 //______________________________________________________________________________

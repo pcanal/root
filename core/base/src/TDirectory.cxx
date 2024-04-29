@@ -33,6 +33,12 @@ Bool_t TDirectory::fgAddDirectory = kTRUE;
 
 const Int_t  kMaxLen = 2048;
 
+static std::atomic_flag *GetCurrentDirectoryLock()
+{
+   thread_local std::atomic_flag gDirectory_lock = ATOMIC_FLAG_INIT;
+   return &gDirectory_lock;
+}
+
 /** \class TDirectory
 \ingroup Base
 
@@ -90,7 +96,9 @@ TDirectory::TDirectory(const char *name, const char *title, Option_t * /*classna
 
 TDirectory::~TDirectory()
 {
-   if (!gROOT) {
+   // Use gROOTLocal to avoid triggering undesired initialization of gROOT.
+   // For example in compiled C++ programs that don't use it directly.
+   if (!ROOT::Internal::gROOTLocal) {
       delete fList;
       return; //when called by TROOT destructor
    }
@@ -207,7 +215,10 @@ void TDirectory::Append(TObject *obj, Bool_t replace /* = kFALSE */)
    }
 
    fList->Add(obj);
-   obj->SetBit(kMustCleanup);
+   // A priori, a `TDirectory` object is assumed to not have shared ownership.
+   // If it is, let's rely on the user to update the bit.
+   if (!dynamic_cast<TDirectory*>(obj))
+      obj->SetBit(kMustCleanup);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -262,7 +273,12 @@ void TDirectory::CleanTargets()
          const auto ctxt = fContext;
          ctxt->fDirectoryWait = true;
 
-         ctxt->fDirectory = nullptr;
+         // If fDirectory is assigned to gROOT but we do not unregister ctxt
+         // (and/or stop unregister for gROOT) then ~TContext will call Unregister on gROOT.
+         // Then unregister of this ctxt and its Previous context can actually be run
+         // in parallel (this takes the gROOT lock, Previous takes the lock of fDirectory)
+         // and thus step on each other.
+         ctxt->fDirectory = nullptr; // Can not be gROOT
 
          if (ctxt->fActiveDestructor) {
             extraWait.push_back(fContext);
@@ -272,9 +288,30 @@ void TDirectory::CleanTargets()
          fContext = next;
       }
 
-      for(auto ptr : fGDirectories) {
+      // Now loop through the set of thread local 'gDirectory' that
+      // have a one point or another pointed to this directory.
+      for (auto &ptr : fGDirectories) {
+         // If the thread local gDirectory still point to this directory
+         // we need to reset it using the following sematic:
+         // we fall back to the mother/owner of this directory or gROOTLocal
+         // if there is no parent or nullptr if the current object is gROOTLocal.
          if (ptr->load() == this) {
-            (*ptr) = nullptr;
+            TDirectory *next = GetMotherDir();
+            if (!next || next == this) {
+               if (this == ROOT::Internal::gROOTLocal) { /// in that case next == this.
+                  next = nullptr;
+               } else {
+                  next = ROOT::Internal::gROOTLocal;
+               }
+            } else {
+               // We can not use 'cd' as this would access the current thread
+               // rather than the thread corresponding to that gDirectory.
+               next->RegisterGDirectory(ptr);
+            }
+            // Actually do the update of the thread local gDirectory
+            // using its object specific lock.
+            auto This = this;
+            ptr->compare_exchange_strong(This, next);
          }
       }
    }
@@ -282,21 +319,13 @@ void TDirectory::CleanTargets()
       // Wait until the TContext is done spinning
       // over the lock.
       while(context->fActiveDestructor);
+      // And now let the TContext destructor finish.
       context->fDirectoryWait = false;
    }
 
-   if (gDirectory == this) {
-      TDirectory *cursav = GetMotherDir();
-      if (cursav && cursav != this) {
-         cursav->cd();
-      } else {
-         if (this == gROOT) {
-            gDirectory = nullptr;
-         } else {
-            gROOT->cd();
-         }
-      }
-   }
+   // Wait until all register attempts are done.
+   while(fContextPeg) {}
+
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -382,15 +411,27 @@ TObject *TDirectory::CloneObject(const TObject *obj, Bool_t autoadd /* = kTRUE *
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// Return the (address of) a shared pointer to the struct holding the
+/// actual thread local gDirectory pointer and the atomic_flag for its lock.
+TDirectory::SharedGDirectory_t &TDirectory::GetSharedLocalCurrentDirectory()
+{
+   using shared_ptr_type = TDirectory::SharedGDirectory_t;
+
+   // Note in previous implementation every time gDirectory was lookup in
+   // a thread, if it was set to nullptr it would be reset to gROOT.  This
+   // was unexpected and this routine is not re-introducing this issue.
+   thread_local shared_ptr_type currentDirectory =
+      std::make_shared<shared_ptr_type::element_type>(ROOT::Internal::gROOTLocal);
+
+   return currentDirectory;
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// Return the current directory for the current thread.
 
 std::atomic<TDirectory*> &TDirectory::CurrentDirectory()
 {
-   static std::atomic<TDirectory*> currentDirectory{nullptr};
-   if (!gThreadTsd)
-      return currentDirectory;
-   else
-      return *(std::atomic<TDirectory*>*)(*gThreadTsd)(&currentDirectory,ROOT::kDirectoryThreadSlot);
+   return *GetSharedLocalCurrentDirectory().get();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -492,6 +533,23 @@ TDirectory *TDirectory::GetDirectory(const char *apath,
 ////////////////////////////////////////////////////////////////////////////////
 /// Change current directory to "this" directory.
 ///
+/// Returns kTRUE (it's guaranteed to succeed).
+
+Bool_t TDirectory::cd()
+{
+   auto &thread_local_gdirectory = GetSharedLocalCurrentDirectory();
+
+   RegisterGDirectory(thread_local_gdirectory);
+
+   thread_local_gdirectory->exchange(this);
+
+   return kTRUE;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Change current directory to "this" directory or to the directory described
+/// by the path if given one.
+///
 /// Using path one can change the current directory to "path". The absolute path
 /// syntax is: `file.root:/dir1/dir2`
 /// where `file.root` is the file and `/dir1/dir2` the desired subdirectory
@@ -507,7 +565,8 @@ Bool_t TDirectory::cd(const char *path)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Change current directory to "this" directory.
+/// Change current directory to "this" directory or to the directory described
+/// by the path if given one.
 ///
 /// Using path one can
 /// change the current directory to "path". The absolute path syntax is:
@@ -521,16 +580,10 @@ Bool_t TDirectory::cd(const char *path)
 
 Bool_t TDirectory::cd1(const char *apath)
 {
-   Int_t nch = 0;
-   if (apath) nch = strlen(apath);
-   if (!nch) {
-      auto &global = CurrentDirectory();
-      RegisterGDirectory(&global);
-      global = this;
-      return kTRUE;
-   }
+   if (!apath || !apath[0])
+      return this->cd();
 
-   TDirectory *where = GetDirectory(apath,kTRUE,"cd");
+   TDirectory *where = GetDirectory(apath, kTRUE, "cd");
    if (where) {
       where->cd();
       return kTRUE;
@@ -557,17 +610,17 @@ Bool_t TDirectory::Cd(const char *path)
 /// `file.root:/dir1/dir2`
 /// where file.root is the file and `/dir1/dir2` the desired subdirectory
 /// in the file.
+/// Relative syntax is relative to the current directory `gDirectory`, e.g.: `../aa`.
 ///
 /// Returns kFALSE in case path does not exist.
 
 Bool_t TDirectory::Cd1(const char *apath)
 {
    // null path is always true (i.e. stay in the current directory)
-   Int_t nch = 0;
-   if (apath) nch = strlen(apath);
-   if (!nch) return kTRUE;
+   if (!apath || !apath[0])
+      return kTRUE;
 
-   TDirectory *where = gDirectory->GetDirectory(apath,kTRUE,"Cd");
+   TDirectory *where = gDirectory->GetDirectory(apath, kTRUE, "Cd");
    if (where) {
       where->cd();
       return kTRUE;
@@ -581,7 +634,6 @@ Bool_t TDirectory::Cd1(const char *apath)
 void TDirectory::Clear(Option_t *)
 {
    if (fList) fList->Clear();
-
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1150,7 +1202,8 @@ void TDirectory::pwd() const
 
 void TDirectory::RecursiveRemove(TObject *obj)
 {
-   fList->RecursiveRemove(obj);
+   if (fList)
+      fList->RecursiveRemove(obj);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1182,41 +1235,44 @@ void TDirectory::rmdir(const char *name)
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Save object in filename,
-/// if filename is 0 or "", a file with "objectname.root" is created.
+/// if filename is `nullptr` or "", a file with "<objectname>.root" is created.
 /// The name of the key is the object name.
+/// By default new file will be created. Using option "a", one can append object
+/// to the existing ROOT file.
 /// If the operation is successful, it returns the number of bytes written to the file
 /// otherwise it returns 0.
 /// By default a message is printed. Use option "q" to not print the message.
 /// If filename contains ".json" extension, JSON representation of the object
 /// will be created and saved in the text file. Such file can be used in
-/// JavaScript ROOT (https://root.cern.ch/js/) to display object in web browser
+/// JavaScript ROOT (https://root.cern/js/) to display object in web browser
 /// When creating JSON file, option string may contain compression level from 0 to 3 (default 0)
 
 Int_t TDirectory::SaveObjectAs(const TObject *obj, const char *filename, Option_t *option) const
 {
+   // option can contain single letter args: "a" for append, "q" for quiet in any combinations
+
    if (!obj) return 0;
    Int_t nbytes = 0;
-   TString fname = filename;
-   if (!filename || !filename[0]) {
-      fname.Form("%s.root",obj->GetName());
-   }
-   TString cmd;
+   TString fname, opt = option, cmd;
+   if (filename && *filename)
+      fname = filename;
+   else
+      fname.Form("%s.root", obj->GetName());
+   opt.ToLower();
+
    if (fname.Index(".json") > 0) {
-      cmd.Form("TBufferJSON::ExportToFile(\"%s\",(TObject*) %s, \"%s\");", fname.Data(), TString::LLtoa((Longptr_t)obj, 10).Data(), (option ? option : ""));
+      cmd.Form("TBufferJSON::ExportToFile(\"%s\", (TObject *) 0x%zx, \"%s\");", fname.Data(), (size_t) obj, (option ? option : ""));
       nbytes = gROOT->ProcessLine(cmd);
    } else {
-      cmd.Form("TFile::Open(\"%s\",\"recreate\");",fname.Data());
+      cmd.Form("TFile::Open(\"%s\",\"%s\");", fname.Data(), opt.Contains("a") ? "update" : "recreate");
       TContext ctxt; // The TFile::Open will change the current directory.
       TDirectory *local = (TDirectory*)gROOT->ProcessLine(cmd);
       if (!local) return 0;
       nbytes = obj->Write();
       delete local;
    }
-   TString opt(option);
-   opt.ToLower();
-   if (!opt.Contains("q")) {
-      if (!gSystem->AccessPathName(fname.Data())) obj->Info("SaveAs", "ROOT file %s has been created", fname.Data());
-   }
+   if (!opt.Contains("q") && !gSystem->AccessPathName(fname.Data()))
+      obj->Info("SaveAs", "ROOT file %s has been created", fname.Data());
    return nbytes;
 }
 
@@ -1234,26 +1290,24 @@ void TDirectory::SetName(const char* newname)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Encode the name and cycle into buffer like: "aap;2".
-
-void TDirectory::EncodeNameCycle(char *buffer, const char *name, Short_t cycle)
-{
-   if (cycle == 9999)
-      strcpy(buffer, name);
-   else
-      sprintf(buffer, "%s;%d", name, cycle);
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// Decode a namecycle "aap;2" into name "aap" and cycle "2". Destination
 /// buffer size for name (including string terminator) should be specified in
 /// namesize.
+/// @note Edge cases:
+///   - If the number after the `;` is larger than `SHORT_MAX`, cycle is set to `0`.
+///   - If name ends with `;*`, cycle is set to 10000`.
+///   - In all other cases, i.e. when number is not a digit or buffer is a nullptr, cycle is set to `9999`.
 
 void TDirectory::DecodeNameCycle(const char *buffer, char *name, Short_t &cycle,
                                  const size_t namesize)
 {
+   if (!buffer) {
+      cycle = 9999;
+      return;
+   }
+
    size_t len = 0;
-   const char *ni = buffer ? strchr(buffer, ';') : nullptr;
+   const char *ni = strchr(buffer, ';');
 
    if (ni) {
       // Found ';'
@@ -1269,7 +1323,7 @@ void TDirectory::DecodeNameCycle(const char *buffer, char *name, Short_t &cycle,
       if (len > namesize-1ul) len = namesize-1;  // accommodate string terminator
    } else {
       ::Warning("TDirectory::DecodeNameCycle",
-         "Using unsafe version: invoke this metod by specifying the buffer size");
+         "Using unsafe version: invoke this method by specifying the buffer size");
    }
 
    strncpy(name, buffer, len);
@@ -1287,12 +1341,32 @@ void TDirectory::DecodeNameCycle(const char *buffer, char *name, Short_t &cycle,
       cycle = 9999;
 }
 
+void TDirectory::TContext::RegisterCurrentDirectory()
+{
+   // peg the current directory
+   TDirectory *current;
+   {
+      ROOT::Internal::TSpinLockGuard slg(*GetCurrentDirectoryLock());
+      current = TDirectory::CurrentDirectory().load();
+      // Don't peg if there is no current directory or if the current
+      // directory's destruction has already started (in another thread)
+      // and is waiting for this thread to leave the critical section.
+      if (!current || !current->IsBuilt())
+         return;
+      ++(current->fContextPeg);
+   }
+   current->RegisterContext(this);
+   --(current->fContextPeg);
+}
+
 ///////////////////////////////////////////////////////////////////////////////
 /// Register a TContext pointing to this TDirectory object
 
 void TDirectory::RegisterContext(TContext *ctxt) {
    ROOT::Internal::TSpinLockGuard slg(fSpinLock);
 
+   if (!IsBuilt() || this == ROOT::Internal::gROOTLocal)
+      return;
    if (fContext) {
       TContext *current = fContext;
       while(current->fNext) {
@@ -1308,19 +1382,20 @@ void TDirectory::RegisterContext(TContext *ctxt) {
 ////////////////////////////////////////////////////////////////////////////////
 /// Register a std::atomic<TDirectory*> that will soon be pointing to this TDirectory object
 
-void TDirectory::RegisterGDirectory(std::atomic<TDirectory*> *globalptr)
+void TDirectory::RegisterGDirectory(TDirectory::SharedGDirectory_t &gdirectory_ptr)
 {
    ROOT::Internal::TSpinLockGuard slg(fSpinLock);
-
-   if (std::find(fGDirectories.begin(), fGDirectories.end(), globalptr) != fGDirectories.end())
-      fGDirectories.push_back(globalptr);
+   if (std::find(fGDirectories.begin(), fGDirectories.end(), gdirectory_ptr) == fGDirectories.end()) {
+      fGDirectories.emplace_back(gdirectory_ptr);
+   }
+   // FIXME:
    // globalptr->load()->fGDirectories will still contain globalptr, but we cannot
    // know whether globalptr->load() has been deleted by another thread in the meantime.
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// \copydoc TDirectory::WriteTObject().
+/// \copydoc TDirectory::WriteObject(const T*,const char*,Option_t*,Int_t).
 
 Int_t TDirectory::WriteTObject(const TObject *obj, const char *name, Option_t * /*option*/, Int_t /*bufsize*/)
 {
@@ -1339,7 +1414,7 @@ void TDirectory::UnregisterContext(TContext *ctxt) {
    ROOT::Internal::TSpinLockGuard slg(fSpinLock);
 
    // Another thread already unregistered the TContext.
-   if (ctxt->fDirectory == nullptr)
+   if (ctxt->fDirectory == nullptr || ctxt->fDirectory == ROOT::Internal::gROOTLocal)
       return;
 
    if (ctxt==fContext) {

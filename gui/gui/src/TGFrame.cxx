@@ -642,7 +642,7 @@ void TGFrame::MoveResize(Int_t x, Int_t y, UInt_t w, UInt_t h)
 /// Send message (i.e. event) to window w. Message is encoded in one long
 /// as message type and up to two long parameters.
 
-void TGFrame::SendMessage(const TGWindow *w, Long_t msg, Long_t parm1, Long_t parm2)
+void TGFrame::SendMessage(const TGWindow *w, Longptr_t msg, Longptr_t parm1, Longptr_t parm2)
 {
    Event_t event;
 
@@ -1731,7 +1731,7 @@ Bool_t TGMainFrame::HandleClientMessage(Event_t *event)
    if ((event->fFormat == 32) && ((Atom_t)event->fUser[0] == gWM_DELETE_WINDOW) &&
        (event->fHandle != gROOT_MESSAGE)) {
       Emit("CloseWindow()");
-      if (TestBit(kNotDeleted) && !TestBit(kDontCallClose))
+      if (!ROOT::Detail::HasBeenDeleted(this) && !TestBit(kDontCallClose))
          CloseWindow();
    }
    return kTRUE;
@@ -1830,9 +1830,11 @@ const TGPicture *TGMainFrame::SetIconPixmap(const char *iconName)
 /// builtin to the source code.
 ///
 /// For example,
+/// \code{.cpp}
 ///    #include "/home/root/icons/bld_rgb.xpm"
 ///    //bld_rgb.xpm contains char *bld_rgb[] array
 ///    main_frame->SetIconPixmap(bld_rgb);
+/// \endcode
 
 void TGMainFrame::SetIconPixmap(char **xpm_array)
 {
@@ -2820,12 +2822,12 @@ void TGMainFrame::SaveSource(const char *filename, Option_t *option)
    TClass *c1, *c2, *c3;
    UInt_t k = 0;      // will mark k-bit of TBits if the class is a base class
 
+   // Reset the ClassSaved status of all classes
+   gROOT->ResetClassSaved();
+
    TIter nextc1(gROOT->GetListOfClasses());
    //gROOT->GetListOfClasses()->ls();    // valid. test
    while((c1 = (TClass *)nextc1())) {
-
-      //   resets bit TClass::kClassSaved for all classes
-      c1->ResetBit(TClass::kClassSaved);
 
       TIter nextc2(gROOT->GetListOfClasses());
       while ((c2 = (TClass *)nextc2())) {
@@ -2959,7 +2961,7 @@ void TGMainFrame::SaveSource(const char *filename, Option_t *option)
 
    TGMainFrame::SavePrimitive(out, option);
 
-   if (strlen(fClassName) || strlen(fResourceName)) {
+   if (fClassName.Length() || fResourceName.Length()) {
       out << "   " << GetName() << "->SetClassHints(" << quote << fClassName
           << quote << "," << quote << fResourceName << quote << ");" << std::endl;
    }
@@ -3080,11 +3082,8 @@ void TGMainFrame::SaveSource(const char *filename, Option_t *option)
    if (!opt.Contains("quiet"))
       printf(" C++ macro file %s has been generated\n", gSystem->BaseName(ff.Data()));
 
-   // reset bit TClass::kClassSaved for all classes
-   nextc1.Reset();
-   while((c1=(TClass*)nextc1())) {
-      c1->ResetBit(TClass::kClassSaved);
-   }
+   // Reset the ClassSaved status of all classes
+   gROOT->ResetClassSaved();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3126,14 +3125,14 @@ void TGMainFrame::SavePrimitive(std::ostream &out, Option_t *option /*= ""*/)
 
    SavePrimitiveSubframes(out, option);
 
-   if (strlen(fWindowName)) {
+   if (fWindowName.Length()) {
       out << "   " << GetName() << "->SetWindowName(" << quote << GetWindowName()
           << quote << ");" << std::endl;
    }
-   if (strlen(fIconName)) {
+   if (fIconName.Length()) {
       out <<"   "<<GetName()<< "->SetIconName("<<quote<<GetIconName()<<quote<<");"<<std::endl;
    }
-   if (strlen(fIconPixmap)) {
+   if (fIconPixmap.Length()) {
       out << "   " << GetName() << "->SetIconPixmap(" << quote << GetIconPixmap()
           << quote << ");" << std::endl;
    }
@@ -3340,11 +3339,11 @@ void TGTransientFrame::SaveSource(const char *filename, Option_t *option)
    TClass *c1, *c2, *c3;
    UInt_t k = 0;      // will mark k-bit of TBits if the class is a base class
 
+   // Reset the ClassSaved status of all classes
+   gROOT->ResetClassSaved();
+
    TIter nextc1(gROOT->GetListOfClasses());
    while((c1 = (TClass *)nextc1())) {
-
-      //   resets bit TClass::kClassSaved for all classes
-      c1->ResetBit(TClass::kClassSaved);
 
       TIter nextc2(gROOT->GetListOfClasses());
       while ((c2 = (TClass *)nextc2())) {
@@ -3437,7 +3436,7 @@ void TGTransientFrame::SaveSource(const char *filename, Option_t *option)
    out <<"// By ROOT version "<< gROOT->GetVersion() <<" on "<<t.AsSQLString()<< std::endl;
    out << std::endl;
 
-   out << "#if !defined( __CINT__) || defined (__MAKECINT__)" << std::endl << std::endl;
+   out << std::endl << std::endl;
 
    TIter nexti(ilist);
    while((inc = (TObjString *)nexti())) {
@@ -3451,7 +3450,7 @@ void TGTransientFrame::SaveSource(const char *filename, Option_t *option)
       }
    }
    out << std::endl << "#include " << quote << "Riostream.h" << quote << std::endl;
-   out << std::endl << "#endif" << std::endl;
+   out << std::endl << std::endl;
    // deletes created ListOfIncludes
    gROOT->GetListOfSpecials()->Remove(ilist);
    ilist->Delete();
@@ -3475,7 +3474,7 @@ void TGTransientFrame::SaveSource(const char *filename, Option_t *option)
 
    TGTransientFrame::SavePrimitive(out, option);
 
-   if (strlen(fClassName) || strlen(fResourceName)) {
+   if (fClassName.Length() || fResourceName.Length()) {
       out<<"   "<<GetName()<< "->SetClassHints("<<quote<<fClassName<<quote
                                             <<"," <<quote<<fResourceName<<quote
                                             <<");"<<std::endl;
@@ -3595,11 +3594,8 @@ void TGTransientFrame::SaveSource(const char *filename, Option_t *option)
    if (!opt.Contains("quiet"))
       printf(" C++ macro file %s has been generated\n", gSystem->BaseName(ff.Data()));
 
-   // reset bit TClass::kClassSaved for all classes
-   nextc1.Reset();
-   while((c1=(TClass*)nextc1())) {
-      c1->ResetBit(TClass::kClassSaved);
-   }
+   // Reset the ClassSaved status of all classes
+   gROOT->ResetClassSaved();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3635,14 +3631,14 @@ void TGTransientFrame::SavePrimitive(std::ostream &out, Option_t *option /*= ""*
 
    SavePrimitiveSubframes(out, option);
 
-   if (strlen(fWindowName)) {
+   if (fWindowName.Length()) {
       out << "   " << GetName() << "->SetWindowName(" << quote << GetWindowName()
           << quote << ");" << std::endl;
    }
-   if (strlen(fIconName)) {
+   if (fIconName.Length()) {
       out <<"   "<<GetName()<< "->SetIconName("<<quote<<GetIconName()<<quote<<");"<<std::endl;
    }
-   if (strlen(fIconPixmap)) {
+   if (fIconPixmap.Length()) {
       out << "   " << GetName() << "->SetIconPixmap(" << quote << GetIconPixmap()
           << quote << ");" << std::endl;
    }

@@ -203,14 +203,15 @@ void TProfile2D::BuildOptions(Double_t zmin, Double_t zmax, Option_t *option)
 ////////////////////////////////////////////////////////////////////////////////
 /// Copy constructor.
 
-TProfile2D::TProfile2D(const TProfile2D &profile) : TH2D()
+TProfile2D::TProfile2D(const TProfile2D &profile2d) : TH2D()
 {
-   ((TProfile2D&)profile).Copy(*this);
+   profile2d.TProfile2D::Copy(*this);
 }
 
-TProfile2D &TProfile2D::operator=(const TProfile2D &profile)
+TProfile2D &TProfile2D::operator=(const TProfile2D &profile2d)
 {
-   ((TProfile2D &)profile).Copy(*this);
+   if (this != &profile2d)
+      profile2d.TProfile2D::Copy(*this);
    return *this;
 }
 
@@ -297,7 +298,7 @@ Int_t TProfile2D::BufferEmpty(Int_t action)
    if (nbentries < 0) {
       if (action == 0) return 0;
       nbentries  = -nbentries;
-      fBuffer=0;
+      fBuffer=nullptr;
       Reset("ICES"); // reset without deleting the functions
       fBuffer = buffer;
    }
@@ -318,7 +319,7 @@ Int_t TProfile2D::BufferEmpty(Int_t action)
       if (fXaxis.GetXmax() <= fXaxis.GetXmin() || fYaxis.GetXmax() <= fYaxis.GetXmin()) {
          THLimitsFinder::GetLimitsFinder()->FindGoodLimits(this,xmin,xmax,ymin,ymax);
       } else {
-         fBuffer = 0;
+         fBuffer = nullptr;
          Int_t keep = fBufferSize; fBufferSize = 0;
          if (xmin <  fXaxis.GetXmin()) ExtendAxis(xmin,&fXaxis);
          if (xmax >= fXaxis.GetXmax()) ExtendAxis(xmax,&fXaxis);
@@ -329,13 +330,13 @@ Int_t TProfile2D::BufferEmpty(Int_t action)
       }
    }
 
-   fBuffer = 0;
+   fBuffer = nullptr;
    for (Int_t i=0;i<nbentries;i++) {
       Fill(buffer[4*i+2],buffer[4*i+3],buffer[4*i+4],buffer[4*i+1]);
    }
    fBuffer = buffer;
 
-   if (action > 0) { delete [] fBuffer; fBuffer = 0; fBufferSize = 0;}
+   if (action > 0) { delete [] fBuffer; fBuffer = nullptr; fBufferSize = 0;}
    else {
       if (nbentries == (Int_t)fEntries) fBuffer[0] = -nbentries;
       else                              fBuffer[0] = 0;
@@ -362,7 +363,7 @@ Int_t TProfile2D::BufferFill(Double_t x, Double_t y, Double_t z, Double_t w)
       nbentries  = -nbentries;
       fBuffer[0] =  nbentries;
       if (fEntries > 0) {
-         Double_t *buffer = fBuffer; fBuffer=0;
+         Double_t *buffer = fBuffer; fBuffer=nullptr;
          Reset("ICES"); // reset without deleting the functions
          fBuffer = buffer;
       }
@@ -385,7 +386,7 @@ Int_t TProfile2D::BufferFill(Double_t x, Double_t y, Double_t z, Double_t w)
 void TProfile2D::Copy(TObject &obj) const
 {
    try {
-      TProfile2D & pobj = dynamic_cast<TProfile2D&>(obj);
+      TProfile2D &pobj = dynamic_cast<TProfile2D &>(obj);
 
       TH2D::Copy(pobj);
       fBinEntries.Copy(pobj.fBinEntries);
@@ -1300,7 +1301,7 @@ TH2D *TProfile2D::ProjectionXY(const char *name, Option_t *option) const
    Int_t ny = fYaxis.GetNbins();
    const TArrayD *xbins = fXaxis.GetXbins();
    const TArrayD *ybins = fYaxis.GetXbins();
-   TH2D * h1 = 0;
+   TH2D * h1 = nullptr;
    if (xbins->fN == 0 && ybins->fN == 0) {
       h1 = new TH2D(pname,GetTitle(),nx,fXaxis.GetXmin(),fXaxis.GetXmax(),ny,fYaxis.GetXmin(),fYaxis.GetXmax());
    } else if (xbins->fN == 0) {
@@ -1409,7 +1410,7 @@ TProfile * TProfile2D::DoProfile(bool onX, const char *name, Int_t firstbin, Int
    Int_t firstOutBin = outAxis.GetFirst();
    Int_t lastOutBin = outAxis.GetLast();
 
-   TProfile  * p1 = 0;
+   TProfile  * p1 = nullptr;
    // case of fixed bins
    if (bins->fN == 0) {
       if (originalRange)
@@ -1432,13 +1433,13 @@ TProfile * TProfile2D::DoProfile(bool onX, const char *name, Int_t firstbin, Int
    TH2D * h2dW = ProjectionXY("h2temp-W","W");
    TH2D * h2dN = ProjectionXY("h2temp-N","B");
 
-   h2dW->SetDirectory(0); h2dN->SetDirectory(0);
+   h2dW->SetDirectory(nullptr); h2dN->SetDirectory(nullptr);
 
 
    TString opt1 = (originalRange) ? "o" : "";
    TH1D * h1W = (onX) ? h2dW->ProjectionX("h1temp-W",firstbin,lastbin,opt1) : h2dW->ProjectionY("h1temp-W",firstbin,lastbin,opt1);
    TH1D * h1N = (onX) ? h2dN->ProjectionX("h1temp-N",firstbin,lastbin,opt1) : h2dN->ProjectionY("h1temp-N",firstbin,lastbin,opt1);
-   h1W->SetDirectory(0); h1N->SetDirectory(0);
+   h1W->SetDirectory(nullptr); h1N->SetDirectory(nullptr);
 
 
    // fill the bin content
@@ -1557,11 +1558,11 @@ TProfile2D * TProfile2D::Rebin2D(Int_t nxgroup ,Int_t nygroup,const char * newna
       Double_t ymax  = fYaxis.GetXmax();
       if ((nxgroup <= 0) || (nxgroup > nxbins)) {
          Error("Rebin", "Illegal value of nxgroup=%d",nxgroup);
-         return 0;
+         return nullptr;
       }
       if ((nygroup <= 0) || (nygroup > nybins)) {
          Error("Rebin", "Illegal value of nygroup=%d",nygroup);
-         return 0;
+         return nullptr;
       }
 
       Int_t newxbins = nxbins/nxgroup;
@@ -1579,7 +1580,7 @@ TProfile2D * TProfile2D::Rebin2D(Int_t nxgroup ,Int_t nygroup,const char * newna
       Double_t *oldBins   = new Double_t[(nxbins+2)*(nybins+2)];
       Double_t *oldCount  = new Double_t[(nxbins+2)*(nybins+2)];
       Double_t *oldErrors = new Double_t[(nxbins+2)*(nybins+2)];
-      Double_t *oldBinw2  = (fBinSumw2.fN ? new Double_t[(nxbins+2)*(nybins+2)] : 0  );
+      Double_t *oldBinw2  = (fBinSumw2.fN ? new Double_t[(nxbins+2)*(nybins+2)] : nullptr  );
       Double_t *cu1 = GetW();
       Double_t *er1 = GetW2();
       Double_t *en1 = GetB();
@@ -1820,7 +1821,7 @@ TProfile2D * TProfile2D::Rebin2D(Int_t nxgroup ,Int_t nygroup,const char * newna
    }
    //nxgroup == nygroup == 1
    else{
-      if((newname) && (strlen(newname) > 0))
+      if(newname && (strlen(newname) > 0))
          return (TProfile2D*)Clone(newname);
       else
          return this;
@@ -1955,7 +1956,7 @@ void TProfile2D::SetBuffer(Int_t buffersize, Option_t *)
    if (fBuffer) {
       BufferEmpty();
       delete [] fBuffer;
-      fBuffer = 0;
+      fBuffer = nullptr;
    }
    if (buffersize <= 0) {
       fBufferSize = 0;
