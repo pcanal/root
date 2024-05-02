@@ -18,38 +18,87 @@
 #include "TBranch.h"
 #include "TBranchElement.h"
 #include "TStreamerInfo.h"
+#include "TVirtualMonitoring.h"
 #include "TLeaf.h"
 #include "TH1.h"
 #include "TAxis.h"
+#include "TSystem.h"
 
-
-#include "TTimer.h"
 #include "TBufferJSON.h"
 
-
 namespace ROOT {
-namespace Experimental {
 
+class RTreeDrawMonitoring : public TVirtualMonitoringWriter {
 
-class TProgressTimer : public TTimer {
+private:
+
+   RTreeDrawMonitoring(const RTreeDrawMonitoring&) = delete;
+   RTreeDrawMonitoring& operator=(const RTreeDrawMonitoring&) = delete;
+
+   Int_t fPeriod{100};
+   long long fLastProgressSendTm{0};
    RTreeViewer &fViewer;
+
 public:
-   TProgressTimer(RTreeViewer &viewer, Int_t period) : TTimer(period, kTRUE), fViewer(viewer)
+   RTreeDrawMonitoring(Int_t period, RTreeViewer &viewer)
+      : TVirtualMonitoringWriter(), fPeriod(period), fViewer(viewer)
    {
    }
 
-   Bool_t Notify() override
+   // TFile related info. In general they are gathered and sent only sometimes as summaries
+   bool SendFileCloseEvent(TFile * /*file*/) override { return false; }
+   bool SendFileReadProgress(TFile * /*file*/) override { return false; }
+   bool SendFileWriteProgress(TFile * /*file*/) override { return false; }
+
+   bool SendParameters(TList * /*valuelist*/, const char * /*identifier*/ = nullptr) override { return false; }
+   bool SendInfoTime() override { return false; }
+   bool SendInfoUser(const char * /*user*/ = nullptr) override { return false; }
+   bool SendInfoDescription(const char * /*jobtag*/) override { return false; }
+   bool SendInfoStatus(const char * /*status*/) override { return false; }
+
+   bool SendFileOpenProgress(TFile * /*file*/, TList * /*openphases*/, const char * /*openphasename*/,
+                               bool /*forcesend*/ = false) override
    {
-      fViewer.SendProgress();
-      return kTRUE;
+      return false;
    }
+
+   bool SendProcessingStatus(const char * /*status*/, bool /*restarttimer*/ = false) override { return false; }
+   bool SendProcessingProgress(Double_t nevent, Double_t /*nbytes*/, bool /*force*/ = false) override
+   {
+      long long millisec = gSystem->Now();
+
+      if (fLastProgressSendTm && (millisec < fLastProgressSendTm + fPeriod))
+         return true;
+
+      fLastProgressSendTm = millisec;
+
+      gSystem->ProcessEvents();
+
+      fViewer.SendProgress(nevent);
+
+      return true;
+   }
+   void SetLogLevel(const char * /*loglevel*/ = "WARNING") override {}
+   void Verbose(bool /*onoff*/) override {}
 };
 
-} // namespace Experimental
+
+class RTreeDrawInvokeTimer : public TTimer {
+public:
+   RTreeViewer &fViewer;
+
+   /// constructor
+   RTreeDrawInvokeTimer(Long_t milliSec, bool mode, RTreeViewer &viewer) : TTimer(milliSec, mode), fViewer(viewer) {}
+
+   /// timeout handler
+   /// used to process postponed requests in main ROOT thread
+   void Timeout() override { fViewer.InvokeTreeDraw(); }
+};
+
+
 } // namespace ROOT
 
-
-using namespace ROOT::Experimental;
+using namespace ROOT;
 using namespace std::string_literals;
 
 
@@ -58,7 +107,7 @@ using namespace std::string_literals;
 
 RTreeViewer::RTreeViewer(TTree *tree)
 {
-   fWebWindow = RWebWindow::Create();
+   fWebWindow = ROOT::RWebWindow::Create();
    fWebWindow->SetDefaultPage("file:rootui5sys/tree/index.html");
 
    // this is call-back, invoked when message received via websocket
@@ -69,6 +118,8 @@ RTreeViewer::RTreeViewer(TTree *tree)
    fWebWindow->SetMaxQueueLength(30); // number of allowed entries in the window queue
 
    if (tree) SetTree(tree);
+
+   fTimer = std::make_unique<RTreeDrawInvokeTimer>(10, true, *this);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -176,11 +227,20 @@ void RTreeViewer::Show(const RWebDisplayArgs &args, bool always_start_new_browse
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
-/// Return URL address of web window used for tree viewer
+/// Return address of web window used for tree viewer
 
 std::string RTreeViewer::GetWindowAddr() const
 {
    return fWebWindow ? fWebWindow->GetAddr() : ""s;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////
+/// Return URL of web window used for tree viewer
+/// See \ref ROOT::RWebWindow::GetUrl docu for more details
+
+std::string RTreeViewer::GetWindowUrl(bool remote)
+{
+   return fWebWindow ? fWebWindow->GetUrl(remote) : ""s;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -225,7 +285,14 @@ void RTreeViewer::WebWindowCallback(unsigned connid, const std::string &arg)
 
    } if (arg.compare(0, 5, "DRAW:"s) == 0) {
 
-      InvokeTreeDraw(arg.substr(5));
+      if (!fTree) return;
+
+      auto newcfg = TBufferJSON::FromJSON<RConfig>(arg.substr(5));
+
+      if (newcfg) {
+         fCfg = *newcfg;
+         fTimer->TurnOn();
+      }
    }
 }
 
@@ -323,13 +390,10 @@ void RTreeViewer::UpdateConfig()
 //////////////////////////////////////////////////////////////////////////////////////////////
 /// Invoke tree drawing
 
-void RTreeViewer::InvokeTreeDraw(const std::string &json)
+void RTreeViewer::InvokeTreeDraw()
 {
-   auto newcfg = TBufferJSON::FromJSON<RConfig>(json);
 
-   if (!newcfg || !fTree) return;
-
-   fCfg = *newcfg;
+   fTimer->TurnOff();
 
    UpdateConfig();
 
@@ -346,28 +410,23 @@ void RTreeViewer::InvokeTreeDraw(const std::string &json)
 
    Long64_t nentries = (fCfg.fNumber > 0) ? fCfg.fNumber : TTree::kMaxEntries;
 
-   if (!fProgrTimer)
-      fProgrTimer = std::make_unique<TProgressTimer>(*this, 50);
-
-   fTree->SetTimerInterval(50);
+   auto old = gMonitoringWriter;
+   RTreeDrawMonitoring monitoring(50, *this);
+   gMonitoringWriter = &monitoring;
 
    fLastSendProgress.clear();
 
-   // SendProgress();
-
-   fProgrTimer->TurnOn();
-
    fTree->Draw(expr.c_str(), fCfg.fExprCut.c_str(), fCfg.fOption.c_str(), nentries, fCfg.fFirst);
 
-   fProgrTimer->TurnOff();
+   gMonitoringWriter = old;
 
    if (!fLastSendProgress.empty())
-      SendProgress(true);
+      SendProgress(-1.);
 
    std::string canv_name;
 
    if (gPad) {
-      if ((expr.find("\\") != std::string::npos) || (expr.find("#") != std::string::npos)) {
+      if ((expr.find('\\') != std::string::npos) || (expr.find('#') != std::string::npos)) {
          auto FixTitle = [](TNamed *obj) {
             if (!obj) return;
             TString title = obj->GetTitle();
@@ -391,8 +450,6 @@ void RTreeViewer::InvokeTreeDraw(const std::string &json)
 
       gPad->Update();
       canv_name = gPad->GetName();
-
-
    }
 
    // at the end invoke callback
@@ -403,11 +460,11 @@ void RTreeViewer::InvokeTreeDraw(const std::string &json)
 //////////////////////////////////////////////////////////////////////////////////////////////
 /// Send progress to the client
 
-void RTreeViewer::SendProgress(bool completed)
+void RTreeViewer::SendProgress(Double_t nevent)
 {
    std::string progress = "100";
 
-   if (!completed) {
+   if (nevent >= 0.) {
 
       Long64_t first = fCfg.fFirst;
       Long64_t nentries = fTree->GetEntries();
@@ -415,10 +472,11 @@ void RTreeViewer::SendProgress(bool completed)
       if ((fCfg.fNumber > 0) && (first + fCfg.fNumber < nentries))
          last = first + fCfg.fNumber;
 
-      Long64_t current = fTree->GetReadEntry();
-
-      if (last > first)
-         progress = std::to_string((current - first + 1.) / ( last - first + 0. ) * 100.);
+      if (last > first) {
+         Double_t p = nevent / ( last - first + 0. ) * 100.;
+         if (p > 100) p = 100;
+         progress = std::to_string(p);
+      }
    }
 
    if (fLastSendProgress == progress)
@@ -426,7 +484,8 @@ void RTreeViewer::SendProgress(bool completed)
 
    fLastSendProgress = progress;
 
-   fWebWindow->Send(0, "PROGRESS:"s + progress);
+   if (fWebWindow->CanSend(0, true))
+      fWebWindow->Send(0, "PROGRESS:"s + progress);
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////

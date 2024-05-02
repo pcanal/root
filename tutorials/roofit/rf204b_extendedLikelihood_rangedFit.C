@@ -34,7 +34,7 @@
 /// fit of these regions with different interpretations of the same model parameter results
 /// in a number that is not easily interpreted.
 ///
-/// If both regions correct their interpretatin such that N_expected refers to the full range,
+/// If both regions correct their interpretations such that N_expected refers to the full range,
 /// it is interpreted easily, and consistent in both regions.
 ///
 /// This requires that the likelihood model is extended using RooAddPdf in the
@@ -89,7 +89,7 @@ void rf204b_extendedLikelihood_rangedFit()
  // `N` will therefore return the count extrapolated to the full range instead of the fit range.
  //
  // **Note**: When using a RooAddPdf for extending the likelihood, the same effect can be achieved with
- // [RooAddPdf::fixCoefRange()](https://root.cern.ch/doc/master/classRooAddPdf.html#ab631caf4b59e4c4221f8967aecbf2a65),
+ // [RooAddPdf::fixCoefRange()](https://root.cern/doc/master/classRooAddPdf.html#ab631caf4b59e4c4221f8967aecbf2a65),
 
  RooRealVar N("N", "Extended term", 0, 20000);
  RooExtendPdf extmodel("extmodel", "Extended model", model, N, "FULL");

@@ -42,7 +42,7 @@ namespace Math {
     using Pt , Phi, Eta and M (mass)
     The metric used is (-,-,-,+).
     Spacelike particles (M2 < 0) are described with negative mass values,
-    but in this case m2 must alwasy be less than P2 to preserve a positive value of E2
+    but in this case m2 must always be less than P2 to preserve a positive value of E2
     Phi is restricted to be in the range [-PI,PI)
 
     @ingroup GenVector
@@ -56,6 +56,7 @@ class PtEtaPhiM4D {
 public :
 
    typedef ScalarType Scalar;
+   static constexpr unsigned int Dimension = 4U;
 
    // --------- Constructors ---------------
 
@@ -78,7 +79,7 @@ public :
       Pt(), Eta(), Phi() and M()
    */
    template <class CoordSystem >
-   explicit PtEtaPhiM4D(const CoordSystem & c) :
+   explicit constexpr PtEtaPhiM4D(const CoordSystem & c) :
       fPt(c.Pt()), fEta(c.Eta()), fPhi(c.Phi()), fM(c.M())  { RestrictPhi(); }
 
    // for g++  3.2 and 3.4 on 32 bits found that the compiler generated copy ctor and assignment are much slower

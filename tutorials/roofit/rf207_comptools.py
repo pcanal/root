@@ -5,6 +5,7 @@
 ## Tools and utilities for manipulation of composite objects
 ##
 ## \macro_code
+## \macro_output
 ##
 ## \date February 2018
 ## \authors Clemens Lange, Wouter Verkerke (C version)
@@ -108,9 +109,3 @@ cust_clone = cust.build(ROOT.kTRUE)
 
 # Print structure of clone of model with sig.sigsum replacement.
 cust_clone.Print("t")
-
-# The RooCustomizer has the be deleted first.
-# Otherwise, it might happen that `sig` or `sigsum` are deleted first, in which
-# case the internal TLists in the RooCustomizer will complain about deleted
-# objects.
-del cust

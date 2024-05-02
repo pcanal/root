@@ -1,4 +1,4 @@
-# Copyright (C) 1995-2021, Rene Brun and Fons Rademakers.
+# Copyright (C) 1995-2022, Rene Brun and Fons Rademakers.
 # All rights reserved.
 #
 # For the licensing terms see $ROOTSYS/LICENSE.
@@ -38,6 +38,9 @@ if(cocoa)
   if(APPLE)
     set(x11 OFF CACHE BOOL "Disabled because cocoa requested (${x11_description})" FORCE)
     set(builtin_freetype ON CACHE BOOL "Enabled because needed for Cocoa graphics (${builtin_freetype_description})" FORCE)
+    if(NOT opengl)
+      message(FATAL_ERROR "Option \"cocoa=ON\" requires \"opengl=ON\"!")
+    endif()
   else()
     message(STATUS "Cocoa option can only be enabled on MacOSX platform")
     set(cocoa OFF CACHE BOOL "Disabled because only available on MacOSX (${cocoa_description})" FORCE)
@@ -80,29 +83,6 @@ if(NOT builtin_nlohmannjson)
     else()
       message(STATUS "nlohmann/json.hpp not found. Switching on builtin_nlohmannjson option")
       set(builtin_nlohmannjson ON CACHE BOOL "Enabled because nlohmann/json.hpp not found" FORCE)
-    endif()
-
-    # If we found an external nlohmann_json with a version greater than 3.11,
-    # check that it has the json_fwd.hpp header.
-    if(nlohmann_json_FOUND AND nlohmann_json_VERSION VERSION_GREATER_EQUAL 3.11)
-      set(_old_CMAKE_REQUIRED_LIBRARIES ${CMAKE_REQUIRED_LIBRARIES})
-      set(_old_CMAKE_REQUIRED_QUIET ${CMAKE_REQUIRED_QUIET})
-
-      set(CMAKE_REQUIRED_LIBRARIES nlohmann_json::nlohmann_json)
-      set(CMAKE_REQUIRED_QUIET TRUE)
-      check_include_file_cxx("nlohmann/json_fwd.hpp" _nlohmann_json_fwd_hpp)
-      if(NOT _nlohmann_json_fwd_hpp)
-        set(_msg "Could not find nlohmann/json_fwd.hpp, which is required for versions greater than 3.11.")
-        if(nlohmann_json_VERSION VERSION_LESS 3.11.2)
-          set(_msg "${_msg} Please upgrade to at least version 3.11.2.")
-        else()
-          set(_msg "${_msg} It is installed by default, so your installation is incomplete!")
-        endif()
-        message(FATAL_ERROR "${_msg}")
-      endif()
-
-      set(CMAKE_REQUIRED_LIBRARIES ${_old_CMAKE_REQUIRED_LIBRARIES})
-      set(CMAKE_REQUIRED_QUIET ${_old_CMAKE_REQUIRED_QUIET})
     endif()
   endif()
 endif()
@@ -293,9 +273,9 @@ endif()
 if(NOT builtin_xxhash)
   message(STATUS "Looking for xxHash")
   if(fail-on-missing)
-    find_package(xxHash REQUIRED)
+    find_package(xxHash 0.8 REQUIRED)
   else()
-    find_package(xxHash)
+    find_package(xxHash 0.8)
     if(NOT xxHash_FOUND)
       message(STATUS "xxHash not found. Switching on builtin_xxhash option")
       set(builtin_xxhash ON CACHE BOOL "Enabled because xxHash not found (${builtin_xxhash_description})" FORCE)
@@ -429,23 +409,8 @@ if(asimage)
   if(JPEG_FOUND)
     set(ASEXTRA_LIBRARIES ${ASEXTRA_LIBRARIES} ${JPEG_LIBRARIES})
   endif()
-endif()
 
-#---Check for AfterImage---------------------------------------------------------------
-if(asimage AND NOT builtin_afterimage)
-  message(STATUS "Looking for AfterImage")
-  if(fail-on-missing)
-    find_package(AfterImage REQUIRED)
-  else()
-    find_package(AfterImage)
-    if(NOT AFTERIMAGE_FOUND)
-      message(STATUS "AfterImage not found. Switching on builtin_afterimage option")
-      set(builtin_afterimage ON CACHE BOOL "Enabled because asimage requested and AfterImage not found (${builtin_afterimage_description})" FORCE)
-    endif()
-  endif()
-endif()
-
-if(builtin_afterimage)
+  #---AfterImage---------------------------------------------------------------
   set(AFTERIMAGE_LIBRARIES ${CMAKE_BINARY_DIR}/lib/libAfterImage${CMAKE_STATIC_LIBRARY_SUFFIX})
   if(WIN32)
     if(winrtdebug)
@@ -457,7 +422,7 @@ if(builtin_afterimage)
       AFTERIMAGE
       DOWNLOAD_COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_SOURCE_DIR}/graf2d/asimage/src/libAfterImage AFTERIMAGE
       INSTALL_DIR ${CMAKE_BINARY_DIR}
-      CMAKE_ARGS -G ${CMAKE_GENERATOR} -DCMAKE_VERBOSE_MAKEFILE=ON -DFREETYPE_INCLUDE_DIR=${FREETYPE_INCLUDE_DIR}
+      CMAKE_ARGS -G ${CMAKE_GENERATOR} -DCMAKE_VERBOSE_MAKEFILE=ON -DFREETYPE_INCLUDE_DIR=${FREETYPE_INCLUDE_DIR} -DZLIB_INCLUDE_DIR=${ZLIB_INCLUDE_DIR}
       BUILD_COMMAND ${CMAKE_COMMAND} --build . --config ${astepbld}
       INSTALL_COMMAND  ${CMAKE_COMMAND} -E copy_if_different ${astepbld}/libAfterImage.lib <INSTALL_DIR>/lib/
       LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 BUILD_IN_SOURCE 0
@@ -466,7 +431,6 @@ if(builtin_afterimage)
     )
     set(AFTERIMAGE_INCLUDE_DIR ${CMAKE_BINARY_DIR}/AFTERIMAGE-prefix/src/AFTERIMAGE)
   else()
-    message(STATUS "Building AfterImage library included in ROOT itself")
     if(JPEG_FOUND)
       set(_jpeginclude --with-jpeg-includes=${JPEG_INCLUDE_DIR})
     else()
@@ -489,7 +453,7 @@ if(builtin_afterimage)
     endif()
     if(builtin_freetype)
       set(_ttf_include --with-ttf-includes=-I${FREETYPE_INCLUDE_DIR})
-      set(_after_cflags "${_after_cflags} -DHAVE_FREETYPE_FREETYPE")
+      set(_after_cflags "${_after_cflags} -DHAVE_FREETYPE_FREETYPE -DPNG_ARM_NEON_OPT=0")
     endif()
     if(CMAKE_OSX_SYSROOT)
       set(_after_cflags "${_after_cflags} -isysroot ${CMAKE_OSX_SYSROOT}")
@@ -585,6 +549,8 @@ if(opengl)
   if(NOT OPENGL_FOUND OR NOT OPENGL_GLU_FOUND)
     if(fail-on-missing)
       message(FATAL_ERROR "OpenGL package (with GLU) not found and opengl option required")
+    elseif(cocoa)
+      message(FATAL_ERROR "OpenGL package (with GLU) not found and opengl option required for \"cocoa=ON\"")
     else()
       message(STATUS "OpenGL (with GLU) not found. Switching off opengl option")
       set(opengl OFF CACHE BOOL "Disabled because OpenGL (with GLU) not found (${opengl_description})" FORCE)
@@ -749,20 +715,6 @@ if(fcgi)
 endif()
 
 
-#---Check for Oracle-------------------------------------------------------------------
-if(oracle)
-  message(STATUS "Looking for Oracle")
-  find_package(Oracle)
-  if(NOT ORACLE_FOUND)
-    if(fail-on-missing)
-      message(FATAL_ERROR "Oracle libraries not found and they are required (orable option enabled)")
-    else()
-      message(STATUS "Oracle not found. Switching off oracle option")
-      set(oracle OFF CACHE BOOL "Disabled because Oracle not found (${oracle_description})" FORCE)
-    endif()
-  endif()
-endif()
-
 #---Check for ODBC-------------------------------------------------------------------
 if(odbc)
   message(STATUS "Looking for ODBC")
@@ -801,20 +753,6 @@ if(sqlite)
     else()
       message(STATUS "SQLite not found. Switching off sqlite option")
       set(sqlite OFF CACHE BOOL "Disabled because SQLite not found (${sqlite_description})" FORCE)
-    endif()
-  endif()
-endif()
-
-#---Check for Pythia6-------------------------------------------------------------------
-if(pythia6)
-  message(STATUS "Looking for Pythia6")
-  find_package(Pythia6 QUIET)
-  if(NOT PYTHIA6_FOUND AND NOT pythia6_nolink)
-    if(fail-on-missing)
-      message(FATAL_ERROR "Pythia6 libraries not found and they are required (pythia6 option enabled)")
-    else()
-      message(STATUS "Pythia6 not found. Switching off pythia6 option")
-      set(pythia6 OFF CACHE BOOL "Disabled because Pythia6 not found (${pythia6_description})" FORCE)
     endif()
   endif()
 endif()
@@ -916,6 +854,7 @@ if(fitsio OR builtin_cfitsio)
         TIMEOUT 600
       )
       set(CFITSIO_INCLUDE_DIR ${CMAKE_BINARY_DIR}/CFITSIO-prefix/src/CFITSIO)
+      install(DIRECTORY ${CMAKE_BINARY_DIR}/bin/ DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT libraries FILES_MATCHING PATTERN "cfitsio*.dll")
     else()
       ExternalProject_Add(
         CFITSIO
@@ -965,20 +904,6 @@ if(shadowpw)
   endif()
 endif()
 
-#---Monalisa support----------------------------------------------------------------
-if(monalisa)
-  if(fail-on-missing)
-    find_package(Monalisa REQUIRED)
-  else()
-    find_package(Monalisa)
-    if(NOT MONALISA_FOUND)
-      message(STATUS "Monalisa not found. Set variable MONALISA_DIR to point to your Monalisa installation")
-      message(STATUS "For the time being switching OFF 'monalisa' option")
-      set(monalisa OFF CACHE BOOL "Disabled because Monalisa not found (${monalisa_description})" FORCE)
-    endif()
-  endif()
-endif()
-
 #---Check for Xrootd support---------------------------------------------------------
 
 foreach(suffix FOUND INCLUDE_DIR INCLUDE_DIRS LIBRARY LIBRARIES)
@@ -987,7 +912,7 @@ endforeach()
 
 if(xrootd AND NOT builtin_xrootd)
   message(STATUS "Looking for XROOTD")
-  find_package(XROOTD)
+  find_package(XRootD)
   if(NOT XROOTD_FOUND)
     if(fail-on-missing)
       message(FATAL_ERROR "XROOTD not found. Set environment variable XRDSYS to point to your XROOTD installation, "
@@ -997,8 +922,6 @@ if(xrootd AND NOT builtin_xrootd)
       message(STATUS "XROOTD not found, enabling 'builtin_xrootd' option")
       set(builtin_xrootd ON CACHE BOOL "Enabled because xrootd is enabled, but external xrootd was not found (${xrootd_description})" FORCE)
     endif()
-  else()
-    set(XROOTD_VERSIONNUM ${xrdversnum})  # variable used internally
   endif()
 endif()
 
@@ -1017,27 +940,9 @@ if(builtin_xrootd)
   set(xrootd ON CACHE BOOL "Enabled because builtin_xrootd requested (${xrootd_description})" FORCE)
 endif()
 
-if(xrootd AND XROOTD_VERSIONNUM VERSION_GREATER_EQUAL 500000000)
-  if(xproofd)
-    if(fail-on-missing)
-      message(FATAL_ERROR "XROOTD is version 5 or greater. The legacy xproofd servers can not be built with this version. Use -Dxproofd:BOOL=OFF to disable.")
-    else()
-      message(STATUS "XROOTD is version 5 or greater. The legacy xproofd servers can not be built with this version. Disabling 'xproofd' option.")
-      set(xproofd OFF CACHE BOOL "Disabled because xrootd version is 5 or greater" FORCE)
-    endif()
-  endif()
-endif()
-
-#---check if netxng and netx can be built-------------------------------
-if(xrootd AND XROOTD_VERSIONNUM VERSION_GREATER 300030005)
+#---check if netxng can be built-------------------------------
+if(xrootd)
   set(netxng ON)
-else()
-  set(netxng OFF)
-endif()
-if(xrootd AND XROOTD_VERSIONNUM VERSION_LESS 500000000)
-  set(netx ON)
-else()
-  set(netx OFF)
 endif()
 
 #---make sure non-builtin xrootd is not using builtin_openssl-----------
@@ -1047,24 +952,6 @@ if(xrootd AND NOT builtin_xrootd AND builtin_openssl)
   else()
     message(STATUS "Non-builtin XROOTD must not be used with builtin OpenSSL. Disabling the 'xrootd' option.")
     set(xrootd OFF CACHE BOOL "Disabled because non-builtin xrootd cannot be used with builtin OpenSSL" FORCE)
-  endif()
-endif()
-
-#---Alien support----------------------------------------------------------------
-if(alien)
-  find_package(Alien)
-  if(NOT ALIEN_FOUND)
-    if(fail-on-missing)
-      message(FATAL_ERROR " Alien API not found and is required."
-        " Set the variable ALIEN_DIR to point to your Alien installation,"
-        " or include the installation of Alien in the CMAKE_PREFIX_PATH.")
-    else()
-      message(STATUS " Alien API not found."
-        " Set variable ALIEN_DIR to point to your Alien installation,"
-        " or include the installation of Alien in the CMAKE_PREFIX_PATH."
-        " For the time being switching OFF 'alien' option")
-      set(alien OFF CACHE BOOL "Disabled because Alien API not found (${alien_description})" FORCE)
-    endif()
   endif()
 endif()
 
@@ -1094,22 +981,6 @@ if(arrow)
   endif()
 
 endif()
-
-#---Check for gfal-------------------------------------------------------------------
-if(gfal)
-  find_package(GFAL)
-  if(NOT GFAL_FOUND)
-    if(fail-on-missing)
-      message(FATAL_ERROR "Gfal library not found and is required (gfal option enabled)")
-    else()
-      message(STATUS "GFAL library not found. Set variable GFAL_DIR to point to your gfal installation
-                      and the variable SRM_IFCE_DIR to the srm_ifce installation")
-      message(STATUS "For the time being switching OFF 'gfal' option")
-      set(gfal OFF CACHE BOOL "Disabled because GFAL not found (${gfal_description})" FORCE)
-    endif()
-  endif()
-endif()
-
 
 #---Check for dCache-------------------------------------------------------------------
 if(dcache)
@@ -1187,13 +1058,21 @@ if(davix AND NOT builtin_davix)
     find_package(Davix 0.6.4)
     if(NOT DAVIX_FOUND)
       find_package(libuuid)
+      if(NOT libuuid_FOUND)
+        message(STATUS "Davix dependency libuuid not found, switching OFF 'davix' option.")
+      endif()
       find_package(LibXml2)
+      if(NOT LIBXML2_FOUND)
+        message(STATUS "Davix dependency libxml2 not found, switching OFF 'davix' option.")
+      endif()
       find_package(OpenSSL)
-      if(UUID_FOUND AND LIBXML2_FOUND AND (OPENSSL_FOUND OR builtin_openssl))
+      if(NOT (OPENSSL_FOUND OR builtin_openssl))
+        message(STATUS "Davix dependency openssl not found, switching OFF 'davix' option.")
+      endif()
+      if(libuuid_FOUND AND LIBXML2_FOUND AND (OPENSSL_FOUND OR builtin_openssl))
         message(STATUS "Davix not found, switching ON 'builtin_davix' option.")
         set(builtin_davix ON CACHE BOOL "Enabled because external Davix not found but davix requested (${builtin_davix_description})" FORCE)
       else()
-        message(STATUS "Davix dependencies not found, switching OFF 'davix' option.")
         set(davix OFF CACHE BOOL "Disabled because dependencies not found (${davix_description})" FORCE)
       endif()
     endif()
@@ -1294,9 +1173,9 @@ endif()
 if(imt AND NOT builtin_tbb)
   message(STATUS "Looking for TBB")
   if(fail-on-missing)
-    find_package(TBB 2018 REQUIRED)
+    find_package(TBB 2020 REQUIRED)
   else()
-    find_package(TBB 2018)
+    find_package(TBB 2020)
     if(NOT TBB_FOUND)
       message(STATUS "TBB not found, enabling 'builtin_tbb' option")
       set(builtin_tbb ON CACHE BOOL "Enabled because imt is enabled, but TBB was not found" FORCE)
@@ -1337,93 +1216,55 @@ if(builtin_tbb AND NO_CONNECTION)
 endif()
 
 if(builtin_tbb)
-  set(tbb_builtin_version 2019_U9)
-  set(tbb_sha256 15652f5328cf00c576f065e5cd3eaf3317422fe82afb67a9bcec0dc065bd2abe)
-  if(CMAKE_CXX_COMPILER_ID MATCHES Clang)
-    set(_tbb_compiler compiler=clang)
-  elseif(CMAKE_CXX_COMPILER_ID STREQUAL Intel)
-    set(_tbb_compiler compiler=icc)
-  elseif(CMAKE_CXX_COMPILER_ID STREQUAL GNU)
-    set(_tbb_compiler compiler=gcc)
-  endif()
-  if(${ROOT_ARCHITECTURE} MATCHES "macosxarm64")
-    set(tbb_command patch -p1 -i ${CMAKE_SOURCE_DIR}/builtins/tbb/patches/apple-m1.patch)
-  else()
-    set(tbb_command "")
-  endif()
+  set(tbb_url ${lcgpackages}/oneTBB-2021.9.0.tar.gz)
+  set(tbb_sha256 1ce48f34dada7837f510735ff1172f6e2c261b09460e3bf773b49791d247d24e)
+
   if(MSVC)
-    set(vsdir "vs2013")
-    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-      set(tbb_arch x64)
-    else()
-      set(tbb_arch Win32)
-    endif()
-    set(tbbbuild "Release")
+    set(tbb_build Release)
     if(winrtdebug)
-      set(tbbbuild "Debug")
+      set(tbb_build Debug)
       set(tbbsuffix "_debug")
     endif()
-    set(TBB_LIBRARIES ${CMAKE_BINARY_DIR}/lib/tbb${tbbsuffix}.lib)
+    set(TBB_LIBRARIES ${CMAKE_BINARY_DIR}/lib/tbb12${tbbsuffix}.lib)
     ExternalProject_Add(
       TBB
-      URL ${lcgpackages}/tbb-${tbb_builtin_version}.tar.gz
+      URL ${tbb_url}
       URL_HASH SHA256=${tbb_sha256}
       INSTALL_DIR ${CMAKE_BINARY_DIR}
-      CONFIGURE_COMMAND devenv.exe /useenv /upgrade build/${vsdir}/makefile.sln
-      BUILD_COMMAND MSBuild.exe build/${vsdir}/makefile.sln /p:Configuration=${tbbbuild} /p:Platform=${tbb_arch}
-      INSTALL_COMMAND ${CMAKE_COMMAND} -E copy_if_different build/${vsdir}/${tbb_arch}/${tbbbuild}/tbb${tbbsuffix}.dll ${CMAKE_BINARY_DIR}/bin/
-              COMMAND ${CMAKE_COMMAND} -E copy_if_different build/${vsdir}/${tbb_arch}/${tbbbuild}/tbbmalloc${tbbsuffix}.dll ${CMAKE_BINARY_DIR}/bin/
-              COMMAND ${CMAKE_COMMAND} -E copy_if_different build/${vsdir}/${tbb_arch}/${tbbbuild}/tbbmalloc_proxy${tbbsuffix}.dll ${CMAKE_BINARY_DIR}/bin/
-              COMMAND ${CMAKE_COMMAND} -E copy_if_different build/${vsdir}/${tbb_arch}/${tbbbuild}/tbb${tbbsuffix}.lib ${CMAKE_BINARY_DIR}/lib/
-              COMMAND ${CMAKE_COMMAND} -E copy_if_different build/${vsdir}/${tbb_arch}/${tbbbuild}/tbbmalloc${tbbsuffix}.lib ${CMAKE_BINARY_DIR}/lib/
-              COMMAND ${CMAKE_COMMAND} -E copy_if_different build/${vsdir}/${tbb_arch}/${tbbbuild}/tbbmalloc_proxy${tbbsuffix}.lib ${CMAKE_BINARY_DIR}/lib/
-              COMMAND ${CMAKE_COMMAND} -E copy_if_different build/${vsdir}/${tbb_arch}/${tbbbuild}/tbb${tbbsuffix}.pdb ${CMAKE_BINARY_DIR}/bin/
-              COMMAND ${CMAKE_COMMAND} -E copy_if_different build/${vsdir}/${tbb_arch}/${tbbbuild}/tbbmalloc${tbbsuffix}.pdb ${CMAKE_BINARY_DIR}/bin/
-              COMMAND ${CMAKE_COMMAND} -E copy_if_different build/${vsdir}/${tbb_arch}/${tbbbuild}/tbbmalloc_proxy${tbbsuffix}.pdb ${CMAKE_BINARY_DIR}/bin/
-              COMMAND ${CMAKE_COMMAND} -Dinstall_dir=<INSTALL_DIR> -Dsource_dir=<SOURCE_DIR>
-                                       -P ${CMAKE_SOURCE_DIR}/cmake/scripts/InstallTBB.cmake
-      BUILD_IN_SOURCE 1
-      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1
+      CMAKE_ARGS -DCMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD} -DTBB_ENABLE_IPO=OFF -DTBB_TEST=Off -DTBB_STRICT=Off -DTBBMALLOC_BUILD=Off -DTBBMALLOC_PROXY_BUILD=Off "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}" "-DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/lib" "-DCMAKE_INSTALL_INCLUDEDIR=${CMAKE_BINARY_DIR}/include"
+      BUILD_COMMAND ${CMAKE_COMMAND} --build . --config ${tbb_build}
+      INSTALL_COMMAND ${CMAKE_COMMAND}  --install . --config ${tbb_build}
+      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 LOG_OUTPUT_ON_FAILURE 1
       BUILD_BYPRODUCTS ${TBB_LIBRARIES}
       TIMEOUT 600
     )
-    install(DIRECTORY ${CMAKE_BINARY_DIR}/bin/ DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT libraries FILES_MATCHING PATTERN "tbb*")
-    install(DIRECTORY ${CMAKE_BINARY_DIR}/lib/ DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT libraries FILES_MATCHING PATTERN "tbb*")
+    install(DIRECTORY ${CMAKE_BINARY_DIR}/bin/ DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT libraries FILES_MATCHING PATTERN "tbb*.dll")
+    install(DIRECTORY ${CMAKE_BINARY_DIR}/lib/ DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT libraries FILES_MATCHING PATTERN "tbb*.lib")
   else()
-    ROOT_ADD_CXX_FLAG(_tbb_cxxflags -mno-rtm)
-    # Here we check that the CMAKE_OSX_SYSROOT variable is not empty otherwise
-    # it can happen that a "-isysroot" switch is added without an argument.
-    if(APPLE AND CMAKE_OSX_SYSROOT)
-      set(_tbb_cxxflags "${_tbb_cxxflags} -isysroot ${CMAKE_OSX_SYSROOT}")
-      set(_tbb_ldflags "${_tbb_ldflags} -isysroot ${CMAKE_OSX_SYSROOT}")
-    endif()
     set(TBB_LIBRARIES ${CMAKE_BINARY_DIR}/lib/libtbb${CMAKE_SHARED_LIBRARY_SUFFIX})
     ExternalProject_Add(
       TBB
-      URL ${lcgpackages}/tbb-${tbb_builtin_version}.tar.gz
+      URL ${tbb_url}
       URL_HASH SHA256=${tbb_sha256}
       INSTALL_DIR ${CMAKE_BINARY_DIR}
-      PATCH_COMMAND sed -i -e "/clang -v/s@-v@--version@" build/macos.inc
-      COMMAND ${tbb_command}
-      CONFIGURE_COMMAND ""
-      BUILD_COMMAND make ${_tbb_compiler} cpp0x=1 "CXXFLAGS=${_tbb_cxxflags}" CPLUS=${CMAKE_CXX_COMPILER} CONLY=${CMAKE_C_COMPILER} "LDFLAGS=${_tbb_ldflags}"
-      INSTALL_COMMAND ${CMAKE_COMMAND} -Dinstall_dir=<INSTALL_DIR> -Dsource_dir=<SOURCE_DIR>
-                                       -P ${CMAKE_SOURCE_DIR}/cmake/scripts/InstallTBB.cmake
-      INSTALL_COMMAND ""
-      BUILD_IN_SOURCE 1
-      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1
+      CMAKE_ARGS -DCMAKE_CXX_STANDARD=${CMAKE_CXX_STANDARD} -DTBB_ENABLE_IPO=OFF -DTBB_TEST=Off -DTBB_STRICT=Off -DTBBMALLOC_BUILD=Off -DTBBMALLOC_PROXY_BUILD=Off "-DCMAKE_INSTALL_PREFIX=${CMAKE_CURRENT_BINARY_DIR}" "-DCMAKE_INSTALL_LIBDIR=${CMAKE_BINARY_DIR}/lib" "-DCMAKE_INSTALL_INCLUDEDIR=${CMAKE_BINARY_DIR}/include"
+      LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1 LOG_OUTPUT_ON_FAILURE 1
       BUILD_BYPRODUCTS ${TBB_LIBRARIES}
       TIMEOUT 600
     )
     install(DIRECTORY ${CMAKE_BINARY_DIR}/lib/ DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT libraries FILES_MATCHING PATTERN "libtbb*")
   endif()
+
   ExternalProject_Add_Step(
      TBB tbb2externals
      COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/include/tbb ${CMAKE_BINARY_DIR}/ginclude/tbb
+     COMMAND ${CMAKE_COMMAND} -E copy_directory ${CMAKE_BINARY_DIR}/include/oneapi ${CMAKE_BINARY_DIR}/ginclude/oneapi
      DEPENDEES install
   )
   set(TBB_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/ginclude)
   set(TBB_CXXFLAGS "-DTBB_SUPPRESS_DEPRECATED_MESSAGES=1")
+  # The following line is needed to generate the proper dependency with: BUILTINS TBB (in Imt)
+  # and generated with this syntax: add_dependencies(${library} ${${arg1}_TARGET})
   set(TBB_TARGET TBB)
 endif()
 
@@ -1434,9 +1275,9 @@ if(builtin_vc)
   set(vc ON CACHE BOOL "Enabled because builtin_vc requested (${vc_description})" FORCE)
 elseif(vc)
   if(fail-on-missing)
-    find_package(Vc 1.3.0 CONFIG QUIET REQUIRED)
+    find_package(Vc 1.4.4 CONFIG QUIET REQUIRED)
   else()
-    find_package(Vc 1.3.0 CONFIG QUIET)
+    find_package(Vc 1.4.4 CONFIG QUIET)
     if(NOT Vc_FOUND)
       message(STATUS "Vc library not found, support for it disabled.")
       message(STATUS "Please enable the option 'builtin_vc' to build Vc internally.")
@@ -1458,7 +1299,7 @@ if(vc AND NOT Vc_FOUND AND NO_CONNECTION)
 endif()
 
 if(vc AND NOT Vc_FOUND)
-  set(Vc_VERSION "1.4.3")
+  set(Vc_VERSION "1.4.4")
   set(Vc_PROJECT "Vc-${Vc_VERSION}")
   set(Vc_SRC_URI "${lcgpackages}/${Vc_PROJECT}.tar.gz")
   set(Vc_DESTDIR "${CMAKE_BINARY_DIR}/externals")
@@ -1468,7 +1309,7 @@ if(vc AND NOT Vc_FOUND)
 
   ExternalProject_Add(VC
     URL     ${Vc_SRC_URI}
-    URL_HASH SHA256=988ea0053f3fbf17544ca776a2749c097b3139089408b0286fa4e9e8513e037f
+    URL_HASH SHA256=5933108196be44c41613884cd56305df320263981fe6a49e648aebb3354d57f3
     BUILD_IN_SOURCE 0
     BUILD_BYPRODUCTS ${Vc_LIBRARY}
     LOG_DOWNLOAD 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1
@@ -1684,6 +1525,12 @@ if(vdt OR builtin_vdt)
             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT extra-headers)
     set(vdt ON CACHE BOOL "Enabled because builtin_vdt enabled (${vdt_description})" FORCE)
     set_property(GLOBAL APPEND PROPERTY ROOT_BUILTIN_TARGETS VDT)
+    add_library(VDT::VDT STATIC IMPORTED GLOBAL)
+    set_target_properties(VDT::VDT
+      PROPERTIES
+        IMPORTED_LOCATION "${VDT_LIBRARIES}"
+        INTERFACE_INCLUDE_DIRECTORIES "${VDT_INCLUDE_DIRS}"
+    )
   endif()
 endif()
 
@@ -1715,7 +1562,11 @@ endif()
 
 if(tmva-sofie)
   message(STATUS "Looking for Protobuf")
-  find_package(Protobuf)
+  set(protobuf_MODULE_COMPATIBLE TRUE)
+  find_package(Protobuf CONFIG)
+  if(NOT Protobuf_FOUND)
+    find_package(Protobuf MODULE)
+  endif()
   if(NOT Protobuf_FOUND)
     if(fail-on-missing)
       message(FATAL_ERROR "Protobuf libraries not found and they are required (tmva-sofie option enabled)")
@@ -1731,86 +1582,40 @@ if(tmva-sofie)
         message(STATUS "Protobuf found but its version is not high enough (>3.0). Switching off tmva-sofie option")
         set(tmva-sofie OFF CACHE BOOL "Disabled because found Protobuf version is not enough" FORCE)
       endif()
+    else()
+      if(NOT TARGET protobuf::protoc)
+        if(fail-on-missing)
+          message(FATAL_ERROR "Protobuf compiler not found (tmva-sofie option enabled)")
+        else()
+          message(STATUS "Protobuf compiler not found. Switching off tmva-sofie option")
+          set(tmva-sofie OFF CACHE BOOL "Disabled because Protobuf compiler not found" FORCE)
+        endif()
+      endif()
     endif()
   endif()
 endif()
 
-#---Check for CUDA-----------------------------------------------------------------------
-# if tmva-gpu is off and cuda is on cuda is searched but not used in tmva
-#  if cuda is off but tmva-gpu is on cuda is searched and activated if found !
-#
-if(cuda OR tmva-gpu)
-  find_package(CUDA)
-  if(CUDA_FOUND)
-    if(NOT DEFINED CMAKE_CUDA_STANDARD)
-      set(CMAKE_CUDA_STANDARD ${CMAKE_CXX_STANDARD})
-    endif()
-    enable_language(CUDA)
-    set(cuda ON CACHE BOOL "Found Cuda for TMVA GPU" FORCE)
-    # CUDA_NVCC_EXECUTABLE
-    if(DEFINED ENV{CUDA_NVCC_EXECUTABLE})
-      set(CUDA_NVCC_EXECUTABLE "$ENV{CUDA_NVCC_EXECUTABLE}" CACHE FILEPATH "The CUDA compiler")
-    else()
-      find_program(CUDA_NVCC_EXECUTABLE
-        NAMES nvcc nvcc.exe
-        PATHS "${CUDA_TOOLKIT_ROOT_DIR}"
-          ENV CUDA_TOOLKIT_ROOT
-          ENV CUDA_PATH
-          ENV CUDA_BIN_PATH
-        PATH_SUFFIXES bin bin64
-        DOC "The CUDA compiler"
-        NO_DEFAULT_PATH
-      )
-      find_program(CUDA_NVCC_EXECUTABLE
-        NAMES nvcc nvcc.exe
-        PATHS /opt/cuda/bin
-        PATH_SUFFIXES cuda/bin
-        DOC "The CUDA compiler"
-      )
-      # Search default search paths, after we search our own set of paths.
-      find_program(CUDA_NVCC_EXECUTABLE nvcc)
-    endif()
-    mark_as_advanced(CUDA_NVCC_EXECUTABLE)
-    ###
-    ### look for package CuDNN
-    if (cudnn)
-      if (fail-on-missing)
-        find_package(CUDNN REQUIRED)
-      else()
-        find_package(CUDNN)
-      endif()
-      if (CUDNN_FOUND)
-        message(STATUS "CuDNN library found: " ${CUDNN_LIBRARIES})
-	### set tmva-cudnn flag only if tmva-gpu is on!
-        if (tmva-gpu)
-          set(tmva-cudnn ON)
-        endif()
-      else()
-        message(STATUS "CUDNN library not found")
-        set(cudnn OFF CACHE BOOL "Disabled because cudnn is not found" FORCE)
-      endif()
+### Look for package CuDNN. If both cudnn and tmva-gpu are set and cudnn was
+### found, it implies the tmva-cudnn flag.
+if (cudnn)
+  if (fail-on-missing)
+    find_package(CUDNN REQUIRED)
+  else()
+    find_package(CUDNN)
+  endif()
+  if (CUDNN_FOUND)
+    message(STATUS "CuDNN library found: " ${CUDNN_LIBRARIES})
+    ### set tmva-cudnn flag only if tmva-gpu is on!
+    if (tmva-gpu)
+      set(tmva-cudnn ON)
     endif()
   else()
-    if(fail-on-missing)
-       message(FATAL_ERROR "CUDA not found. Ensure that the installation of CUDA is in the CMAKE_PREFIX_PATH")
-    else()
-       message(STATUS "CUDA not found. Disable RooFit and TMVA cuda computation")
-       set(cuda OFF CACHE BOOL "Disabled because Cuda is not found" FORCE)
-       set(cudnn OFF)
-       set(tmva-gpu OFF)
-    endif()
+    message(STATUS "CUDNN library not found")
+    set(cudnn OFF CACHE BOOL "Disabled because cudnn is not found" FORCE)
   endif()
-else()
-  if (cudnn)
-    message(STATUS "Cannot select cudnn without selecting cuda or tmva-gpu. Option is ignored")
-    set(cudnn OFF)
-  endif()
-endif()
-#
+endif(cudnn)
+
 #---TMVA and its dependencies------------------------------------------------------------
-if (tmva AND NOT mlp)
-  message(FATAL_ERROR "The 'tmva' option requires 'mlp', please enable mlp with -Dmlp=ON")
-endif()
 if(tmva)
   if(tmva-cpu AND imt)
     message(STATUS "Looking for BLAS for optional parts of TMVA")
@@ -1825,14 +1630,20 @@ if(tmva)
   else()
     set(tmva-cpu OFF CACHE BOOL "Disabled because 'imt' is disabled (${tmva-cpu_description})" FORCE)
   endif()
-  if(tmva-gpu AND NOT CUDA_FOUND)
+  if(tmva-gpu AND NOT CMAKE_CUDA_COMPILER)
     set(tmva-gpu OFF CACHE BOOL "Disabled because cuda not found" FORCE)
   endif()
+  if(tmva-gpu)
+    # So far, TMVA is the only package that uses the CUDA toolkit. RooFit is
+    # just compiling libraries with the NVidia compiler itself. If more ROOT
+    # components depend on the CUDA toolkit, this should be moved.
+    find_package(CUDAToolkit REQUIRED)
+  endif()
   if(tmva-pymva)
-    if(fail-on-missing AND (NOT NUMPY_FOUND OR (NOT PYTHONLIBS_FOUND AND NOT Python2_Interpreter_Development_FOUND AND NOT Python3_Interpreter_Development_FOUND)))
+    if(fail-on-missing AND (NOT Python3_NumPy_FOUND OR NOT Python3_Development_FOUND))
       message(FATAL_ERROR "TMVA: numpy python package or Python development package not found and tmva-pymva component required"
                           " (python executable: ${PYTHON_EXECUTABLE})")
-    elseif(NOT NUMPY_FOUND OR (NOT PYTHONLIBS_FOUND AND NOT Python2_Interpreter_Development_FOUND AND NOT Python3_Interpreter_Development_FOUND))
+    elseif(NOT Python3_NumPy_FOUND OR NOT Python3_Development_FOUND)
       message(STATUS "TMVA: Numpy or Python development package not found for python ${PYTHON_EXECUTABLE}. Switching off tmva-pymva option")
       set(tmva-pymva OFF CACHE BOOL "Disabled because Numpy or Python development package were not found (${tmva-pymva_description})" FORCE)
     endif()
@@ -1849,47 +1660,23 @@ else()
   set(tmva-gpu   OFF CACHE BOOL "Disabled because 'tmva' is disabled (${tmva-gpu_description})"   FORCE)
   set(tmva-pymva OFF CACHE BOOL "Disabled because 'tmva' is disabled (${tmva-pymva_description})" FORCE)
   set(tmva-rmva  OFF CACHE BOOL "Disabled because 'tmva' is disabled (${tmva-rmva_description})"  FORCE)
-endif()
+endif(tmva)
 
 #---Check for PyROOT---------------------------------------------------------------------
 if(pyroot)
-  if(fail-on-missing AND (NOT PYTHONLIBS_FOUND AND NOT Python2_Interpreter_Development_FOUND AND NOT Python3_Interpreter_Development_FOUND))
-    message(FATAL_ERROR "PyROOT: Python development package not found and pyroot component required"
-                        " (python executable: ${PYTHON_EXECUTABLE})")
-  elseif(NOT PYTHONLIBS_FOUND AND NOT Python2_Interpreter_Development_FOUND AND NOT Python3_Interpreter_Development_FOUND)
-    message(STATUS "PyROOT: Python development package not found for python ${PYTHON_EXECUTABLE}. Switching off pyroot option")
-    set(pyroot OFF CACHE BOOL "Disabled because Python development package was not found" FORCE)
-  endif()
-  mark_as_advanced(FORCE pyroot2 pyroot3)
-  if(fail-on-missing AND pyroot2 AND NOT Python2_Interpreter_Development_FOUND)
-    message(FATAL_ERROR "PyROOT2: Python2 development package not found and pyroot2 component required"
-                        " (python2 executable: ${Python2_EXECUTABLE})")
-  endif()
-  if(fail-on-missing AND pyroot3 AND NOT Python3_Interpreter_Development_FOUND)
-    message(FATAL_ERROR "PyROOT3: Python3 development package not found and pyroot3 component required"
-                        " (python3 executable: ${Python3_EXECUTABLE})")
-  endif()
-endif()
 
-#---Check for PyROOT legacy---------------------------------------------------------------
-if(pyroot_legacy)
-  if(NOT pyroot)
-    message(FATAL_ERROR "pyroot_legacy is ON but pyroot is OFF. Please reconfigure with -Dpyroot=ON")
+  if(NOT Python3_Development_FOUND)
+    if(fail-on-missing)
+      message(FATAL_ERROR "PyROOT: Python development package not found and pyroot component required"
+                          " (python executable: ${PYTHON_EXECUTABLE})")
+    else()
+      message(STATUS "PyROOT: Python development package not found for python ${PYTHON_EXECUTABLE}. Switching off pyroot option")
+      set(pyroot OFF CACHE BOOL "Disabled because Python development package was not found for ${PYTHON_EXECUTABLE}" FORCE)
+    endif()
   endif()
 
-  if(fail-on-missing AND (NOT PYTHONLIBS_FOUND AND NOT Python2_Interpreter_Development_FOUND AND NOT Python3_Interpreter_Development_FOUND))
-    message(FATAL_ERROR "PyROOT: Python development package not found and pyroot legacy component required"
-                        " (python executable: ${PYTHON_EXECUTABLE})")
-  elseif(NOT PYTHONLIBS_FOUND AND NOT Python2_Interpreter_Development_FOUND AND NOT Python3_Interpreter_Development_FOUND)
-    message(STATUS "PyROOT: Python development package not found for python ${PYTHON_EXECUTABLE}. Switching off pyroot_legacy option")
-    set(pyroot_legacy OFF CACHE BOOL "Disabled because Python development package was not found" FORCE)
-  endif()
-endif()
+  message(STATUS "PyROOT: development package found. Building for version ${PYTHON_VERSION_STRING}")
 
-#---Check for deprecated PyROOT experimental ---------------------------------------------
-if(pyroot_experimental)
-  message(WARNING "pyroot_experimental is a deprecated flag from 6.22.00."
-                  "To build the new PyROOT, just configure with -Dpyroot=ON -Dpyroot_experimental=OFF.")
 endif()
 
 #---Check for MPI---------------------------------------------------------------------
@@ -1928,9 +1715,9 @@ if (roofit_multiprocess)
     set(CMAKE_FIND_PACKAGE_PREFER_CONFIG TRUE)
 
     if(fail-on-missing)
-      find_package(ZeroMQ REQUIRED)
+      find_package(ZeroMQ 4.3.5 REQUIRED)
     else()
-      find_package(ZeroMQ)
+      find_package(ZeroMQ 4.3.5)
       if(NOT ZeroMQ_FOUND)
         message(STATUS "ZeroMQ not found. Switching on builtin_zeromq option")
         set(builtin_zeromq ON CACHE BOOL "Enabled because ZeroMQ not found (${builtin_zeromq_description})" FORCE)
@@ -1974,12 +1761,6 @@ if (roofit_multiprocess)
     list(APPEND ROOT_BUILTINS cppzmq)
     add_subdirectory(builtins/zeromq/cppzmq)
   endif()
-
-  # zmq_ppoll is still in the draft API, so enable that transitively
-  target_compile_definitions(libzmq INTERFACE ZMQ_BUILD_DRAFT_API)
-  target_compile_definitions(libzmq INTERFACE ZMQ_NO_EXPORT)
-  target_compile_definitions(cppzmq INTERFACE ZMQ_BUILD_DRAFT_API)
-  target_compile_definitions(cppzmq INTERFACE ZMQ_NO_EXPORT)
 endif (roofit_multiprocess)
 
 #---Check for googletest---------------------------------------------------------------
@@ -2095,7 +1876,6 @@ if (builtin_gtest)
     add_library(${lib} IMPORTED STATIC GLOBAL)
     set_target_properties(${lib} PROPERTIES
       IMPORTED_LOCATION "${_G_LIBRARY_PATH}${CMAKE_STATIC_LIBRARY_PREFIX}${lib}${CMAKE_STATIC_LIBRARY_SUFFIX}"
-      INTERFACE_INCLUDE_DIRECTORIES "${GTEST_INCLUDE_DIRS}"
     )
     add_dependencies(${lib} googletest)
     if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU" AND
@@ -2160,13 +1940,23 @@ if(webgui)
   endif()
   ExternalProject_Add(
     RENDERCORE
-    URL ${CMAKE_SOURCE_DIR}/builtins/rendercore/RenderCore.tar.gz
-    URL_HASH SHA256=a0b1cc0d4e8d739b113ace87e33de77572cf019772899549cb082088943513e1
+    URL ${CMAKE_SOURCE_DIR}/builtins/rendercore/RenderCore-1.3.tar.gz
+    URL_HASH SHA256=5f5d885c69b35cd71cf630fd7f37728650bb144f7bb176382d7f4d9dbc3e8066
     CONFIGURE_COMMAND ""
     BUILD_COMMAND ""
     INSTALL_COMMAND ""
     SOURCE_DIR ${CMAKE_BINARY_DIR}/ui5/eve7/rcore
     TIMEOUT 600
+  )
+  ExternalProject_Add(
+     MATHJAX
+     URL ${CMAKE_SOURCE_DIR}/documentation/doxygen/mathjax.tar.gz
+     URL_HASH SHA256=c5e22e60430a65963a87ab4dcc8856b9be5bd434d3b3871f27ee65b584c3c3ea
+     CONFIGURE_COMMAND ""
+     BUILD_COMMAND ""
+     INSTALL_COMMAND ""
+     SOURCE_DIR ${CMAKE_BINARY_DIR}/js/mathjax/
+     TIMEOUT 600
   )
   install(DIRECTORY ${CMAKE_BINARY_DIR}/ui5/eve7/rcore/ DESTINATION ${CMAKE_INSTALL_OPENUI5DIR}/eve7/rcore/ COMPONENT libraries FILES_MATCHING PATTERN "*")
 endif()

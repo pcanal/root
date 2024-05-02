@@ -20,17 +20,20 @@
 #include <memory>
 #include <string>
 
+class RooSimultaneous;
+
+namespace RooFit {
+
+namespace Experimental {
+
 /// @brief  A wrapper class to store a C++ function of type 'double (*)(double*, double*)'.
 /// The parameters can be accessed as params[<relative position of param in paramSet>] in the function body.
 /// The observables can be accessed as obs[i + j], where i represents the observable position and j
 /// represents the data entry.
 class RooFuncWrapper final : public RooAbsReal {
 public:
-   RooFuncWrapper(const char *name, const char *title, std::string const &funcBody, RooArgSet const &paramSet,
-                  const RooAbsData *data = nullptr);
-
-   RooFuncWrapper(const char *name, const char *title, RooAbsReal const &obj, RooArgSet const &normSet,
-                  const RooAbsData *data = nullptr);
+   RooFuncWrapper(const char *name, const char *title, RooAbsReal &obj, const RooAbsData *data = nullptr,
+                  RooSimultaneous const *simPdf = nullptr, bool useEvaluator=false);
 
    RooFuncWrapper(const RooFuncWrapper &other, const char *name = nullptr);
 
@@ -38,11 +41,23 @@ public:
 
    double defaultErrorLevel() const override { return 0.5; }
 
-   void getGradient(double *out) const;
+   bool hasGradient() const override { return _hasGradient; }
+   void gradient(double *out) const override;
 
    void gradient(const double *x, double *g) const;
 
    std::size_t getNumParams() const { return _params.size(); }
+
+   void dumpCode();
+
+   void dumpGradient();
+
+   /// No constant term optimization is possible in code-generation mode.
+   void constOptimizeTestStatistic(ConstOpCode /*opcode*/, bool /*doAlsoTrackingOpt*/) override {}
+
+   std::string const &funcName() const { return _funcName; }
+
+   void createGradient();
 
 protected:
    double evaluate() const override;
@@ -50,17 +65,17 @@ protected:
 private:
    std::string buildCode(RooAbsReal const &head);
 
+   static std::string declareFunction(std::string const &funcBody);
+
    void updateGradientVarBuffer() const;
 
-   void
-   loadParamsAndData(std::string funcName, RooAbsArg const *head, RooArgSet const &paramSet, const RooAbsData *data);
-
-   void declareAndDiffFunction(std::string funcName, std::string const &funcBody);
+   void loadParamsAndData(RooAbsArg const *head, RooArgSet const &paramSet, const RooAbsData *data,
+                          RooSimultaneous const *simPdf);
 
    void buildFuncAndGradFunctors();
 
-   using Func = double (*)(double *, double const *);
-   using Grad = void (*)(double *, double const *, double *);
+   using Func = double (*)(double *, double const *, double const *);
+   using Grad = void (*)(double *, double const *, double const *, double *);
 
    struct ObsInfo {
       ObsInfo(std::size_t i, std::size_t n) : idx{i}, size{n} {}
@@ -68,13 +83,21 @@ private:
       std::size_t size = 0;
    };
 
+   std::unique_ptr<RooAbsReal> _absReal;
    RooListProxy _params;
+   std::string _funcName;
    Func _func;
    Grad _grad;
+   bool _hasGradient = false;
    mutable std::vector<double> _gradientVarBuffer;
    std::vector<double> _observables;
    std::map<RooFit::Detail::DataKey, ObsInfo> _obsInfos;
    std::map<RooFit::Detail::DataKey, std::size_t> _nodeOutputSizes;
+   std::vector<double> _xlArr;
 };
+
+} // namespace Experimental
+
+} // namespace RooFit
 
 #endif

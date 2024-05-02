@@ -39,7 +39,7 @@ either use:
 
 #include "RooStats/RooStatsUtils.h"
 
-using namespace std;
+using std::cout, std::endl;
 
 bool RooStats::ProfileLikelihoodTestStat::fgAlwaysReuseNll = true ;
 
@@ -54,12 +54,8 @@ void RooStats::ProfileLikelihoodTestStat::SetAlwaysReuseNLL(bool flag) { fgAlway
 
 double RooStats::ProfileLikelihoodTestStat::EvaluateProfileLikelihood(int type, RooAbsData& data, RooArgSet& paramsOfInterest) {
 
-       if( fDetailedOutputEnabled && fDetailedOutput ) {
-          delete fDetailedOutput;
-          fDetailedOutput = 0;
-       }
-       if( fDetailedOutputEnabled && !fDetailedOutput ) {
-          fDetailedOutput = new RooArgSet();
+       if (fDetailedOutputEnabled) {
+          fDetailedOutput = std::make_unique<RooArgSet>();
        }
 
        //data.Print("V");
@@ -68,7 +64,7 @@ double RooStats::ProfileLikelihoodTestStat::EvaluateProfileLikelihood(int type, 
        tsw.Start();
 
        double initial_mu_value  = 0;
-       RooRealVar* firstPOI = dynamic_cast<RooRealVar*>( paramsOfInterest.first());
+       RooRealVar* firstPOI = dynamic_cast<RooRealVar*>(paramsOfInterest.first());
        if (firstPOI) initial_mu_value = firstPOI->getVal();
        //paramsOfInterest.getRealValue(firstPOI->GetName());
        if (fPrintLevel > 1) {
@@ -130,12 +126,12 @@ double RooStats::ProfileLikelihoodTestStat::EvaluateProfileLikelihood(int type, 
        double uncondML = 0;
        double fit_favored_mu = 0;
        int statusD = 0;
-       RooArgSet * detOutput = 0;
+       RooArgSet * detOutput = nullptr;
        if (type != 2) {
           // minimize and count eval errors
           fNll->clearEvalErrorLog();
           if (fPrintLevel>1) std::cout << "Do unconditional fit" << std::endl;
-     RooFitResult* result = GetMinNLL();
+          std::unique_ptr<RooFitResult> result{GetMinNLL()};
           if (result) {
              uncondML = result->minNll();
              statusD = result->status();
@@ -145,11 +141,10 @@ double RooStats::ProfileLikelihoodTestStat::EvaluateProfileLikelihood(int type, 
 
              // save this snapshot
              if( fDetailedOutputEnabled ) {
-                detOutput = DetailedOutputAggregator::GetAsArgSet(result, "fitUncond_", fDetailedOutputWithErrorsAndPulls);
+                detOutput = DetailedOutputAggregator::GetAsArgSet(result.get(), "fitUncond_", fDetailedOutputWithErrorsAndPulls);
                 fDetailedOutput->addOwned(*detOutput);
                 delete detOutput;
              }
-             delete result;
           }
           else {
              return TMath::SignalingNaN();   // this should not really happen
@@ -204,16 +199,15 @@ double RooStats::ProfileLikelihoodTestStat::EvaluateProfileLikelihood(int type, 
           }
           else {
             fNll->clearEvalErrorLog();
-            RooFitResult* result = GetMinNLL();
+            std::unique_ptr<RooFitResult> result{GetMinNLL()};
             if (result) {
                condML = result->minNll();
                statusN = result->status();
                if( fDetailedOutputEnabled ) {
-                  detOutput = DetailedOutputAggregator::GetAsArgSet(result, "fitCond_", fDetailedOutputWithErrorsAndPulls);
+                  detOutput = DetailedOutputAggregator::GetAsArgSet(result.get(), "fitCond_", fDetailedOutputWithErrorsAndPulls);
                   fDetailedOutput->addOwned(*detOutput);
                   delete detOutput;
                }
-               delete result;
             }
             else {
                return TMath::SignalingNaN();   // this should not really happen
@@ -234,10 +228,11 @@ double RooStats::ProfileLikelihoodTestStat::EvaluateProfileLikelihood(int type, 
              pll = fNll->getVal();
           }
           else {
-             if (type == 1)
-                pll = uncondML;
-             else if (type == 2)
-                pll = condML;
+             if (type == 1) {
+               pll = uncondML;
+             } else if (type == 2) {
+               pll = condML;
+             }
           }
        }
        else {  // type == 0
@@ -291,7 +286,7 @@ double RooStats::ProfileLikelihoodTestStat::EvaluateProfileLikelihood(int type, 
 ////////////////////////////////////////////////////////////////////////////////
 /// find minimum of NLL using RooMinimizer
 
-RooFitResult* RooStats::ProfileLikelihoodTestStat::GetMinNLL() {
+std::unique_ptr<RooFitResult> RooStats::ProfileLikelihoodTestStat::GetMinNLL() {
 
    const auto& config = GetGlobalRooStatsConfig();
    RooMinimizer minim(*fNll);
@@ -309,7 +304,7 @@ RooFitResult* RooStats::ProfileLikelihoodTestStat::GetMinNLL() {
    int status;
    for (int tries = 1, maxtries = 4; tries <= maxtries; ++tries) {
       status = minim.minimize(minimizer,algorithm);
-      if (status%1000 == 0) {  // ignore erros from Improve
+      if (status%1000 == 0) {  // ignore errors from Improve
          break;
       } else if (tries < maxtries) {
          cout << "    ----> Doing a re-scan first" << endl;
@@ -331,6 +326,6 @@ RooFitResult* RooStats::ProfileLikelihoodTestStat::GetMinNLL() {
    }
 
    //how to get cov quality faster?
-   return minim.save();
+   return std::unique_ptr<RooFitResult>{minim.save()};
    //minim.optimizeConst(false);
 }

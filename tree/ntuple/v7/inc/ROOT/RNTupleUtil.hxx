@@ -47,7 +47,7 @@ enum ENTupleStructure {
 /// Integer type long enough to hold the maximum number of entries in a column
 using NTupleSize_t = std::uint64_t;
 constexpr NTupleSize_t kInvalidNTupleIndex = std::uint64_t(-1);
-/// Wrap the integer in a struct in order to avoid template specialization clash with std::uint32_t
+/// Wrap the integer in a struct in order to avoid template specialization clash with std::uint64_t
 struct RClusterSize {
    using ValueType = std::uint64_t;
 
@@ -63,9 +63,14 @@ struct RClusterSize {
 using ClusterSize_t = RClusterSize;
 constexpr ClusterSize_t kInvalidClusterIndex(std::uint64_t(-1));
 
-/// Helper type to present an offset column as array of collection sizes. See RField<RNTupleCardinality> for details.
+/// Helper types to present an offset column as array of collection sizes.
+/// See RField<RNTupleCardinality<SizeT>> for details.
+template <typename SizeT>
 struct RNTupleCardinality {
-   using ValueType = std::size_t;
+   static_assert(std::is_same_v<SizeT, std::uint32_t> || std::is_same_v<SizeT, std::uint64_t>,
+                 "RNTupleCardinality is only supported with std::uint32_t or std::uint64_t template parameters");
+
+   using ValueType = SizeT;
 
    RNTupleCardinality() : fValue(0) {}
    explicit constexpr RNTupleCardinality(ValueType value) : fValue(value) {}
@@ -116,10 +121,8 @@ public:
    RClusterIndex  operator-(ClusterSize_t::ValueType off) const { return RClusterIndex(fClusterId, fIndex - off); }
    RClusterIndex  operator++(int) /* postfix */        { auto r = *this; fIndex++; return r; }
    RClusterIndex& operator++()    /* prefix */         { ++fIndex; return *this; }
-   bool operator==(const RClusterIndex &other) const {
-      return fClusterId == other.fClusterId && fIndex == other.fIndex;
-   }
-   bool operator!=(const RClusterIndex &other) const { return !(*this == other); }
+   bool operator==(RClusterIndex other) const { return fClusterId == other.fClusterId && fIndex == other.fIndex; }
+   bool operator!=(RClusterIndex other) const { return !(*this == other); }
 
    DescriptorId_t GetClusterId() const { return fClusterId; }
    ClusterSize_t::ValueType GetIndex() const { return fIndex; }
@@ -138,11 +141,15 @@ struct RNTupleLocatorObject64 {
 /// and therefore we need to store their actual size.
 /// TODO(jblomer): consider moving this to `RNTupleDescriptor`
 struct RNTupleLocator {
-   /// Values for the _Type_ field in non-disk locators; see `doc/specifications.md` for details
+   /// Values for the _Type_ field in non-disk locators.  Serializable types must have the MSb == 0; see
+   /// `doc/specifications.md` for details
    enum ELocatorType : std::uint8_t {
       kTypeFile = 0x00,
       kTypeURI = 0x01,
       kTypeDAOS = 0x02,
+
+      kLastSerializableType = 0x7f,
+      kTypePageZero = kLastSerializableType + 1,
    };
 
    /// Simple on-disk locators consisting of a 64-bit offset use variant type `uint64_t`; extended locators have
@@ -164,6 +171,15 @@ struct RNTupleLocator {
       return std::get<T>(fPosition);
    }
 };
+
+namespace Internal {
+template <typename T>
+auto MakeAliasedSharedPtr(T *rawPtr)
+{
+   const static std::shared_ptr<T> fgRawPtrCtrlBlock;
+   return std::shared_ptr<T>(fgRawPtrCtrlBlock, rawPtr);
+}
+} // namespace Internal
 
 } // namespace Experimental
 } // namespace ROOT

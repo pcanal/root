@@ -13,7 +13,7 @@
 #include <ROOT/RDF/RInterfaceBase.hxx>
 #include <ROOT/RDF/Utils.hxx>
 #include <ROOT/RDF/RVariationsDescription.hxx>
-#include <ROOT/RStringView.hxx>
+#include <string_view>
 #include <TTree.h>
 
 #include <algorithm> // std::for_each
@@ -23,6 +23,18 @@
 #include <sstream>
 #include <string>
 #include <unordered_set>
+
+unsigned int ROOT::RDF::RInterfaceBase::GetNFiles()
+{
+   // TTree/TChain as input
+   const auto tree = fLoopManager->GetTree();
+
+   if (tree) {
+      const auto files = ROOT::Internal::TreeUtils::GetFileNamesFromTree(*tree);
+      return files.size();
+   }
+   return 0;
+}
 
 std::string ROOT::RDF::RInterfaceBase::DescribeDataset() const
 {
@@ -36,7 +48,10 @@ std::string ROOT::RDF::RInterfaceBase::DescribeDataset() const
       const auto friendInfo = ROOT::Internal::TreeUtils::GetFriendInfo(*tree);
       const auto hasFriends = friendInfo.fFriendNames.empty() ? false : true;
       std::stringstream ss;
-      ss << "Dataframe from " << treeType << " " << treeName;
+      ss << "Dataframe from " << treeType;
+      if (*treeName != 0) {
+         ss << " " << treeName;
+      }
       if (isInMemory) {
          ss << " (in-memory)";
       } else {
@@ -104,13 +119,15 @@ std::string ROOT::RDF::RInterfaceBase::DescribeDataset() const
 }
 
 ROOT::RDF::RInterfaceBase::RInterfaceBase(std::shared_ptr<RDFDetail::RLoopManager> lm)
-   : fLoopManager(lm.get()), fDataSource(lm->GetDataSource()), fColRegister(std::move(lm))
+   : fLoopManager(lm), fDataSource(lm->GetDataSource()), fColRegister(lm.get())
 {
    AddDefaultColumns();
 }
 
 ROOT::RDF::RInterfaceBase::RInterfaceBase(RDFDetail::RLoopManager &lm, const RDFInternal::RColumnRegister &colRegister)
-   : fLoopManager(&lm), fDataSource(lm.GetDataSource()), fColRegister(colRegister)
+   : fLoopManager(std::shared_ptr<ROOT::Detail::RDF::RLoopManager>{&lm, [](ROOT::Detail::RDF::RLoopManager *) {}}),
+     fDataSource(lm.GetDataSource()),
+     fColRegister(colRegister)
 {
 }
 
@@ -137,7 +154,7 @@ ROOT::RDF::ColumnNames_t ROOT::RDF::RInterfaceBase::GetColumnNames()
          allColumns.emplace(colName);
    };
 
-   auto definedColumns = fColRegister.GetNames();
+   auto definedColumns = fColRegister.GenerateColumnNames();
 
    std::for_each(definedColumns.begin(), definedColumns.end(), addIfNotInternal);
 
@@ -174,13 +191,13 @@ ROOT::RDF::ColumnNames_t ROOT::RDF::RInterfaceBase::GetColumnNames()
 ///
 std::string ROOT::RDF::RInterfaceBase::GetColumnType(std::string_view column)
 {
-   const auto col = fColRegister.ResolveAlias(std::string(column));
+   const auto col = fColRegister.ResolveAlias(column);
 
    RDFDetail::RDefineBase *define = fColRegister.GetDefine(col);
 
    const bool convertVector2RVec = true;
-   return RDFInternal::ColumnName2ColumnTypeName(col, fLoopManager->GetTree(), fLoopManager->GetDataSource(), define,
-                                                 convertVector2RVec);
+   return RDFInternal::ColumnName2ColumnTypeName(std::string(col), fLoopManager->GetTree(),
+                                                 fLoopManager->GetDataSource(), define, convertVector2RVec);
 }
 
 /////////////////////////////////////////////////////////////////////////////
@@ -262,9 +279,7 @@ ROOT::RDF::RDFDescription ROOT::RDF::RInterfaceBase::Describe()
       if (definedColumnNamesSet.find(columnNames[i]) != definedColumnNamesSet.end())
          origin = "Define";
       ss << std::left << std::setw(columnWidthNames) << columnNames[i] << std::setw(columnWidthTypes) << columnTypes[i]
-         << origin;
-      if (i < nCols - 1)
-         ss << '\n';
+         << origin << '\n';
    }
    // Use the string returned from DescribeDataset() as the 'brief' description
    // Use the converted to string stringstream ss as the 'full' description

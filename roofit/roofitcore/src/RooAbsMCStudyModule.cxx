@@ -19,7 +19,7 @@
 \class RooAbsMCStudyModule
 \ingroup Roofitcore
 
-RooAbsMCStudyModule is a base class for add-on modules to RooMCStudy that
+Base class for add-on modules to RooMCStudy that
 can perform additional calculations on each generate+fit cycle managed
 by RooMCStudy.
 
@@ -31,18 +31,17 @@ summaryData() is merged with the 'master' summary dataset in RooMCStudy.
 Look at RooDLLSignificanceMCSModule for an example of an implementation.
 **/
 
-#include "RooAbsMCStudyModule.h"
+#include <RooAbsMCStudyModule.h>
 
-using namespace std;
+#include <RooFitResult.h>
 
 ClassImp(RooAbsMCStudyModule);
-  ;
 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Constructor
 
-RooAbsMCStudyModule::RooAbsMCStudyModule(const char* name, const char* title) : TNamed(name,title), _mcs(0)
+RooAbsMCStudyModule::RooAbsMCStudyModule(const char* name, const char* title) : TNamed(name,title), _mcs(nullptr)
 {
 }
 
@@ -65,3 +64,6 @@ bool RooAbsMCStudyModule::doInitializeInstance(RooMCStudy& study)
   return initializeInstance() ;
 }
 
+RooFit::OwningPtr<RooFitResult> RooAbsMCStudyModule::refit(RooAbsData* inGenSample) {
+  if (_mcs) return _mcs->refit(inGenSample) ; else return nullptr ;
+}

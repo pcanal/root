@@ -19,10 +19,10 @@ This is the base class for the ROOT Random number generators.
 This class defines the ROOT Random number interface and it should not be instantiated directly but used via its derived
 classes. The generator provided in TRandom itself is a LCG (Linear Congruential Generator), the <a
 href="https://www.gnu.org/software/gsl/manual/html_node/Unix-random-number-generators.html">BSD `rand` generator</a>,
-that it should not be used because its period is only 2**31, i.e. approximatly 2 billion events, that can be generated
+that it should not be used because its period is only 2**31, i.e. approximately 2 billion events, that can be generated
 in just few seconds.
 
-To generate random numbers, one should use the derived class, which  are :
+To generate random numbers, one should use one of the derived classes, which are:
 - TRandom3: it is based on the "Mersenne Twister generator",
 it is fast and a very long period of about \f$10^{6000}\f$. However it fails some of the most stringent tests of the
 <a href="http://simul.iro.umontreal.ca/testu01/tu01.html">TestU01 suite</a>.
@@ -45,7 +45,7 @@ than the generator with N=240. However, it has the same seeding capabilities, wi
 times less than TRandomMixMax240 and comparable to TRandom3).
 - ::TRandomMixMax256 : A variant of the MIXMAX generators, based on a state of N=256, and described in the
         <a  href="http://arxiv.org/abs/1403.5355">2015 paper</a>. This implementation has been modified with respect to
-the paper, by skipping 2 internal interations, to provide improved random properties.
+the paper, by skipping 2 internal iterations, to provide improved random properties.
 - ::TRandomMT64 :  Generator based on a the Mersenne-Twister generator with 64 bits,
   using the implementation provided by the standard library ( <a
 href="http://www.cplusplus.com/reference/random/mt19937_64/">std::mt19937_64</a> )
@@ -85,7 +85,7 @@ for the random numbers obtained using a macbookpro 2.6 GHz Intel Core i7 CPU:
 -   ::TRandom1          80   ns/call
 -   ::TRandomRanlux48  250  ns/call
 
-The following methods are provided to generate random numbers disctributed according to some basic distributions:
+The following methods are provided to generate random numbers distributed according to some basic distributions:
 
 - Exp(Double_t tau)
 - Integer(UInt_t imax)
@@ -107,7 +107,7 @@ package. You need in this case to initialize UNURAN to the function you would li
 The techniques of using directly a TF1,2 or 3 function is powerful and
 can be used to generate numbers in the defined range of the function.
 Getting a number from a TF1,2,3 function is also quite fast.
-UNURAN is a  powerful and flexible tool which containes various methods for
+UNURAN is a  powerful and flexible tool which contains various methods for
 generate random numbers for continuous distributions of one and multi-dimension.
 It requires some set-up (initialization) phase and can be very fast when the distribution
 parameters are not changed for every call.
@@ -177,6 +177,7 @@ A TRandom object may be written to a Root file
 #include "TDirectory.h"
 #include "Math/QuantFuncMathCore.h"
 #include "TUUID.h"
+#include "TError.h"
 
 ClassImp(TRandom);
 
@@ -194,7 +195,7 @@ TRandom::TRandom(UInt_t seed): TNamed("Random","Default Random number generator"
 
 TRandom::~TRandom()
 {
-   if (gRandom == this) gRandom = 0;
+   if (gRandom == this) gRandom = nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -331,7 +332,7 @@ Double_t TRandom::Gaus(Double_t mean, Double_t sigma)
          }
       }
 
-      while (1) {
+      while (true) {
          x = Rndm();
          y = kYm * Rndm();
          z = kX0 - kS*x - y;
@@ -348,7 +349,7 @@ Double_t TRandom::Gaus(Double_t mean, Double_t sigma)
             if (rn*rn<4*(kB-log(x))) {
                result = rn; break; }
       }
-   } while(0);
+   } while(false);
 
    return mean + sigma * result;
 }
@@ -395,19 +396,20 @@ Double_t TRandom::Landau(Double_t mu, Double_t sigma)
 /// the exponential.
 /// For higher values use a rejection method comparing with a Lorentzian
 /// distribution, as suggested by several authors.
-/// This routine since is returning 32 bits integer will not work for values
-/// larger than 2*10**9.
-/// One should then use the Trandom::PoissonD for such large values.
+/// This routine returns now an unsigned 64 bit integer
+/// For large values, larger than 1.84e+19, we print an error message
+/// advising to use the Trandom::PoissonD for such large values,
+/// and return the max value UINT64_MAX
 
-Int_t TRandom::Poisson(Double_t mean)
+ULong64_t TRandom::Poisson(Double_t mean)
 {
-   Int_t n;
+   ULong64_t n;
    if (mean <= 0) return 0;
    if (mean < 25) {
       Double_t expmean = TMath::Exp(-mean);
       Double_t pir = 1;
       n = -1;
-      while(1) {
+      while(true) {
          n++;
          pir *= Rndm();
          if (pir <= expmean) break;
@@ -434,12 +436,17 @@ Int_t TRandom::Poisson(Double_t mean)
          t = 0.9*(1.0 + y*y)* TMath::Exp(em*alxm - TMath::LnGamma(em + 1.0) - g);
       } while( Rndm() > t );
 
-      return static_cast<Int_t> (em);
+      return static_cast<ULong64_t>(em);
 
    }
    else {
-      // use Gaussian approximation vor very large values
-      n = Int_t(Gaus(0,1)*TMath::Sqrt(mean) + mean +0.5);
+      // use Gaussian approximation for very large values
+      Double_t x = Gaus(0, 1) * TMath::Sqrt(mean) + mean + 0.5;
+      if (x > TMath::Limits<ULong64_t>::Max()) {
+         Error("Poisson", "Overflow in return value. Use PoissonD instead.");
+         return TMath::Limits<ULong64_t>::Max();
+      }
+      n = static_cast<ULong64_t>(x);
       return n;
    }
 }
@@ -459,7 +466,7 @@ Double_t TRandom::PoissonD(Double_t mean)
       Double_t expmean = TMath::Exp(-mean);
       Double_t pir = 1;
       n = -1;
-      while(1) {
+      while(true) {
          n++;
          pir *= Rndm();
          if (pir <= expmean) break;
@@ -489,7 +496,7 @@ Double_t TRandom::PoissonD(Double_t mean)
       return em;
 
    } else {
-      // use Gaussian approximation vor very large values
+      // use Gaussian approximation for very large values
       return Gaus(0,1)*TMath::Sqrt(mean) + mean +0.5;
    }
 }
@@ -541,7 +548,7 @@ void TRandom::ReadRandom(const char *filename)
 
 ////////////////////////////////////////////////////////////////////////////////
 ///  Machine independent random number generator.
-///  Based on the BSD Unix (Rand) Linear congrential generator.
+///  Based on the BSD Unix (Rand) Linear congruential generator.
 ///  Produces uniformly-distributed floating points between 0 and 1.
 ///  Identical sequence on all machines of >= 32 bits.
 ///  Periodicity = 2**31, generates a number in (0,1).
@@ -618,7 +625,10 @@ void TRandom::SetSeed(ULong_t seed)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Get the random generator seed.
+/// \brief Get the random generator seed.
+///
+/// \warning Might not be the initial seed!
+///
 /// Note that this function returns the given seed only when using
 /// as random generator engine TRandom itself, which is an LCG generator
 /// and it has as seed (state) only one 32 bit word.
@@ -635,7 +645,7 @@ void TRandom::SetSeed(ULong_t seed)
 ///  TRandom* rngSaved = static_cast<TRandom*>(gRandom->Clone());
 ///  // now both rngSaved and gRandom will produce the same sequence of numbers
 ///  for (int i = 0; i < 10; ++i )
-///     std::cout << "genrated number from gRandom : " << gRandom->Rndm() << "  from saved generator " <<
+///     std::cout << "generated number from gRandom : " << gRandom->Rndm() << "  from saved generator " <<
 ///     rngSaved->Rndm() << std::endl;
 /// ```
 UInt_t TRandom::GetSeed() const

@@ -12,7 +12,7 @@
 #define ROOT_RDFUTILS
 
 #include "ROOT/RSpan.hxx"
-#include "ROOT/RStringView.hxx"
+#include <string_view>
 #include "ROOT/RVec.hxx"
 #include "ROOT/TypeTraits.hxx"
 #include "Rtypes.h"
@@ -259,14 +259,6 @@ struct Disjunction<B1, Bn...> : std::conditional_t<bool(B1::value), B1, Disjunct
 #endif
 
 bool IsStrInVec(const std::string &str, const std::vector<std::string> &vec);
-
-// clang-format off
-template <typename>
-struct IsRVec : std::false_type {};
-
-template <typename T>
-struct IsRVec<ROOT::VecOps::RVec<T>> : std::true_type {};
-// clang-format on
 
 /// Return a vector with all elements of v1 and v2 and duplicates removed.
 /// Precondition: each of v1 and v2 must not have duplicate elements.

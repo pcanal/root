@@ -33,10 +33,6 @@
 #include <thread>
 #include <iostream>
 
-// macro must be here while cling is not capable to load
-// library automatically for outlined function see ROOT-10336
-R__LOAD_LIBRARY(libROOTHistDraw)
-
 using namespace ROOT::Experimental;
 
 void draw_canvas(const std::string &title, RColor col)
@@ -107,7 +103,7 @@ void rcanvas_mt(bool block_main_thread = true)
    ROOT::EnableThreadSafety();
 
    // create instance in main thread, used to assign thread id as well
-   RWebWindowsManager::Instance();
+   ROOT::RWebWindowsManager::Instance();
 
    std::thread thrd1(draw_canvas, "First canvas", RColor::kRed);
    std::thread thrd2(draw_canvas, "Second canvas", RColor::kBlue);

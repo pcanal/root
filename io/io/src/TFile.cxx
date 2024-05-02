@@ -13,12 +13,47 @@
 \file TFile.cxx
 \class TFile
 \ingroup IO
+\brief A ROOT file is an on-disk file, usually with extension .root, that stores objects in a file-system-like logical structure, possibly including subdirectory hierarchies.
+\sa \ref IO
+\sa \ref rootio (or `io/doc/TFile` folder in your codebase)
 
-A ROOT file is a suite of consecutive data records (TKey instances) with
-a well defined format.
+<details>
+<summary>ROOT file data format specification</summary>
 
-If the key is located past the 32 bit file limit (> 2 GB) then some fields will
-be 8 instead of 4 bytes:
+A ROOT file is composed of a header, followed by consecutive data records
+(`TKey` instances) with a well defined format.
+
+The first data record starts at byte fBEGIN (currently set to kBEGIN).
+Bytes 1->kBEGIN contain the file description, when fVersion >= 1000000
+it is a large file (> 2 GB) and the offsets will be 8 bytes long and
+fUnits will be set to 8:
+
+Byte Range      | Record Name | Description
+----------------|-------------|------------
+1->4            | "root"      | Root file identifier
+5->8            | fVersion    | File format version
+9->12           | fBEGIN      | Pointer to first data record
+13->16 [13->20] | fEND        | Pointer to first free word at the EOF
+17->20 [21->28] | fSeekFree   | Pointer to FREE data record
+21->24 [29->32] | fNbytesFree | Number of bytes in FREE data record
+25->28 [33->36] | nfree       | Number of free data records
+29->32 [37->40] | fNbytesName | Number of bytes in TNamed at creation time
+33->33 [41->41] | fUnits      | Number of bytes for file pointers
+34->37 [42->45] | fCompress   | Compression level and algorithm
+38->41 [46->53] | fSeekInfo   | Pointer to TStreamerInfo record
+42->45 [54->57] | fNbytesInfo | Number of bytes in TStreamerInfo record
+46->63 [58->75] | fUUID       | Universal Unique ID
+
+For the purpose of magic bytes in the context of ROOT files' MIME definition,
+the following additional requirements are introduced:
+- The value of `fBEGIN` is fixed at 100.
+- The four bytes starting at position 96 are reserved and must be 0.
+If any changes to this need to be made, `media-types@iana.org` needs to be
+notified in accordance with RFC 6838.
+
+The key structure is as follows; if a key is located past the 32 bit file
+limit (> 2 GB) then some fields will be 8 instead of 4 bytes (see parts marked
+with square brackets below):
 
 Byte Range      | Member Name | Description
 ----------------|-----------|--------------
@@ -38,30 +73,13 @@ Byte Range      | Member Name | Description
 ..->..          | Title     | Title of the object
 ----->          | DATA      | Data bytes associated to the object
 
-The first data record starts at byte fBEGIN (currently set to kBEGIN).
-Bytes 1->kBEGIN contain the file description, when fVersion >= 1000000
-it is a large file (> 2 GB) and the offsets will be 8 bytes long and
-fUnits will be set to 8:
-Byte Range      | Record Name | Description
-----------------|-------------|------------
-1->4            | "root"      | Root file identifier
-5->8            | fVersion    | File format version
-9->12           | fBEGIN      | Pointer to first data record
-13->16 [13->20] | fEND        | Pointer to first free word at the EOF
-17->20 [21->28] | fSeekFree   | Pointer to FREE data record
-21->24 [29->32] | fNbytesFree | Number of bytes in FREE data record
-25->28 [33->36] | nfree       | Number of free data records
-29->32 [37->40] | fNbytesName | Number of bytes in TNamed at creation time
-33->33 [41->41] | fUnits      | Number of bytes for file pointers
-34->37 [42->45] | fCompress   | Compression level and algorithm
-38->41 [46->53] | fSeekInfo   | Pointer to TStreamerInfo record
-42->45 [54->57] | fNbytesInfo | Number of bytes in TStreamerInfo record
-46->63 [58->75] | fUUID       | Universal Unique ID
-
 Begin_Macro
 ../../../tutorials/io/file.C
 End_Macro
+
 The structure of a directory is shown in TDirectoryFile::TDirectoryFile
+
+</details>
 */
 
 #include <ROOT/RConfig.hxx>
@@ -77,7 +95,9 @@ The structure of a directory is shown in TDirectoryFile::TDirectoryFile
 #include <sys/stat.h>
 #ifndef WIN32
 #include <unistd.h>
+#ifndef R__FBSD
 #include <sys/xattr.h>
+#endif
 #else
 #   define ssize_t int
 #   include <io.h>
@@ -133,6 +153,10 @@ The structure of a directory is shown in TDirectoryFile::TDirectoryFile
 #include "ROOT/RConcurrentHashColl.hxx"
 #include <memory>
 
+#ifdef R__FBSD
+#include <sys/extattr.h>
+#endif
+
 using std::sqrt;
 
 std::atomic<Long64_t> TFile::fgBytesRead{0};
@@ -147,13 +171,14 @@ Bool_t   TFile::fgCacheFileForce = kFALSE;
 Bool_t   TFile::fgCacheFileDisconnected = kTRUE;
 UInt_t   TFile::fgOpenTimeout = TFile::kEternalTimeout;
 Bool_t   TFile::fgOnlyStaged = kFALSE;
-#ifdef R__USE_IMT
 ROOT::Internal::RConcurrentHashColl TFile::fgTsSIHashes;
-#endif
 
 #ifdef R__MACOSX
 /* On macOS getxattr takes two extra arguments that should be set to 0 */
 #define getxattr(path, name, value, size) getxattr(path, name, value, size, 0u, 0)
+#endif
+#ifdef R__FBSD
+#define getxattr(path, name, value, size) extattr_get_file(path, EXTATTR_NAMESPACE_USER, name, value, size)
 #endif
 
 const Int_t kBEGIN = 100;
@@ -438,10 +463,9 @@ TFile::TFile(const char *fname1, Option_t *option, const char *ftitle, Int_t com
       SetBit(kDevNull);
    }
 
-   const char *fname;
-   if ((fname = gSystem->ExpandPathName(fname1))) {
-      SetName(fname);
-      delete [] fname;
+   TString fname(fname1);
+   if (!gSystem->ExpandPathName(fname)) {
+      SetName(fname.Data());
       fRealName = GetName();
       if (!gSystem->IsAbsoluteFileName(fRealName)) {
          gSystem->PrependPathName(gSystem->WorkingDirectory(),fRealName);
@@ -462,10 +486,10 @@ TFile::TFile(const char *fname1, Option_t *option, const char *ftitle, Int_t com
    }
 
    if (recreate) {
-      if (!gSystem->AccessPathName(fname, kFileExists)) {
-         if (gSystem->Unlink(fname) != 0) {
+      if (!gSystem->AccessPathName(fname.Data(), kFileExists)) {
+         if (gSystem->Unlink(fname.Data()) != 0) {
             SysError("TFile", "could not delete %s (errno: %d)",
-                     fname, gSystem->GetErrno());
+                     fname.Data(), gSystem->GetErrno());
             zombify();
             return;
          }
@@ -474,30 +498,30 @@ TFile::TFile(const char *fname1, Option_t *option, const char *ftitle, Int_t com
       create   = kTRUE;
       fOption  = "CREATE";
    }
-   if (create && !devnull && !gSystem->AccessPathName(fname, kFileExists)) {
-      Error("TFile", "file %s already exists", fname);
+   if (create && !devnull && !gSystem->AccessPathName(fname.Data(), kFileExists)) {
+      Error("TFile", "file %s already exists", fname.Data());
       zombify();
       return;
    }
    if (update) {
-      if (gSystem->AccessPathName(fname, kFileExists)) {
+      if (gSystem->AccessPathName(fname.Data(), kFileExists)) {
          update = kFALSE;
          create = kTRUE;
       }
-      if (update && gSystem->AccessPathName(fname, kWritePermission)) {
-         Error("TFile", "no write permission, could not open file %s", fname);
+      if (update && gSystem->AccessPathName(fname.Data(), kWritePermission)) {
+         Error("TFile", "no write permission, could not open file %s", fname.Data());
          zombify();
          return;
       }
    }
    if (read) {
-      if (gSystem->AccessPathName(fname, kFileExists)) {
-         Error("TFile", "file %s does not exist", fname);
+      if (gSystem->AccessPathName(fname.Data(), kFileExists)) {
+         Error("TFile", "file %s does not exist", fname.Data());
          zombify();
          return;
       }
-      if (gSystem->AccessPathName(fname, kReadPermission)) {
-         Error("TFile", "no read permission, could not open file %s", fname);
+      if (gSystem->AccessPathName(fname.Data(), kReadPermission)) {
+         Error("TFile", "no read permission, could not open file %s", fname.Data());
          zombify();
          return;
       }
@@ -506,24 +530,24 @@ TFile::TFile(const char *fname1, Option_t *option, const char *ftitle, Int_t com
    // Connect to file system stream
    if (create || update) {
 #ifndef WIN32
-      fD = TFile::SysOpen(fname, O_RDWR | O_CREAT, 0644);
+      fD = TFile::SysOpen(fname.Data(), O_RDWR | O_CREAT, 0644);
 #else
-      fD = TFile::SysOpen(fname, O_RDWR | O_CREAT | O_BINARY, S_IREAD | S_IWRITE);
+      fD = TFile::SysOpen(fname.Data(), O_RDWR | O_CREAT | O_BINARY, S_IREAD | S_IWRITE);
 #endif
       if (fD == -1) {
-         SysError("TFile", "file %s can not be opened", fname);
+         SysError("TFile", "file %s can not be opened", fname.Data());
          zombify();
          return;
       }
       fWritable = kTRUE;
    } else {
 #ifndef WIN32
-      fD = TFile::SysOpen(fname, O_RDONLY, 0644);
+      fD = TFile::SysOpen(fname.Data(), O_RDONLY, 0644);
 #else
-      fD = TFile::SysOpen(fname, O_RDONLY | O_BINARY, S_IREAD | S_IWRITE);
+      fD = TFile::SysOpen(fname.Data(), O_RDONLY | O_BINARY, S_IREAD | S_IWRITE);
 #endif
       if (fD == -1) {
-         SysError("TFile", "file %s can not be opened for reading", fname);
+         SysError("TFile", "file %s can not be opened for reading", fname.Data());
          zombify();
          return;
       }
@@ -532,8 +556,6 @@ TFile::TFile(const char *fname1, Option_t *option, const char *ftitle, Int_t com
 
    // calling virtual methods from constructor not a good idea, but it is how code was developed
    TFile::Init(create);                        // NOLINT: silence clang-tidy warnings
-
-   return;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -587,7 +609,7 @@ TFile::~TFile()
 ///
 /// TFile implementations providing asynchronous open functionality need to
 /// override this method to run the appropriate checks before calling this
-/// standard initialization part. See TXNetFile::Init for an example.
+/// standard initialization part. See TNetXNGFile::Init for an example.
 
 void TFile::Init(Bool_t create)
 {
@@ -801,6 +823,11 @@ void TFile::Init(Bool_t create)
       //*-* -------------Check if, in case of inconsistencies, we are requested to
       //*-* -------------attempt recovering the file
       Bool_t tryrecover = (gEnv->GetValue("TFile.Recover", 1) == 1) ? kTRUE : kFALSE;
+
+      //*-* -------------Check if we need to enable forward compatible with version
+      //*-* -------------prior to v6.30
+      if (gEnv->GetValue("TFile.v630forwardCompatibility", 0) == 1)
+         SetBit(k630forwardCompatibility);
 
       //*-* -------------Read keys of the top directory
       if (fSeekKeys > fBEGIN && fEND <= size) {
@@ -1360,19 +1387,19 @@ TFile::InfoListRet TFile::GetStreamerInfoListImpl(bool lookupSICache)
          return {nullptr, 1, hash};
       }
 
-#ifdef R__USE_IMT
       if (lookupSICache) {
          // key data must be excluded from the hash, otherwise the timestamp will
          // always lead to unique hashes for each file
          hash = fgTsSIHashes.Hash(buf + key->GetKeylen(), fNbytesInfo - key->GetKeylen());
-         if (fgTsSIHashes.Find(hash)) {
-            if (gDebug > 0) Info("GetStreamerInfo", "The streamer info record for file %s has already been treated, skipping it.", GetName());
+         auto si_uids = fgTsSIHashes.Find(hash);
+         if (si_uids) {
+            if (gDebug > 0)
+               Info("GetStreamerInfo", "The streamer info record for file %s has already been treated, skipping it.", GetName());
+            for(auto uid : *si_uids)
+               fClassIndex->fArray[uid] = 1;
             return {nullptr, 0, hash};
          }
       }
-#else
-      (void) lookupSICache;
-#endif
       key->ReadKeyBuffer(buf);
       list = dynamic_cast<TList*>(key->ReadObjWithBuffer(buffer.data()));
       if (list) list->SetOwner();
@@ -3613,6 +3640,7 @@ void TFile::ReadStreamerInfo()
       }
    }
 
+   std::vector<Int_t> si_uids;
    // loop on all TStreamerInfo classes
    for (int mode=0;mode<2; ++mode) {
       // In order for the collection proxy to be initialized properly, we need
@@ -3663,7 +3691,10 @@ void TFile::ReadStreamerInfo()
             Int_t uid = info->GetNumber();
             Int_t asize = fClassIndex->GetSize();
             if (uid >= asize && uid <100000) fClassIndex->Set(2*asize);
-            if (uid >= 0 && uid < fClassIndex->GetSize()) fClassIndex->fArray[uid] = 1;
+            if (uid >= 0 && uid < fClassIndex->GetSize()) {
+               si_uids.push_back(uid);
+               fClassIndex->fArray[uid] = 1;
+            }
             else if (!isstl && !info->GetClass()->IsSyntheticPair()) {
                printf("ReadStreamerInfo, class:%s, illegal uid=%d\n",info->GetName(),uid);
             }
@@ -3676,11 +3707,9 @@ void TFile::ReadStreamerInfo()
    list->Clear();  //this will delete all TStreamerInfo objects with kCanDelete bit set
    delete list;
 
-#ifdef R__USE_IMT
    // We are done processing the record, let future calls and other threads that it
    // has been done.
-   fgTsSIHashes.Insert(listRetcode.fHash);
-#endif
+   fgTsSIHashes.Insert(listRetcode.fHash, std::move(si_uids));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -4304,7 +4333,7 @@ TFile *TFile::Open(const char *url, Option_t *options, const char *ftitle,
 ///     TFile::Open(const char *, ...)
 ///
 /// To be effective, the underlying TFile implementation must be able to
-/// support asynchronous open functionality. Currently, only TXNetFile
+/// support asynchronous open functionality. Currently, only TNetXNGFile
 /// supports it. If the functionality is not implemented, this call acts
 /// transparently by returning an handle with the arguments for the
 /// standard synchronous open run by TFile::Open(TFileOpenHandle *).
@@ -4361,18 +4390,12 @@ TFileOpenHandle *TFile::AsyncOpen(const char *url, Option_t *option,
       if (type == kNet) {
          // Network files
          if ((h = gROOT->GetPluginManager()->FindHandler("TFile", name)) &&
-            (!strcmp(h->GetClass(),"TXNetFile") || !strcmp(h->GetClass(),"TNetXNGFile"))
+            !strcmp(h->GetClass(),"TNetXNGFile")
             && h->LoadPlugin() == 0) {
             f = (TFile*) h->ExecPlugin(6, name.Data(), option, ftitle, compress, netopt, kTRUE);
             notfound = kFALSE;
          }
       }
-      if ((h = gROOT->GetPluginManager()->FindHandler("TFile", name)) &&
-         !strcmp(h->GetClass(),"TAlienFile") && h->LoadPlugin() == 0) {
-         f = (TFile*) h->ExecPlugin(5, name.Data(), option, ftitle, compress, kTRUE);
-         notfound = kFALSE;
-      }
-
    }
 
    if (rediroutput) {
@@ -4836,11 +4859,10 @@ TFile::EFileType TFile::GetType(const char *name, Option_t *option, TString *pre
             Bool_t read = (opt.IsNull() ||
                           !opt.CompareTo("READ", TString::kIgnoreCase)) ? kTRUE : kFALSE;
             if (read) {
-               char *fn;
-               if ((fn = gSystem->ExpandPathName(TUrl(lfname).GetFile()))) {
+               TString fn = TUrl(lfname).GetFile();
+               if (!gSystem->ExpandPathName(fn)) {
                   if (gSystem->AccessPathName(fn, kReadPermission))
                      localFile = kFALSE;
-                  delete [] fn;
                }
             }
             // Return full local path if requested (and if the case)

@@ -206,7 +206,7 @@ modelConfig.SetPriorPdf(wspace["prior"])
 modelConfig.SetParametersOfInterest(wspace.set("poi"))
 modelConfig.SetNuisanceParameters(wspace.set("nuis"))
 wspace.Import(modelConfig)
-wspace.writeToFile("FourBin.root")
+# wspace.writeToFile("FourBin.root")
 
 # -------------------------------------------------
 # If you want to see the covariance matrix uncomment
@@ -295,7 +295,7 @@ if doMCMC:
     mcPlot.Draw()
 
 # ----------------------------------
-# querry intervals
+# query intervals
 print(
     "Profile Likelihood interval on s = [{}, {}]".format(plInt.LowerLimit(wspace["s"]), plInt.UpperLimit(wspace["s"]))
 )

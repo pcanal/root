@@ -19,7 +19,7 @@
 \class RooPrintable
 \ingroup Roofitcore
 
-RooPlotable is a 'mix-in' base class that define the standard RooFit plotting and
+A 'mix-in' base class that define the standard RooFit plotting and
 printing methods. Each RooPlotable implementation must define methods that
 print the objects name, class name, title, value, arguments and extras
 to a provided stream. The definition of value is class dependent. The definition
@@ -39,10 +39,9 @@ given a Print() option string.
 #include "TNamed.h"
 #include "TClass.h"
 
-using namespace std;
+using std::ostream, std::cout, std::endl, std::setw;
 
 ClassImp(RooPrintable);
-;
 
 Int_t  RooPrintable::_nameLength(0) ;
 
@@ -272,6 +271,6 @@ ostream &RooPrintable::defaultPrintStream(ostream *os)
   static ostream *_defaultPrintStream = &cout;
 
   ostream& _oldDefault= *_defaultPrintStream;
-  if(0 != os) _defaultPrintStream= os;
+  if(nullptr != os) _defaultPrintStream= os;
   return _oldDefault;
 }

@@ -3,8 +3,8 @@
 /// \notebook -nodraw
 /// Data and categories: working with RooCategory objects to describe discrete variables
 ///
-/// \macro_output
 /// \macro_code
+/// \macro_output
 ///
 /// \date July 2008
 /// \author Wouter Verkerke
@@ -88,7 +88,7 @@ void rf404_categories()
 
    // Generate a dummy dataset
    RooRealVar x("x", "x", 0, 10);
-   RooDataSet *data = RooPolynomial("p", "p", x).generate(RooArgSet(x, b0flav, tagCat), 10000);
+   std::unique_ptr<RooDataSet> data{RooPolynomial("p", "p", x).generate({x, b0flav, tagCat}, 10000)};
 
 
    // P r i n t   t a b l e s   o f   c a t e g o r y   c o n t e n t s   o f   d a t a s e t s
@@ -128,6 +128,6 @@ void rf404_categories()
    tagCat.addToRange("soso", "NetTagger-2");
 
    // Use category range in dataset reduction specification
-   RooDataSet *goodData = (RooDataSet *)data->reduce(CutRange("good"));
-   goodData->table(tagCat)->Print("v");
+   std::unique_ptr<RooAbsData> goodData{data->reduce(CutRange("good"))};
+   static_cast<RooDataSet&>(*goodData).table(tagCat)->Print("v");
 }

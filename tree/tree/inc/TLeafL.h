@@ -35,7 +35,7 @@ protected:
 public:
    TLeafL();
    TLeafL(TBranch *parent, const char *name, const char *type);
-   virtual ~TLeafL();
+   ~TLeafL() override;
 
    void            Export(TClonesArray *list, Int_t n) override;
    void            FillBasket(TBuffer &b) override;
@@ -47,7 +47,7 @@ public:
    Long64_t        GetValueLong64(Int_t i = 0) const override;
    LongDouble_t    GetValueLongDouble(Int_t i = 0) const override;
    void           *GetValuePointer() const override { return fValue; }
-   Bool_t          IncludeRange(TLeaf *) override;
+   bool            IncludeRange(TLeaf *) override;
    void            Import(TClonesArray *list, Int_t n) override;
    void            PrintValue(Int_t i=0) const override;
    void            ReadBasket(TBuffer &b) override;

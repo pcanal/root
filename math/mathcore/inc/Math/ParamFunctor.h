@@ -22,7 +22,6 @@
 // #include "Math/StaticCheck.h"
 // #endif
 
-//#ifndef __CINT__
 //#include <memory>
 
 #include "RtypesCore.h"
@@ -58,7 +57,6 @@ class ParamFunctionBase {
    @ingroup  ParamFunctor_int
 
 */
-#ifndef __CINT__
 
 template<class ParentFunctor, class Func >
 class ParamFunctorHandler : public ParentFunctor::Impl {
@@ -245,15 +243,14 @@ private:
    // };
 
 private :
-   ParamMemFunHandler(const ParamMemFunHandler&); // Not implemented
-   ParamMemFunHandler& operator=(const ParamMemFunHandler&); // Not implemented
+   ParamMemFunHandler(const ParamMemFunHandler&) = delete; // Not implemented
+   ParamMemFunHandler& operator=(const ParamMemFunHandler&) = delete; // Not implemented
 
    PointerToObj fObj;
    PointerToMemFn fMemFn;
 
 };
 
-#endif
 
 
 

@@ -33,6 +33,7 @@
 #include "clang/Sema/Scope.h"
 #include "clang/Serialization/ASTReader.h"
 #include "clang/Serialization/GlobalModuleIndex.h"
+#include "clang/Basic/DiagnosticSema.h"
 
 #include "llvm/ExecutionEngine/Orc/Core.h"
 
@@ -43,6 +44,8 @@
 
 #include "TClingUtils.h"
 #include "ClingRAII.h"
+
+#include <optional>
 
 using namespace clang;
 using namespace cling;
@@ -82,9 +85,12 @@ extern "C" {
 }
 
 class AutoloadLibraryMU : public llvm::orc::MaterializationUnit {
+   const TClingCallbacks &fCallbacks;
+   std::string fLibrary;
+   llvm::orc::SymbolNameVector fSymbols;
 public:
-   AutoloadLibraryMU(const std::string &Library, const llvm::orc::SymbolNameVector &Symbols)
-      : MaterializationUnit(getSymbolFlagsMap(Symbols), nullptr), fLibrary(Library), fSymbols(Symbols)
+   AutoloadLibraryMU(const TClingCallbacks &cb, const std::string &Library, const llvm::orc::SymbolNameVector &Symbols)
+      : MaterializationUnit({getSymbolFlagsMap(Symbols), nullptr}), fCallbacks(cb), fLibrary(Library), fSymbols(Symbols)
    {
    }
 
@@ -92,6 +98,11 @@ public:
 
    void materialize(std::unique_ptr<llvm::orc::MaterializationResponsibility> R) override
    {
+      if (!fCallbacks.IsAutoLoadingEnabled()) {
+         R->failMaterialization();
+         return;
+      }
+
       llvm::orc::SymbolMap loadedSymbols;
       llvm::orc::SymbolNameSet failedSymbols;
       bool loadedLibrary = false;
@@ -150,19 +161,22 @@ private:
          map[symbolName] = llvm::JITSymbolFlags::Exported;
       return map;
    }
-
-   std::string fLibrary;
-   llvm::orc::SymbolNameVector fSymbols;
 };
 
 class AutoloadLibraryGenerator : public llvm::orc::DefinitionGenerator {
+   const TClingCallbacks &fCallbacks;
+   cling::Interpreter *fInterpreter;
 public:
-   AutoloadLibraryGenerator(cling::Interpreter *interp) : fInterpreter(interp) {}
+   AutoloadLibraryGenerator(cling::Interpreter *interp, const TClingCallbacks& cb)
+      : fCallbacks(cb), fInterpreter(interp) {}
 
    llvm::Error tryToGenerate(llvm::orc::LookupState &LS, llvm::orc::LookupKind K, llvm::orc::JITDylib &JD,
                              llvm::orc::JITDylibLookupFlags JDLookupFlags,
                              const llvm::orc::SymbolLookupSet &Symbols) override
    {
+      if (!fCallbacks.IsAutoLoadingEnabled())
+         llvm::Error::success();
+
       // If we get here, the symbols have not been found in the current process,
       // so no need to check that again. Instead search for the library that
       // provides the symbol and create one MaterializationUnit per library to
@@ -197,19 +211,17 @@ public:
       }
 
       for (auto &&KV : found) {
-         auto MU = std::make_unique<AutoloadLibraryMU>(KV.first, std::move(KV.second));
+         auto MU = std::make_unique<AutoloadLibraryMU>(fCallbacks, KV.first, std::move(KV.second));
          if (auto Err = JD.define(MU))
             return Err;
       }
 
       if (!missing.empty())
-         return llvm::make_error<llvm::orc::SymbolsNotFound>(std::move(missing));
+         return llvm::make_error<llvm::orc::SymbolsNotFound>(
+            JD.getExecutionSession().getSymbolStringPool(), std::move(missing));
 
       return llvm::Error::success();
    }
-
-private:
-   cling::Interpreter *fInterpreter;
 };
 
 TClingCallbacks::TClingCallbacks(cling::Interpreter *interp, bool hasCodeGen) : InterpreterCallbacks(interp)
@@ -219,7 +231,7 @@ TClingCallbacks::TClingCallbacks(cling::Interpreter *interp, bool hasCodeGen) : 
       m_Interpreter->declare("namespace __ROOT_SpecialObjects{}", &T);
       fROOTSpecialNamespace = dyn_cast<NamespaceDecl>(T->getFirstDecl().getSingleDecl());
 
-      interp->addGenerator(std::make_unique<AutoloadLibraryGenerator>(interp));
+      interp->addGenerator(std::make_unique<AutoloadLibraryGenerator>(interp, *this));
    }
 }
 
@@ -231,7 +243,7 @@ void TClingCallbacks::InclusionDirective(clang::SourceLocation sLoc/*HashLoc*/,
                                          llvm::StringRef FileName,
                                          bool /*IsAngled*/,
                                          clang::CharSourceRange /*FilenameRange*/,
-                                         const clang::FileEntry *FE,
+                                         clang::OptionalFileEntryRef FE,
                                          llvm::StringRef /*SearchPath*/,
                                          llvm::StringRef /*RelativePath*/,
                                          const clang::Module * Imported,
@@ -279,9 +291,8 @@ bool TClingCallbacks::LibraryLoadingFailed(const std::string& errmessage, const 
 // Preprocessor callbacks used to handle special cases like for example:
 // #include "myMacro.C+"
 //
-bool TClingCallbacks::FileNotFound(llvm::StringRef FileName,
-                                   llvm::SmallVectorImpl<char> &RecoveryPath) {
-   // Method called via Callbacks->FileNotFound(Filename, RecoveryPath)
+bool TClingCallbacks::FileNotFound(llvm::StringRef FileName) {
+   // Method called via Callbacks->FileNotFound(Filename)
    // in Preprocessor::HandleIncludeDirective(), initially allowing to
    // change the include path, and allowing us to compile code via ACLiC
    // when specifying #include "myfile.C+", and suppressing the preprocessor
@@ -330,21 +341,11 @@ bool TClingCallbacks::FileNotFound(llvm::StringRef FileName,
                                                 SemaR.TUScope);
          int retcode = TCling__CompileMacro(fname.c_str(), options.c_str());
          if (retcode) {
-            // compilation was successful, let's remember the original
-            // preprocessor "include not found" error suppression flag
-            if (!fPPChanged)
-               fPPOldFlag = PP.GetSuppressIncludeNotFoundError();
-            PP.SetSuppressIncludeNotFoundError(true);
-            fPPChanged = true;
+            // compilation was successful, tell the preprocess to silently
+            // skip the file
+            return true;
          }
-         return false;
       }
-   }
-   if (fPPChanged) {
-      // restore the original preprocessor "include not found" error
-      // suppression flag
-      PP.SetSuppressIncludeNotFoundError(fPPOldFlag);
-      fPPChanged = false;
    }
    return false;
 }
@@ -424,8 +425,8 @@ bool TClingCallbacks::LookupObject(LookupResult &R, Scope *S) {
 
 bool TClingCallbacks::findInGlobalModuleIndex(DeclarationName Name, bool loadFirstMatchOnly /*=true*/)
 {
-   llvm::Optional<std::string> envUseGMI = llvm::sys::Process::GetEnv("ROOT_USE_GMI");
-   if (envUseGMI.hasValue())
+   std::optional<std::string> envUseGMI = llvm::sys::Process::GetEnv("ROOT_USE_GMI");
+   if (envUseGMI.has_value())
       if (!envUseGMI->empty() && !ROOT::FoundationUtils::ConvertEnvValueToBool(*envUseGMI))
          return false;
 
@@ -440,6 +441,14 @@ bool TClingCallbacks::findInGlobalModuleIndex(DeclarationName Name, bool loadFir
       return false;
 
    if (fIsCodeGening)
+      return false;
+
+   // We are currently instantiating one (or more) templates. At that point,
+   // all Decls are present in the AST (with possibly deserialization pending),
+   // and we should not load more modules which could find an implicit template
+   // instantiation that is lazily loaded.
+   Sema &SemaR = m_Interpreter->getSema();
+   if (SemaR.InstantiatingSpecializations.size() > 0)
       return false;
 
    GlobalModuleIndex *Index = CI->getASTReader()->getGlobalIndex();
@@ -540,8 +549,7 @@ bool TClingCallbacks::LookupObject(const DeclContext* DC, DeclarationName Name) 
       llvm::SmallVector<NamedDecl*, 4> lookupResults;
       for(LookupResult::iterator I = R.begin(), E = R.end(); I < E; ++I)
          lookupResults.push_back(*I);
-      UpdateWithNewDecls(DC, Name, llvm::makeArrayRef(lookupResults.data(),
-                                                      lookupResults.size()));
+      UpdateWithNewDecls(DC, Name, llvm::ArrayRef(lookupResults.data(), lookupResults.size()));
       return true;
    }
    return false;
@@ -611,7 +619,7 @@ bool TClingCallbacks::LookupObject(clang::TagDecl* Tag) {
 // filename.
 //
 bool TClingCallbacks::tryAutoParseInternal(llvm::StringRef Name, LookupResult &R,
-                                           Scope *S, const FileEntry* FE /*=0*/) {
+                                           Scope *S, clang::OptionalFileEntryRef FE) {
    if (!fROOTSpecialNamespace) {
       // init error or rootcling
       return false;
@@ -997,6 +1005,12 @@ bool TClingCallbacks::tryInjectImplicitAutoKeyword(LookupResult &R, Scope *S) {
    Result->addAttr(AnnotateAttr::CreateImplicit(C, "__Auto"));
 
    R.addDecl(Result);
+
+   // Raise a warning when trying to use implicit auto injection feature.
+   SemaRef.getDiagnostics().setSeverity(diag::warn_deprecated_message, diag::Severity::Warning, SourceLocation());
+   SemaRef.Diag(Loc, diag::warn_deprecated_message)
+      << "declaration without the 'auto' keyword" << DC << Loc << FixItHint::CreateInsertion(Loc, "auto ");
+
    // Say that we can handle the situation. Clang should try to recover
    return true;
 }
@@ -1043,19 +1057,6 @@ void TClingCallbacks::TransactionRollback(const Transaction &T) {
 
 void TClingCallbacks::DefinitionShadowed(const clang::NamedDecl *D) {
    TCling__InvalidateGlobal(D);
-}
-
-void TClingCallbacks::DeclDeserialized(const clang::Decl* D) {
-   if (const RecordDecl* RD = dyn_cast<RecordDecl>(D)) {
-      // FIXME: Our AutoLoading doesn't work (load the library) when the looked
-      // up decl is found in the PCH/PCM. We have to do that extra step, which
-      // loads the corresponding library when a decl was deserialized.
-      //
-      // Unfortunately we cannot do that with the current implementation,
-      // because the library load will pull in the header files of the library
-      // as well, even though they are in the PCH/PCM and available.
-      (void)RD;//TCling__AutoLoadCallback(RD->getNameAsString().c_str());
-   }
 }
 
 void TClingCallbacks::LibraryLoaded(const void* dyLibHandle,

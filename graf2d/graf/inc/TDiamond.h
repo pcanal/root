@@ -20,9 +20,10 @@ public:
    TDiamond();
    TDiamond(Double_t x1, Double_t y1,Double_t x2, Double_t  y2);
    TDiamond(const TDiamond &diamond);
-   virtual ~TDiamond();
+   ~TDiamond() override;
    Int_t DistancetoPrimitive(Int_t px, Int_t py) override;
    void  Draw(Option_t *option="") override;
+   Int_t IsInside(Double_t x, Double_t y) const override;
    void  ExecuteEvent(Int_t event, Int_t px, Int_t py) override;
    void  Paint(Option_t *option="") override;
    void  SavePrimitive(std::ostream &out, Option_t *option = "") override;
@@ -31,4 +32,3 @@ public:
 };
 
 #endif
-

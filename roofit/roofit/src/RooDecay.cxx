@@ -36,8 +36,6 @@ for the analytical convolution with a RooResolutionModel. See RooAbsAnaConvPdf.
 
 #include "TError.h"
 
-using namespace std;
-
 ClassImp(RooDecay);
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -82,13 +80,6 @@ RooDecay::RooDecay(const RooDecay& other, const char* name) :
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Destructor
-
-RooDecay::~RooDecay()
-{
-}
-
-////////////////////////////////////////////////////////////////////////////////
 
 double RooDecay::coefficient(Int_t /*basisIndex*/) const
 {
@@ -110,7 +101,7 @@ void RooDecay::generateEvent(Int_t code)
   R__ASSERT(code==1) ;
 
   // Generate delta-t dependent
-  while(1) {
+  while(true) {
     double rand = RooRandom::uniform() ;
     double tval(0) ;
 

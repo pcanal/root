@@ -9,10 +9,7 @@ from IPython.core.display import display, HTML
 from string import Template
 import ROOT
 import sys
-if sys.version_info >= (3, 0):
-    from JsMVA import DataLoader, Factory
-else:
-    import DataLoader, Factory
+from JsMVA import DataLoader, Factory
 from JsMVA import OutputTransformer
 
 
@@ -188,7 +185,7 @@ class functions:
 ## Class for creating the output scripts and inserting them to cell output
 class JsDraw:
     ## Base repository
-    __jsMVARepo = "https://root.cern.ch/js/jsmva/latest"
+    __jsMVARepo = "https://root.cern/js/jsmva/latest"
 
     ## String containing the link to JavaScript files
     __jsMVASourceDir = __jsMVARepo + "/js"

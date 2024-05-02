@@ -26,15 +26,15 @@ public:
    TGLPShapeObj() : TObject(), fPShape(nullptr), fViewer(nullptr) {}
    TGLPShapeObj(TGLPhysicalShape* sh, TGLViewer* v) :
       TObject(), fPShape(sh), fViewer(v) {}
-   virtual ~TGLPShapeObj() {}
+   ~TGLPShapeObj() override {}
 
-   virtual const char* GetName() const { return "Selected"; }
+   const char* GetName() const override { return "Selected"; }
 
 private:
-   TGLPShapeObj(const TGLPShapeObj &); // Not implemented
-   TGLPShapeObj& operator=(const TGLPShapeObj &); // Not implemented
+   TGLPShapeObj(const TGLPShapeObj &) = delete;
+   TGLPShapeObj& operator=(const TGLPShapeObj &) = delete;
 
-   ClassDef(TGLPShapeObj, 0) // This object wraps TGLPhysicalShape (not a TObject)
+   ClassDefOverride(TGLPShapeObj, 0) // This object wraps TGLPhysicalShape (not a TObject)
 };
 
 #endif

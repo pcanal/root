@@ -68,10 +68,10 @@ be larger than one.
 #define NaN numeric_limits<float>::quiet_NaN()
 #define IsNaN(a) TMath::IsNaN(a)
 
-ClassImp(RooStats::HypoTestResult); ;
+ClassImp(RooStats::HypoTestResult);
 
 using namespace RooStats;
-using namespace std;
+using std::numeric_limits, std::endl;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Default constructor
@@ -110,9 +110,9 @@ HypoTestResult::HypoTestResult(const char* name, double nullp, double altp) :
 
 HypoTestResult::HypoTestResult(const HypoTestResult& other) :
    TNamed(other),
-   fNullPValue(NaN), fAlternatePValue(NaN),
-   fNullPValueError(0), fAlternatePValueError(0),
-   fTestStatisticData(NaN),
+   fNullPValue(other.fNullPValue), fAlternatePValue(other.fAlternatePValue),
+   fNullPValueError(other.fNullPValueError), fAlternatePValueError(other.fAlternatePValueError),
+   fTestStatisticData(other.fTestStatisticData),
    fAllTestStatisticsData(nullptr),
    fNullDistr(nullptr), fAltDistr(nullptr),
    fNullDetailedOutput(nullptr), fAltDetailedOutput(nullptr),
@@ -171,16 +171,17 @@ HypoTestResult & HypoTestResult::operator=(const HypoTestResult& other) {
 /// set (otherwise, ignore the new one).
 
 void HypoTestResult::Append(const HypoTestResult* other) {
-   if(fNullDistr)
+   if (fNullDistr) {
       fNullDistr->Add(other->GetNullDistribution());
-   else
-      if(other->GetNullDistribution()) fNullDistr = new SamplingDistribution( *other->GetNullDistribution() );
+   } else if (other->GetNullDistribution()) {
+      fNullDistr = new SamplingDistribution(*other->GetNullDistribution());
+   }
 
-   if(fAltDistr)
+   if (fAltDistr) {
       fAltDistr->Add(other->GetAltDistribution());
-   else
-      if(other->GetAltDistribution()) fAltDistr = new SamplingDistribution( *other->GetAltDistribution() );
-
+   } else if (other->GetAltDistribution()) {
+      fAltDistr = new SamplingDistribution(*other->GetAltDistribution());
+   }
 
    if( fNullDetailedOutput ) {
       if( other->GetNullDetailedOutput() ) fNullDetailedOutput->append( *other->GetNullDetailedOutput() );
@@ -235,12 +236,12 @@ void HypoTestResult::SetTestStatisticData(const double tsd) {
 void HypoTestResult::SetAllTestStatisticsData(const RooArgList* tsd) {
    if (fAllTestStatisticsData) {
       delete fAllTestStatisticsData;
-      fAllTestStatisticsData = 0;
+      fAllTestStatisticsData = nullptr;
    }
-   if (tsd) fAllTestStatisticsData = (const RooArgList*)tsd->snapshot();
+   if (tsd) fAllTestStatisticsData = static_cast<const RooArgList*>(tsd->snapshot());
 
-   if( fAllTestStatisticsData  &&  fAllTestStatisticsData->getSize() > 0 ) {
-      RooRealVar* firstTS = (RooRealVar*)fAllTestStatisticsData->at(0);
+   if( fAllTestStatisticsData  &&  !fAllTestStatisticsData->empty() ) {
+      RooRealVar* firstTS = static_cast<RooRealVar*>(fAllTestStatisticsData->at(0));
       if( firstTS ) SetTestStatisticData( firstTS->getVal() );
    }
 }

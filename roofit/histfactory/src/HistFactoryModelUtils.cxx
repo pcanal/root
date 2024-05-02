@@ -44,7 +44,8 @@ namespace HistFactory{
 
     RooAbsPdf* sum_pdf = nullptr;
     bool FoundSumPdf=false;
-    for (auto *sum_pdf_arg : *sim_channel->getComponents()) {
+    std::unique_ptr<RooArgSet> components{sim_channel->getComponents()};
+    for (auto *sum_pdf_arg : *components) {
         std::string NodeClassName = sum_pdf_arg->ClassName();
         if( NodeClassName == std::string("RooRealSumPdf") ) {
             FoundSumPdf=true;
@@ -76,14 +77,14 @@ namespace HistFactory{
    if (id == typeid(RooProdPdf)) {
       RooProdPdf *prod = dynamic_cast<RooProdPdf *>(&pdf);
       RooArgList list(prod->pdfList());
-      for (int i = 0, n = list.getSize(); i < n; ++i) {
-         RooAbsPdf *pdfi = (RooAbsPdf *) list.at(i);
+      for (int i = 0, n = list.size(); i < n; ++i) {
+         RooAbsPdf *pdfi = static_cast<RooAbsPdf *>(list.at(i));
             FactorizeHistFactoryPdf(observables, *pdfi, obsTerms, constraints);
          }
       } else if (id == typeid(RooSimultaneous)) {    //|| id == typeid(RooSimultaneousOpt)) {
          RooSimultaneous *sim  = dynamic_cast<RooSimultaneous *>(&pdf);
          std::unique_ptr<RooAbsCategoryLValue> cat{static_cast<RooAbsCategoryLValue *>(sim->indexCat().Clone())};
-         for (int ic = 0, nc = cat->numBins((const char *)0); ic < nc; ++ic) {
+         for (int ic = 0, nc = cat->numBins((const char *)nullptr); ic < nc; ++ic) {
             cat->setBin(ic);
             FactorizeHistFactoryPdf(observables, *sim->getPdf(cat->getCurrentLabel()), obsTerms, constraints);
          }
@@ -101,7 +102,8 @@ namespace HistFactory{
 
     // Find the servers of this channel
     bool FoundParamHistFunc=false;
-    for( auto *paramfunc_arg : *channel->getComponents() ) {
+    std::unique_ptr<RooArgSet> components{channel->getComponents()};
+    for( auto *paramfunc_arg : *components) {
       std::string NodeName = paramfunc_arg->GetName();
       std::string NodeClassName = paramfunc_arg->ClassName();
       if( NodeClassName != std::string("ParamHistFunc") ) continue;
@@ -117,7 +119,7 @@ namespace HistFactory{
     }
 
     // Now, get the set of gamma's
-    gammaList = (RooArgList*) &( paramfunc->paramList());
+    gammaList = const_cast<RooArgList*>(&( paramfunc->paramList()));
     if(verbose) gammaList->Print("V");
 
     return true;
@@ -130,7 +132,7 @@ namespace HistFactory{
 
     bool verbose=false;
 
-    RooSimultaneous* simPdf = (RooSimultaneous*) pdf;
+    RooSimultaneous* simPdf = static_cast<RooSimultaneous*>(pdf);
 
     // get category label
     RooCategory* cat = nullptr;
@@ -157,7 +159,7 @@ namespace HistFactory{
     // RooAbsData* dataForChan = (RooAbsData*) dataByCategory->FindObject("");
 
     // loop over channels
-    RooCategory* channelCat = (RooCategory*) (&simPdf->indexCat());
+    auto channelCat = static_cast<RooCategory const*>(&simPdf->indexCat());
     for (const auto& nameIdx : *channelCat) {
 
       // Get pdf associated with state from simpdf
@@ -167,12 +169,12 @@ namespace HistFactory{
       if(verbose) std::cout << "Getting data for channel: " << ChannelName << std::endl;
       ChannelBinDataMap[ ChannelName ] = std::vector<double>();
 
-      RooAbsData* dataForChan = (RooAbsData*) dataByCategory->FindObject(nameIdx.first.c_str());
+      RooAbsData* dataForChan = static_cast<RooAbsData*>(dataByCategory->FindObject(nameIdx.first.c_str()));
       if(verbose) dataForChan->Print();
 
       // Generate observables defined by the pdf associated with this state
-      RooArgSet* obstmp = pdftmp->getObservables(*dataForChan->get()) ;
-      RooRealVar* obs = ((RooRealVar*)obstmp->first());
+      std::unique_ptr<RooArgSet> obstmp{pdftmp->getObservables(*dataForChan->get())};
+      RooRealVar* obs = (static_cast<RooRealVar*>(obstmp->first()));
       if(verbose) obs->Print();
 
       //double expected = pdftmp->expectedEvents(*obstmp);
@@ -255,7 +257,7 @@ namespace HistFactory{
       //std::cout << "Checking Server: " << serverName << std::endl;
       if( serverName.find("nom_")!=std::string::npos ) {
    FoundNomMean = true;
-   pois_nom = (RooRealVar*) term_pois;
+   pois_nom = static_cast<RooRealVar*>(term_pois);
       }
     }
     if( !FoundNomMean || !pois_nom ) {
@@ -293,7 +295,7 @@ namespace HistFactory{
       //std::cout << "Checking Server: " << serverName << std::endl;
       if( serverName.find("_tau")!=std::string::npos ) {
    FoundTau = true;
-   tau = (RooRealVar*) term_in_product;
+   tau = static_cast<RooRealVar*>(term_in_product);
       }
     }
     if( !FoundTau || !tau ) {

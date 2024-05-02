@@ -19,7 +19,7 @@
 \class RooRandomizeParamMCSModule
 \ingroup Roofitcore
 
-RooRandomizeParamMCSModule is an add-on modules to RooMCStudy that
+Add-on module to RooMCStudy that
 allows you to randomize input generation parameters. Randomized generation
 parameters can be sampled from a uniform or Gaussian distribution.
 For every randomized parameter, an extra variable is added to
@@ -44,18 +44,16 @@ number of expected events of an extended p.d.f
 #include "RooMsgService.h"
 #include "RooRandomizeParamMCSModule.h"
 
-using namespace std ;
+using std::endl;
 
 ClassImp(RooRandomizeParamMCSModule);
-  ;
-
 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Constructor
 
 RooRandomizeParamMCSModule::RooRandomizeParamMCSModule() :
-  RooAbsMCStudyModule("RooRandomizeParamMCSModule","RooRandomizeParamMCSModule"), _data(0)
+  RooAbsMCStudyModule("RooRandomizeParamMCSModule","RooRandomizeParamMCSModule")
 {
 }
 
@@ -67,24 +65,11 @@ RooRandomizeParamMCSModule::RooRandomizeParamMCSModule() :
 RooRandomizeParamMCSModule::RooRandomizeParamMCSModule(const RooRandomizeParamMCSModule& other) :
   RooAbsMCStudyModule(other),
   _unifParams(other._unifParams),
-  _gausParams(other._gausParams),
-  _data(0)
+  _gausParams(other._gausParams)
 {
 }
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// Destructor
-
-RooRandomizeParamMCSModule:: ~RooRandomizeParamMCSModule()
-{
-  if (_data) {
-    delete _data ;
-  }
-}
-
-
+RooRandomizeParamMCSModule:: ~RooRandomizeParamMCSModule() = default;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Request uniform smearing of param in range [lo,hi] in RooMCStudy
@@ -244,10 +229,9 @@ bool RooRandomizeParamMCSModule::initializeInstance()
     uiter->_param = actualPar ;
 
     // Add variable to summary dataset to hold generator value
-    TString parName = Form("%s_gen",uiter->_param->GetName()) ;
-    TString parTitle = Form("%s as generated",uiter->_param->GetTitle()) ;
-    RooRealVar* par_gen = new RooRealVar(parName.Data(),parTitle.Data(),0) ;
-    _genParSet.addOwned(*par_gen) ;
+    std::string parName = std::string(uiter->_param->GetName()) + "_gen";
+    std::string parTitle = std::string(uiter->_param->GetTitle()) + " as generated";
+    _genParSet.addOwned(std::make_unique<RooRealVar>(parName.c_str(),parTitle.c_str(),0));
   }
 
   // Loop over all gaussian smearing parameters
@@ -264,10 +248,9 @@ bool RooRandomizeParamMCSModule::initializeInstance()
     giter->_param = actualPar ;
 
     // Add variable to summary dataset to hold generator value
-    TString parName = Form("%s_gen",giter->_param->GetName()) ;
-    TString parTitle = Form("%s as generated",giter->_param->GetTitle()) ;
-    RooRealVar* par_gen = new RooRealVar(parName.Data(),parTitle.Data(),0) ;
-    _genParSet.addOwned(*par_gen) ;
+    std::string parName = std::string(giter->_param->GetName()) + "_gen";
+    std::string parTitle = std::string(giter->_param->GetTitle()) + " as generated";
+    _genParSet.addOwned(std::make_unique<RooRealVar>(parName.c_str(),parTitle.c_str(),0));
   }
 
 
@@ -290,10 +273,9 @@ bool RooRandomizeParamMCSModule::initializeInstance()
 
     // Add variables to summary dataset to hold generator values
     for(auto * param : static_range_cast<RooRealVar*>(usiter->_pset)) {
-      TString parName = Form("%s_gen",param->GetName()) ;
-      TString parTitle = Form("%s as generated",param->GetTitle()) ;
-      RooRealVar* par_gen = new RooRealVar(parName.Data(),parTitle.Data(),0) ;
-      _genParSet.addOwned(*par_gen) ;
+      std::string parName = std::string(param->GetName()) + "_gen";
+      std::string parTitle = std::string(param->GetTitle()) + " as generated";
+      _genParSet.addOwned(std::make_unique<RooRealVar>(parName.c_str(),parTitle.c_str(),0));
     }
   }
 
@@ -317,15 +299,14 @@ bool RooRandomizeParamMCSModule::initializeInstance()
 
     // Add variables to summary dataset to hold generator values
     for(auto * param : static_range_cast<RooRealVar*>(ugiter->_pset)) {
-      TString parName = Form("%s_gen",param->GetName()) ;
-      TString parTitle = Form("%s as generated",param->GetTitle()) ;
-      RooRealVar* par_gen = new RooRealVar(parName.Data(),parTitle.Data(),0) ;
-      _genParSet.addOwned(*par_gen) ;
+      std::string parName = std::string(param->GetName()) + "_gen";
+      std::string parTitle = std::string(param->GetTitle()) + " as generated";
+      _genParSet.addOwned(std::make_unique<RooRealVar>(parName.c_str(),parTitle.c_str(),0));
     }
   }
 
   // Create new dataset to be merged with RooMCStudy::fitParDataSet
-  _data = new RooDataSet("DeltaLLSigData","Additional data for Delta(-log(L)) study",_genParSet) ;
+  _data = std::make_unique<RooDataSet>("DeltaLLSigData","Additional data for Delta(-log(L)) study",_genParSet) ;
 
   return true ;
 }
@@ -432,7 +413,7 @@ bool RooRandomizeParamMCSModule::processBeforeGen(Int_t /*sampleNum*/)
 
 RooDataSet* RooRandomizeParamMCSModule::finalizeRun()
 {
-  return _data ;
+  return _data.get();
 }
 
 

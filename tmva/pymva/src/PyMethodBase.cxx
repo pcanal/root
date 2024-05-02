@@ -120,6 +120,8 @@ PyMethodBase::PyMethodBase(Types::EMVA methodType,
 PyMethodBase::~PyMethodBase()
 {
    // should we delete here fLocalNS ?
+   //PyFinalize();
+   if (fLocalNS) Py_DECREF(fLocalNS);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -321,6 +323,7 @@ Int_t PyMethodBase::UnSerialize(TString path, PyObject **obj)
 /// Py_single_input, Py_file_input)
 
 void PyMethodBase::PyRunString(TString code, TString errorMessage, int start) {
+   //std::cout << "Run: >> " << code << std::endl;
    fPyReturn = PyRun_String(code, start, fGlobalNS, fLocalNS);
    if (!fPyReturn) {
       Log() << kWARNING << "Failed to run python code: " << code << Endl;
@@ -397,21 +400,13 @@ std::vector<size_t> PyMethodBase::GetDataFromList(PyObject* listObject){
 }
 
 //////////////////////////////////////////////////////////////////////////////////
-/// \brief Utility function which checks if a given key is present in a Python 
+/// \brief Utility function which checks if a given key is present in a Python
 ///        dictionary object and returns the associated value or throws runtime
-///        error. This is to replace PyDict_GetItemWithError in Python 2.
+///        error.
 ///
 /// \param[in] listObject Python Dict object
 /// \return Associated value PyObject
-PyObject* PyMethodBase::GetValueFromDict(PyObject* dict, const char* key){
-   #if PY_MAJOR_VERSION >= 3   // using PyDict_GetItemWithError that is available only in Python3
-   return PyDict_GetItemWithError(dict,PyUnicode_FromString(key));
-   #else
-   if(!PyDict_Contains(dict, PyUnicode_FromString(key))){
-      throw std::runtime_error(std::string("Key ")+key+" does not exist in the dictionary.");
-   } else {
-      return PyDict_GetItemString(dict, key);
-   }
-   #endif
+PyObject *PyMethodBase::GetValueFromDict(PyObject *dict, const char *key)
+{
+   return PyDict_GetItemWithError(dict, PyUnicode_FromString(key));
 }
-

@@ -19,7 +19,7 @@
 \class RooAbsData
 \ingroup Roofitcore
 
-RooAbsData is the common abstract base class for binned and unbinned
+Abstract base class for binned and unbinned
 datasets. The abstract interface defines plotting and tabulating entry
 points for its contents and provides an iterator over its elements
 (bins for binned data sets, data points for unbinned datasets).
@@ -46,7 +46,9 @@ with this change.
 
 Usage example for a model with global observables `g1` and `g2`:
 ```
-auto data = model.generate(x, 1000); // data has only the single observables x
+using namespace RooFit;
+
+std::unique_ptr<RooAbsData> data{model.generate(x, 1000)}; // data has only the single observables x
 data->setGlobalObservables(g1, g2); // now, data also stores a snapshot of g1 and g2
 
 // If you fit the model to the data, the global observables and their values
@@ -83,6 +85,7 @@ observable snapshots are stored in the dataset.
 #include "TMath.h"
 #include "TTree.h"
 
+#include "RooFormula.h"
 #include "RooFormulaVar.h"
 #include "RooCmdConfig.h"
 #include "RooAbsRealLValue.h"
@@ -108,7 +111,6 @@ observable snapshots are stored in the dataset.
 #include "RooHelpers.h"
 
 #include "ROOT/StringUtils.hxx"
-#include "TMatrixDSym.h"
 #include "TPaveText.h"
 #include "TH1.h"
 #include "TH2.h"
@@ -119,12 +121,7 @@ observable snapshots are stored in the dataset.
 #include <memory>
 
 
-using namespace std;
-
 ClassImp(RooAbsData);
-;
-
-static std::map<RooAbsData*,int> _dcc ;
 
 RooAbsData::StorageType RooAbsData::defaultStorageType=RooAbsData::Vector ;
 
@@ -133,7 +130,7 @@ RooAbsData::StorageType RooAbsData::defaultStorageType=RooAbsData::Vector ;
 void RooAbsData::setDefaultStorageType(RooAbsData::StorageType s)
 {
    if (RooAbsData::Composite == s) {
-      cout << "Composite storage is not a valid *default* storage type." << endl;
+      std::cout << "Composite storage is not a valid *default* storage type." << std::endl;
    } else {
       defaultStorageType = s;
    }
@@ -147,33 +144,10 @@ RooAbsData::StorageType RooAbsData::getDefaultStorageType( )
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-
-void RooAbsData::claimVars(RooAbsData* data)
-{
-  _dcc[data]++ ;
-  //cout << "RooAbsData(" << data << ") claim incremented to " << _dcc[data] << endl ;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-/// If return value is true variables can be deleted
-
-bool RooAbsData::releaseVars(RooAbsData* data)
-{
-  if (_dcc[data]>0) {
-    _dcc[data]-- ;
-  }
-
-  //cout << "RooAbsData(" << data << ") claim decremented to " << _dcc[data] << endl ;
-  return (_dcc[data]==0) ;
-}
-
-////////////////////////////////////////////////////////////////////////////////
 /// Default constructor
 
-RooAbsData::RooAbsData()
+RooAbsData::RooAbsData() : storageType(defaultStorageType)
 {
-  claimVars(this) ;
-  storageType = defaultStorageType;
 
   RooTrace::create(this) ;
 }
@@ -189,7 +163,7 @@ void RooAbsData::initializeVars(RooArgSet const& vars)
       if (!var->isFundamental()) {
          coutE(InputArguments) << "RooAbsDataStore::initialize(" << GetName()
                                << "): Data set cannot contain non-fundamental types, ignoring " << var->GetName()
-                               << endl;
+                               << std::endl;
          throw std::invalid_argument(std::string("Only fundamental variables can be placed into datasets. This is violated for ") + var->GetName());
       } else {
          _vars.addClone(*var);
@@ -219,8 +193,6 @@ RooAbsData::RooAbsData(RooStringView name, RooStringView title, const RooArgSet&
    } else {
       storageType = RooAbsData::Composite;
    }
-   // cout << "created dataset " << this << endl ;
-   claimVars(this);
 
    initializeVars(vars);
 
@@ -229,92 +201,65 @@ RooAbsData::RooAbsData(RooStringView name, RooStringView title, const RooArgSet&
    RooTrace::create(this);
 }
 
+void RooAbsData::copyImpl(const RooAbsData &other, const char *newName)
+{
+   _namePtr = newName ? RooNameReg::instance().constPtr(newName) : other._namePtr;
+
+   _vars.addClone(other._vars);
+
+   // reconnect any parameterized ranges to internal dataset observables
+   for (auto var : _vars) {
+      var->attachArgs(_vars);
+   }
+
+   if (!other._ownedComponents.empty()) {
+
+      // copy owned components here
+
+      std::map<std::string, RooAbsDataStore *> smap;
+      for (auto &itero : other._ownedComponents) {
+         RooAbsData *dclone = static_cast<RooAbsData *>(itero.second->Clone());
+         _ownedComponents[itero.first] = dclone;
+         smap[itero.first] = dclone->store();
+      }
+
+      auto compStore = static_cast<RooCompositeDataStore const *>(other.store());
+      auto idx = static_cast<RooCategory *>(_vars.find(*(const_cast<RooCompositeDataStore *>(compStore)->index())));
+      _dstore = std::make_unique<RooCompositeDataStore>(newName ? newName : other.GetName(), other.GetTitle(), _vars,
+                                                        *idx, smap);
+      storageType = RooAbsData::Composite;
+
+   } else {
+
+      // Convert to vector store if default is vector
+      _dstore.reset(other._dstore->clone(_vars, newName ? newName : other.GetName()));
+      storageType = other.storageType;
+   }
+
+   copyGlobalObservables(other);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 /// Copy constructor
 
-RooAbsData::RooAbsData(const RooAbsData& other, const char* newname) :
-  TNamed(newname ? newname : other.GetName(),other.GetTitle()),
-  RooPrintable(other), _vars(),
-  _cachedVars("Cached Variables"),
-  _namePtr(newname ? RooNameReg::instance().constPtr(newname) : other._namePtr)
+RooAbsData::RooAbsData(const RooAbsData &other, const char *newName)
+   : TNamed{newName ? newName : other.GetName(), other.GetTitle()},
+     RooPrintable{other},
+     _cachedVars{"Cached Variables"}
 {
-  //cout << "created dataset " << this << endl ;
-  claimVars(this) ;
-  _vars.addClone(other._vars) ;
+   copyImpl(other, newName);
 
-  // reconnect any parameterized ranges to internal dataset observables
-  for (auto var : _vars) {
-    var->attachArgs(_vars);
-  }
-
-
-  if (other._ownedComponents.size()>0) {
-
-    // copy owned components here
-
-    map<string,RooAbsDataStore*> smap ;
-    for (auto& itero : other._ownedComponents) {
-      RooAbsData* dclone = (RooAbsData*) itero.second->Clone();
-      _ownedComponents[itero.first] = dclone;
-      smap[itero.first] = dclone->store();
-    }
-
-    RooCategory* idx = (RooCategory*) _vars.find(*((RooCompositeDataStore*)other.store())->index()) ;
-    _dstore = std::make_unique<RooCompositeDataStore>(newname?newname:other.GetName(),other.GetTitle(),_vars,*idx,smap) ;
-    storageType = RooAbsData::Composite;
-
-  } else {
-
-    // Convert to vector store if default is vector
-    _dstore.reset(other._dstore->clone(_vars,newname?newname:other.GetName()));
-    storageType = other.storageType;
-  }
-
-  copyGlobalObservables(other);
-
-  RooTrace::create(this) ;
+   RooTrace::create(this);
 }
 
-RooAbsData& RooAbsData::operator=(const RooAbsData& other) {
-  TNamed::operator=(other);
-  RooPrintable::operator=(other);
+RooAbsData &RooAbsData::operator=(const RooAbsData &other)
+{
+   TNamed::operator=(other);
+   RooPrintable::operator=(other);
 
-  claimVars(this);
-  _vars.Clear();
-  _vars.addClone(other._vars);
-  _namePtr = other._namePtr;
+   copyImpl(other, nullptr);
 
-  // reconnect any parameterized ranges to internal dataset observables
-  for (const auto var : _vars) {
-    var->attachDataSet(*this) ;
-  }
-
-
-  if (other._ownedComponents.size()>0) {
-
-    // copy owned components here
-
-    map<string,RooAbsDataStore*> smap ;
-    for (auto& itero : other._ownedComponents) {
-      RooAbsData* dclone = (RooAbsData*) itero.second->Clone();
-      _ownedComponents[itero.first] = dclone;
-      smap[itero.first] = dclone->store();
-    }
-
-    RooCategory* idx = (RooCategory*) _vars.find(*((RooCompositeDataStore*)other.store())->index()) ;
-    _dstore = std::make_unique<RooCompositeDataStore>(GetName(), GetTitle(), _vars, *idx, smap);
-    storageType = RooAbsData::Composite;
-
-  } else {
-
-    // Convert to vector store if default is vector
-    _dstore.reset(other._dstore->clone(_vars));
-    storageType = other.storageType;
-  }
-
-  copyGlobalObservables(other);
-
-  return *this;
+   return *this;
 }
 
 
@@ -324,7 +269,7 @@ void RooAbsData::copyGlobalObservables(const RooAbsData& other) {
     else _globalObservables->clear();
     other._globalObservables->snapshot(*_globalObservables);
   } else {
-    _globalObservables.reset(nullptr);
+    _globalObservables.reset();
   }
 }
 
@@ -334,15 +279,9 @@ void RooAbsData::copyGlobalObservables(const RooAbsData& other) {
 
 RooAbsData::~RooAbsData()
 {
-  if (releaseVars(this)) {
-    // will cause content to be deleted subsequently in dtor
-  } else {
-    _vars.releaseOwnership() ;
-  }
-
   // Delete owned dataset components
-  for(map<std::string,RooAbsData*>::iterator iter = _ownedComponents.begin() ; iter!= _ownedComponents.end() ; ++iter) {
-    delete iter->second ;
+  for (auto& item : _ownedComponents) {
+    delete item.second;
   }
 
   RooTrace::destroy(this) ;
@@ -457,19 +396,19 @@ void RooAbsData::setDirtyProp(bool flag)
 /// <tr><td> `Title(const char* name)`   <td> Give specified title to output dataset
 /// </table>
 
-RooAbsData* RooAbsData::reduce(const RooCmdArg& arg1,const RooCmdArg& arg2,const RooCmdArg& arg3,const RooCmdArg& arg4,
+RooFit::OwningPtr<RooAbsData> RooAbsData::reduce(const RooCmdArg& arg1,const RooCmdArg& arg2,const RooCmdArg& arg3,const RooCmdArg& arg4,
                 const RooCmdArg& arg5,const RooCmdArg& arg6,const RooCmdArg& arg7,const RooCmdArg& arg8)
 {
   // Define configuration for this method
-  RooCmdConfig pc(Form("RooAbsData::reduce(%s)",GetName())) ;
+  RooCmdConfig pc("RooAbsData::reduce(" + std::string(GetName()) + ")");
   pc.defineString("name","Name",0,"") ;
   pc.defineString("title","Title",0,"") ;
   pc.defineString("cutRange","CutRange",0,"") ;
   pc.defineString("cutSpec","CutSpec",0,"") ;
-  pc.defineObject("cutVar","CutVar",0,0) ;
+  pc.defineObject("cutVar","CutVar",0,nullptr) ;
   pc.defineInt("evtStart","EventRange",0,0) ;
   pc.defineInt("evtStop","EventRange",1,std::numeric_limits<int>::max()) ;
-  pc.defineSet("varSel","SelectVars",0,0) ;
+  pc.defineSet("varSel","SelectVars",0,nullptr) ;
   pc.defineMutex("CutVar","CutSpec") ;
 
   // Process & check varargs
@@ -479,14 +418,14 @@ RooAbsData* RooAbsData::reduce(const RooCmdArg& arg1,const RooCmdArg& arg2,const
   }
 
   // Extract values from named arguments
-  const char* cutRange = pc.getString("cutRange",0,true) ;
-  const char* cutSpec = pc.getString("cutSpec",0,true) ;
-  RooFormulaVar* cutVar = static_cast<RooFormulaVar*>(pc.getObject("cutVar",0)) ;
-  Int_t nStart = pc.getInt("evtStart",0) ;
-  Int_t nStop = pc.getInt("evtStop",std::numeric_limits<int>::max()) ;
+  const char* cutRange = pc.getString("cutRange",nullptr,true) ;
+  const char* cutSpec = pc.getString("cutSpec",nullptr,true) ;
+  RooFormulaVar* cutVar = static_cast<RooFormulaVar*>(pc.getObject("cutVar",nullptr)) ;
+  int nStart = pc.getInt("evtStart",0) ;
+  int nStop = pc.getInt("evtStop",std::numeric_limits<int>::max()) ;
   RooArgSet* varSet = pc.getSet("varSel");
-  const char* name = pc.getString("name",0,true) ;
-  const char* title = pc.getString("title",0,true) ;
+  const char* name = pc.getString("name",nullptr,true) ;
+  const char* title = pc.getString("title",nullptr,true) ;
 
   // Make sure varSubset doesn't contain any variable not in this dataset
   RooArgSet varSubset ;
@@ -495,7 +434,7 @@ RooAbsData* RooAbsData::reduce(const RooCmdArg& arg1,const RooCmdArg& arg2,const
     for (const auto arg : varSubset) {
       if (!_vars.find(arg->GetName())) {
         coutW(InputArguments) << "RooAbsData::reduce(" << GetName() << ") WARNING: variable "
-            << arg->GetName() << " not in dataset, ignored" << endl ;
+            << arg->GetName() << " not in dataset, ignored" << std::endl ;
         varSubset.remove(*arg) ;
       }
     }
@@ -503,7 +442,7 @@ RooAbsData* RooAbsData::reduce(const RooCmdArg& arg1,const RooCmdArg& arg2,const
     varSubset.add(*get()) ;
   }
 
-  RooAbsData* ret = nullptr;
+  std::unique_ptr<RooAbsData> ret;
   if (cutSpec) {
 
     RooFormulaVar cutVarTmp(cutSpec,cutSpec,*get()) ;
@@ -521,7 +460,7 @@ RooAbsData* RooAbsData::reduce(const RooCmdArg& arg1,const RooCmdArg& arg2,const
   if (title) ret->SetTitle(title) ;
 
   ret->copyGlobalObservables(*this);
-  return ret ;
+  return RooFit::makeOwningPtr(std::move(ret));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -530,12 +469,12 @@ RooAbsData* RooAbsData::reduce(const RooCmdArg& arg1,const RooCmdArg& arg2,const
 /// other variables, such as intermediate formula objects, use the equivalent
 /// reduce method specifying the as a RooFormulVar reference.
 
-RooAbsData* RooAbsData::reduce(const char* cut)
+RooFit::OwningPtr<RooAbsData> RooAbsData::reduce(const char* cut)
 {
   RooFormulaVar cutVar(cut,cut,*get()) ;
-  RooAbsData* ret = reduceEng(*get(),&cutVar,0,0,std::numeric_limits<std::size_t>::max()) ;
+  auto ret = reduceEng(*get(),&cutVar,nullptr,0,std::numeric_limits<std::size_t>::max()) ;
   ret->copyGlobalObservables(*this);
-  return ret;
+  return RooFit::makeOwningPtr(std::move(ret));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -543,11 +482,11 @@ RooAbsData* RooAbsData::reduce(const char* cut)
 /// The 'cutVar' formula variable is used to select the subset of data points to be
 /// retained in the reduced data collection.
 
-RooAbsData* RooAbsData::reduce(const RooFormulaVar& cutVar)
+RooFit::OwningPtr<RooAbsData> RooAbsData::reduce(const RooFormulaVar& cutVar)
 {
-  RooAbsData* ret = reduceEng(*get(),&cutVar,0,0,std::numeric_limits<std::size_t>::max()) ;
+  auto ret = reduceEng(*get(),&cutVar,nullptr,0,std::numeric_limits<std::size_t>::max()) ;
   ret->copyGlobalObservables(*this);
-  return ret;
+  return RooFit::makeOwningPtr(std::move(ret));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -558,27 +497,27 @@ RooAbsData* RooAbsData::reduce(const RooFormulaVar& cutVar)
 /// other variables, such as intermediate formula objects, use the equivalent
 /// reduce method specifying the as a RooFormulVar reference.
 
-RooAbsData* RooAbsData::reduce(const RooArgSet& varSubset, const char* cut)
+RooFit::OwningPtr<RooAbsData> RooAbsData::reduce(const RooArgSet& varSubset, const char* cut)
 {
   // Make sure varSubset doesn't contain any variable not in this dataset
   RooArgSet varSubset2(varSubset) ;
   for (const auto arg : varSubset) {
     if (!_vars.find(arg->GetName())) {
       coutW(InputArguments) << "RooAbsData::reduce(" << GetName() << ") WARNING: variable "
-             << arg->GetName() << " not in dataset, ignored" << endl ;
+             << arg->GetName() << " not in dataset, ignored" << std::endl ;
       varSubset2.remove(*arg) ;
     }
   }
 
-  RooAbsData* ret = nullptr;
+  std::unique_ptr<RooAbsData> ret;
   if (cut && strlen(cut)>0) {
     RooFormulaVar cutVar(cut, cut, *get(), false);
-    ret = reduceEng(varSubset2,&cutVar,0,0,std::numeric_limits<std::size_t>::max());
+    ret = reduceEng(varSubset2,&cutVar,nullptr,0,std::numeric_limits<std::size_t>::max());
   } else {
-    ret = reduceEng(varSubset2,0,0,0,std::numeric_limits<std::size_t>::max());
+    ret = reduceEng(varSubset2,nullptr,nullptr,0,std::numeric_limits<std::size_t>::max());
   }
   ret->copyGlobalObservables(*this);
-  return ret;
+  return RooFit::makeOwningPtr(std::move(ret));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -588,21 +527,21 @@ RooAbsData* RooAbsData::reduce(const RooArgSet& varSubset, const char* cut)
 /// The 'cutVar' formula variable is used to select the subset of data points to be
 /// retained in the reduced data collection.
 
-RooAbsData* RooAbsData::reduce(const RooArgSet& varSubset, const RooFormulaVar& cutVar)
+RooFit::OwningPtr<RooAbsData> RooAbsData::reduce(const RooArgSet& varSubset, const RooFormulaVar& cutVar)
 {
   // Make sure varSubset doesn't contain any variable not in this dataset
   RooArgSet varSubset2(varSubset) ;
   for(RooAbsArg * arg : varSubset) {
     if (!_vars.find(arg->GetName())) {
       coutW(InputArguments) << "RooAbsData::reduce(" << GetName() << ") WARNING: variable "
-             << arg->GetName() << " not in dataset, ignored" << endl ;
+             << arg->GetName() << " not in dataset, ignored" << std::endl ;
       varSubset2.remove(*arg) ;
     }
   }
 
-  RooAbsData* ret = reduceEng(varSubset2,&cutVar,0,0,std::numeric_limits<std::size_t>::max()) ;
+  auto ret = reduceEng(varSubset2,&cutVar,nullptr,0,std::numeric_limits<std::size_t>::max()) ;
   ret->copyGlobalObservables(*this);
-  return ret;
+  return RooFit::makeOwningPtr(std::move(ret));
 }
 
 
@@ -672,7 +611,7 @@ TH1 *RooAbsData::createHistogram(const char* varNameList,
       continue;
     }
 
-    vars[i] = static_cast<RooRealVar*>( get()->find(varNames[i].data()) );
+    vars[i] = static_cast<RooRealVar*>(get()->find(varNames[i].data()) );
     if (!vars[i]) {
       coutE(InputArguments) << "RooAbsData::createHistogram(" << GetName() << ") ERROR: dataset does not contain an observable named " << varNames[i] << std::endl;
       return nullptr;
@@ -736,11 +675,11 @@ TH1 *RooAbsData::createHistogram(const char *name, const RooAbsRealLValue& xvar,
   RooLinkedList argList(argListIn) ;
 
   // Define configuration for this method
-  RooCmdConfig pc(Form("RooAbsData::createHistogram(%s)",GetName())) ;
+  RooCmdConfig pc("RooAbsData::createHistogram(" + std::string(GetName()) + ")");
   pc.defineString("cutRange","CutRange",0,"",true) ;
   pc.defineString("cutString","CutSpec",0,"") ;
-  pc.defineObject("yvar","YVar",0,0) ;
-  pc.defineObject("zvar","ZVar",0,0) ;
+  pc.defineObject("yvar","YVar",0,nullptr) ;
+  pc.defineObject("zvar","ZVar",0,nullptr) ;
   pc.allowUndefined() ;
 
   // Process & check varargs
@@ -749,8 +688,8 @@ TH1 *RooAbsData::createHistogram(const char *name, const RooAbsRealLValue& xvar,
     return nullptr;
   }
 
-  const char* cutSpec = pc.getString("cutString",0,true) ;
-  const char* cutRange = pc.getString("cutRange",0,true) ;
+  const char* cutSpec = pc.getString("cutString",nullptr,true) ;
+  const char* cutRange = pc.getString("cutRange",nullptr,true) ;
 
   RooArgList vars(xvar) ;
   RooAbsArg* yvar = static_cast<RooAbsArg*>(pc.getObject("yvar")) ;
@@ -766,37 +705,40 @@ TH1 *RooAbsData::createHistogram(const char *name, const RooAbsRealLValue& xvar,
 
   // Swap Auto(Sym)RangeData with a Binning command
   RooLinkedList ownedCmds ;
-  RooCmdArg* autoRD = (RooCmdArg*) argList.find("AutoRangeData") ;
+  RooCmdArg* autoRD = static_cast<RooCmdArg*>(argList.find("AutoRangeData")) ;
   if (autoRD) {
-    double xmin,xmax ;
-    if (!getRange((RooRealVar&)xvar,xmin,xmax,autoRD->getDouble(0),autoRD->getInt(0))) {
-       RooCmdArg* bincmd = (RooCmdArg*) RooFit::Binning(autoRD->getInt(1),xmin,xmax).Clone() ;
+    double xmin;
+    double xmax;
+    if (!getRange(static_cast<RooRealVar const&>(xvar),xmin,xmax,autoRD->getDouble(0),autoRD->getInt(0))) {
+       RooCmdArg* bincmd = static_cast<RooCmdArg*>(RooFit::Binning(autoRD->getInt(1),xmin,xmax).Clone()) ;
        ownedCmds.Add(bincmd) ;
        argList.Replace(autoRD,bincmd) ;
     }
   }
 
   if (yvar) {
-    RooCmdArg* autoRDY = (RooCmdArg*) ((RooCmdArg*)argList.find("YVar"))->subArgs().find("AutoRangeData") ;
+    RooCmdArg* autoRDY = static_cast<RooCmdArg*>((static_cast<RooCmdArg*>(argList.find("YVar")))->subArgs().find("AutoRangeData")) ;
     if (autoRDY) {
-      double ymin,ymax ;
-      if (!getRange((RooRealVar&)(*yvar),ymin,ymax,autoRDY->getDouble(0),autoRDY->getInt(0))) {
-         RooCmdArg* bincmd = (RooCmdArg*) RooFit::Binning(autoRDY->getInt(1),ymin,ymax).Clone() ;
-         //ownedCmds.Add(bincmd) ;
-         ((RooCmdArg*)argList.find("YVar"))->subArgs().Replace(autoRDY,bincmd) ;
+       double ymin;
+       double ymax;
+       if (!getRange(static_cast<RooRealVar &>(*yvar), ymin, ymax, autoRDY->getDouble(0), autoRDY->getInt(0))) {
+        RooCmdArg *bincmd = static_cast<RooCmdArg *>(RooFit::Binning(autoRDY->getInt(1), ymin, ymax).Clone());
+        // ownedCmds.Add(bincmd) ;
+        (static_cast<RooCmdArg *>(argList.find("YVar")))->subArgs().Replace(autoRDY, bincmd);
       }
       delete autoRDY ;
     }
   }
 
   if (zvar) {
-    RooCmdArg* autoRDZ = (RooCmdArg*) ((RooCmdArg*)argList.find("ZVar"))->subArgs().find("AutoRangeData") ;
+    RooCmdArg* autoRDZ = static_cast<RooCmdArg*>((static_cast<RooCmdArg*>(argList.find("ZVar")))->subArgs().find("AutoRangeData")) ;
     if (autoRDZ) {
-      double zmin,zmax ;
-      if (!getRange((RooRealVar&)(*zvar),zmin,zmax,autoRDZ->getDouble(0),autoRDZ->getInt(0))) {
-         RooCmdArg* bincmd = (RooCmdArg*) RooFit::Binning(autoRDZ->getInt(1),zmin,zmax).Clone() ;
+      double zmin;
+      double zmax;
+      if (!getRange(static_cast<RooRealVar&>(*zvar),zmin,zmax,autoRDZ->getDouble(0),autoRDZ->getInt(0))) {
+         RooCmdArg* bincmd = static_cast<RooCmdArg*>(RooFit::Binning(autoRDZ->getInt(1),zmin,zmax).Clone()) ;
          //ownedCmds.Add(bincmd) ;
-         ((RooCmdArg*)argList.find("ZVar"))->subArgs().Replace(autoRDZ,bincmd) ;
+         (static_cast<RooCmdArg*>(argList.find("ZVar")))->subArgs().Replace(autoRDZ,bincmd) ;
       }
       delete autoRDZ ;
     }
@@ -818,7 +760,7 @@ Roo1DTable* RooAbsData::table(const RooArgSet& catSet, const char* cuts, const c
 {
   RooArgSet catSet2 ;
 
-  string prodName("(") ;
+  std::string prodName("(") ;
   for(auto * arg : catSet) {
     if (dynamic_cast<RooAbsCategory*>(arg)) {
       if (auto varsArg = dynamic_cast<RooAbsCategory*>(_vars.find(arg->GetName()))) catSet2.add(*varsArg) ;
@@ -828,7 +770,7 @@ Roo1DTable* RooAbsData::table(const RooArgSet& catSet, const char* cuts, const c
       }
       prodName += arg->GetName() ;
     } else {
-      coutW(InputArguments) << "RooAbsData::table(" << GetName() << ") non-RooAbsCategory input argument " << arg->GetName() << " ignored" << endl ;
+      coutW(InputArguments) << "RooAbsData::table(" << GetName() << ") non-RooAbsCategory input argument " << arg->GetName() << " ignored" << std::endl ;
     }
   }
   prodName += ")" ;
@@ -840,7 +782,7 @@ Roo1DTable* RooAbsData::table(const RooArgSet& catSet, const char* cuts, const c
 ////////////////////////////////////////////////////////////////////////////////
 /// Print name of dataset
 
-void RooAbsData::printName(ostream& os) const
+void RooAbsData::printName(std::ostream& os) const
 {
   os << GetName() ;
 }
@@ -848,7 +790,7 @@ void RooAbsData::printName(ostream& os) const
 ////////////////////////////////////////////////////////////////////////////////
 /// Print title of dataset
 
-void RooAbsData::printTitle(ostream& os) const
+void RooAbsData::printTitle(std::ostream& os) const
 {
   os << GetTitle() ;
 }
@@ -856,14 +798,14 @@ void RooAbsData::printTitle(ostream& os) const
 ////////////////////////////////////////////////////////////////////////////////
 /// Print class name of dataset
 
-void RooAbsData::printClassName(ostream& os) const
+void RooAbsData::printClassName(std::ostream& os) const
 {
   os << ClassName() ;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void RooAbsData::printMultiline(ostream& os, Int_t contents, bool verbose, TString indent) const
+void RooAbsData::printMultiline(std::ostream& os, Int_t contents, bool verbose, TString indent) const
 {
   _dstore->printMultiline(os,contents,verbose,indent) ;
 }
@@ -929,13 +871,13 @@ double RooAbsData::moment(const RooRealVar& var, double order, double offset, co
   auto varPtr = dynamic_cast<const RooRealVar*>(arg);
   // Check if found variable is of type RooRealVar
   if (!varPtr) {
-    coutE(InputArguments) << "RooDataSet::moment(" << GetName() << ") ERROR: variable " << var.GetName() << " is not of type RooRealVar" << endl ;
+    coutE(InputArguments) << "RooDataSet::moment(" << GetName() << ") ERROR: variable " << var.GetName() << " is not of type RooRealVar" << std::endl ;
     return 0;
   }
 
   // Check if dataset is not empty
   if(sumEntries(cutSpec, cutRange) == 0.) {
-    coutE(InputArguments) << "RooDataSet::moment(" << GetName() << ") WARNING: empty dataset" << endl ;
+    coutE(InputArguments) << "RooDataSet::moment(" << GetName() << ") WARNING: empty dataset" << std::endl ;
     return 0;
   }
 
@@ -948,7 +890,7 @@ double RooAbsData::moment(const RooRealVar& var, double order, double offset, co
 
   // Calculate requested moment
   ROOT::Math::KahanSum<double> sum;
-  for(Int_t index= 0; index < numEntries(); index++) {
+  for(int index= 0; index < numEntries(); index++) {
     const RooArgSet* vars = get(index) ;
     if (select && select->eval()==0) continue ;
     if (cutRange && vars->allInRange(cutRange)) continue ;
@@ -965,14 +907,14 @@ double RooAbsData::moment(const RooRealVar& var, double order, double offset, co
 RooRealVar* RooAbsData::dataRealVar(const char* methodname, const RooRealVar& extVar) const
 {
   // Lookup variable in dataset
-  RooRealVar *xdata = (RooRealVar*) _vars.find(extVar.GetName());
+  RooRealVar *xdata = static_cast<RooRealVar*>(_vars.find(extVar.GetName()));
   if(!xdata) {
-    coutE(InputArguments) << "RooDataSet::" << methodname << "(" << GetName() << ") ERROR: variable : " << extVar.GetName() << " is not in data" << endl ;
+    coutE(InputArguments) << "RooDataSet::" << methodname << "(" << GetName() << ") ERROR: variable : " << extVar.GetName() << " is not in data" << std::endl ;
     return nullptr;
   }
   // Check if found variable is of type RooRealVar
   if (!dynamic_cast<RooRealVar*>(xdata)) {
-    coutE(InputArguments) << "RooDataSet::" << methodname << "(" << GetName() << ") ERROR: variable : " << extVar.GetName() << " is not of type RooRealVar in data" << endl ;
+    coutE(InputArguments) << "RooDataSet::" << methodname << "(" << GetName() << ") ERROR: variable : " << extVar.GetName() << " is not of type RooRealVar in data" << std::endl ;
     return nullptr;
   }
   return xdata;
@@ -990,17 +932,22 @@ double RooAbsData::corrcov(const RooRealVar &x, const RooRealVar &y, const char*
 
   // Check if dataset is not empty
   if(sumEntries(cutSpec, cutRange) == 0.) {
-    coutW(InputArguments) << "RooDataSet::" << (corr?"correlation":"covariance") << "(" << GetName() << ") WARNING: empty dataset, returning zero" << endl ;
+    coutW(InputArguments) << "RooDataSet::" << (corr?"correlation":"covariance") << "(" << GetName() << ") WARNING: empty dataset, returning zero" << std::endl ;
     return 0;
   }
 
   // Setup RooFormulaVar for cutSpec if it is present
-  RooFormula* select = cutSpec ? new RooFormula("select",cutSpec,*get()) : 0 ;
+  std::unique_ptr<RooFormula> select;
+  if (cutSpec) select = std::make_unique<RooFormula>("select",cutSpec,*get());
 
   // Calculate requested moment
-  double xysum(0),xsum(0),ysum(0),x2sum(0),y2sum(0);
+  double xysum(0);
+  double xsum(0);
+  double ysum(0);
+  double x2sum(0);
+  double y2sum(0);
   const RooArgSet* vars ;
-  for(Int_t index= 0; index < numEntries(); index++) {
+  for(int index= 0; index < numEntries(); index++) {
     vars = get(index) ;
     if (select && select->eval()==0) continue ;
     if (cutRange && vars->allInRange(cutRange)) continue ;
@@ -1023,9 +970,6 @@ double RooAbsData::corrcov(const RooRealVar &x, const RooRealVar &y, const char*
     y2sum/=sumEntries(cutSpec, cutRange) ;
   }
 
-  // Cleanup
-  if (select) delete select ;
-
   // Return covariance or correlation as requested
   if (corr) {
     return (xysum-xsum*ysum)/(sqrt(x2sum-(xsum*xsum))*sqrt(y2sum-(ysum*ysum))) ;
@@ -1037,7 +981,7 @@ double RooAbsData::corrcov(const RooRealVar &x, const RooRealVar &y, const char*
 ////////////////////////////////////////////////////////////////////////////////
 /// Return covariance matrix from data for given list of observables
 
-TMatrixDSym* RooAbsData::corrcovMatrix(const RooArgList& vars, const char* cutSpec, const char* cutRange, bool corr) const
+RooFit::OwningPtr<TMatrixDSym> RooAbsData::corrcovMatrix(const RooArgList& vars, const char* cutSpec, const char* cutRange, bool corr) const
 {
   RooArgList varList ;
   for(auto * var : static_range_cast<RooRealVar*>(vars)) {
@@ -1051,7 +995,7 @@ TMatrixDSym* RooAbsData::corrcovMatrix(const RooArgList& vars, const char* cutSp
 
   // Check if dataset is not empty
   if(sumEntries(cutSpec, cutRange) == 0.) {
-    coutW(InputArguments) << "RooDataSet::covariance(" << GetName() << ") WARNING: empty dataset, returning zero" << endl ;
+    coutW(InputArguments) << "RooDataSet::covariance(" << GetName() << ") WARNING: empty dataset, returning zero" << std::endl ;
     return nullptr;
   }
 
@@ -1063,7 +1007,7 @@ TMatrixDSym* RooAbsData::corrcovMatrix(const RooArgList& vars, const char* cutSp
   std::vector<double> x2sum(varList.size()) ;
 
   // Calculate <x_i> and <x_i y_j>
-  for(Int_t index= 0; index < numEntries(); index++) {
+  for(int index= 0; index < numEntries(); index++) {
     const RooArgSet* dvars = get(index) ;
     if (select && select->eval()==0) continue ;
     if (cutRange && dvars->allInRange(cutRange)) continue ;
@@ -1096,7 +1040,7 @@ TMatrixDSym* RooAbsData::corrcovMatrix(const RooArgList& vars, const char* cutSp
   }
 
   // Calculate covariance matrix
-  TMatrixDSym* C = new TMatrixDSym(varList.size()) ;
+  auto C = std::make_unique<TMatrixDSym>(varList.size()) ;
   for (std::size_t ix=0 ; ix<varList.size() ; ix++) {
     for (std::size_t iy=0 ; iy<varList.size() ; iy++) {
       (*C)(ix,iy) = xysum(ix,iy)-xsum[ix]*xsum[iy] ;
@@ -1106,7 +1050,7 @@ TMatrixDSym* RooAbsData::corrcovMatrix(const RooArgList& vars, const char* cutSp
     }
   }
 
-  return C ;
+  return RooFit::makeOwningPtr(std::move(C));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1155,7 +1099,8 @@ RooRealVar* RooAbsData::rmsVar(const RooRealVar &var, const char* cutSpec, const
   // RMS/(2*Sqrt(N)) which is only valid if the variable has a Gaussian distribution.
 
   // Create RMS value holder
-  std::string name(var.GetName()),title("RMS of ") ;
+  std::string name(var.GetName());
+  std::string title("RMS         of ");
   name += "RMS";
   title += var.GetTitle();
   auto *rms= new RooRealVar(name.c_str(), title.c_str(), 0) ;
@@ -1218,12 +1163,12 @@ RooPlot* RooAbsData::statOn(RooPlot* frame, const RooCmdArg& arg1, const RooCmdA
   cmdList.Add(const_cast<RooCmdArg*>(&arg7)) ;  cmdList.Add(const_cast<RooCmdArg*>(&arg8)) ;
 
   // Select the pdf-specific commands
-  RooCmdConfig pc(Form("RooTreeData::statOn(%s)",GetName())) ;
+  RooCmdConfig pc("RooTreeData::statOn(" + std::string(GetName()) + ")");
   pc.defineString("what","What",0,"MNR") ;
   pc.defineString("label","Label",0,"") ;
   pc.defineDouble("xmin","Layout",0,0.65) ;
   pc.defineDouble("xmax","Layout",1,0.99) ;
-  pc.defineInt("ymaxi","Layout",0,Int_t(0.95*10000)) ;
+  pc.defineInt("ymaxi","Layout",0,int(0.95*10000)) ;
   pc.defineString("formatStr","Format",0,"NELU") ;
   pc.defineInt("sigDigit","Format",0,2) ;
   pc.defineInt("dummy","FormatArgs",0,0) ;
@@ -1242,15 +1187,15 @@ RooPlot* RooAbsData::statOn(RooPlot* frame, const RooCmdArg& arg1, const RooCmdA
   double xmax = pc.getDouble("xmax") ;
   double ymax = pc.getInt("ymaxi") / 10000. ;
   const char* formatStr = pc.getString("formatStr") ;
-  Int_t sigDigit = pc.getInt("sigDigit") ;
+  int sigDigit = pc.getInt("sigDigit") ;
   const char* what = pc.getString("what") ;
 
-  const char* cutSpec = pc.getString("cutString",0,true) ;
-  const char* cutRange = pc.getString("cutRange",0,true) ;
+  const char* cutSpec = pc.getString("cutString",nullptr,true) ;
+  const char* cutRange = pc.getString("cutRange",nullptr,true) ;
 
   if (pc.hasProcessed("FormatArgs")) {
     RooCmdArg* formatCmd = static_cast<RooCmdArg*>(cmdList.FindObject("FormatArgs")) ;
-    return statOn(frame,what,label,0,0,xmin,xmax,ymax,cutSpec,cutRange,formatCmd) ;
+    return statOn(frame,what,label,0,nullptr,xmin,xmax,ymax,cutSpec,cutRange,formatCmd) ;
   } else {
     return statOn(frame,what,label,sigDigit,formatStr,xmin,xmax,ymax,cutSpec,cutRange) ;
   }
@@ -1270,13 +1215,14 @@ RooPlot* RooAbsData::statOn(RooPlot* frame, const char* what, const char *label,
   bool showN = whatStr.find('N') != std::string::npos;
   bool showR = whatStr.find('R') != std::string::npos;
   bool showM = whatStr.find('M') != std::string::npos;
-  Int_t nPar= 0;
+  int nPar= 0;
   if (showN) nPar++ ;
   if (showR) nPar++ ;
   if (showM) nPar++ ;
 
   // calculate the box's size
-  double dy(0.06), ymin(ymax-nPar*dy);
+  double dy(0.06);
+  double ymin(ymax - nPar * dy);
   if(showLabel) ymin-= dy;
 
   // create the box and set its options
@@ -1292,11 +1238,13 @@ RooPlot* RooAbsData::statOn(RooPlot* frame, const char* what, const char *label,
   // add formatted text for each statistic
   RooRealVar N("N","Number of Events",sumEntries(cutSpec,cutRange));
   N.setPlotLabel("Entries") ;
-  std::unique_ptr<RooRealVar> meanv{meanVar(*(RooRealVar*)frame->getPlotVar(),cutSpec,cutRange)};
+  std::unique_ptr<RooRealVar> meanv{meanVar(*static_cast<RooRealVar*>(frame->getPlotVar()),cutSpec,cutRange)};
   meanv->setPlotLabel("Mean") ;
-  std::unique_ptr<RooRealVar> rms{rmsVar(*(RooRealVar*)frame->getPlotVar(),cutSpec,cutRange)};
+  std::unique_ptr<RooRealVar> rms{rmsVar(*static_cast<RooRealVar*>(frame->getPlotVar()),cutSpec,cutRange)};
   rms->setPlotLabel("RMS") ;
-  std::unique_ptr<TString> rmsText, meanText, NText;
+  std::unique_ptr<TString> rmsText;
+  std::unique_ptr<TString> meanText;
+  std::unique_ptr<TString> NText;
   if (options) {
     rmsText.reset(rms->format(sigDigits,options));
     meanText.reset(meanv->format(sigDigits,options));
@@ -1327,36 +1275,37 @@ TH1 *RooAbsData::fillHistogram(TH1 *hist, const RooArgList &plotVars, const char
 {
   // Do we have a valid histogram to use?
   if(nullptr == hist) {
-    coutE(InputArguments) << ClassName() << "::" << GetName() << ":fillHistogram: no valid histogram to fill" << endl;
+    coutE(InputArguments) << ClassName() << "::" << GetName() << ":fillHistogram: no valid histogram to fill" << std::endl;
     return nullptr;
   }
 
   // Check that the number of plotVars matches the input histogram's dimension
   std::size_t hdim= hist->GetDimension();
   if(hdim != plotVars.size()) {
-    coutE(InputArguments) << ClassName() << "::" << GetName() << ":fillHistogram: plotVars has the wrong dimension" << endl;
+    coutE(InputArguments) << ClassName() << "::" << GetName() << ":fillHistogram: plotVars has the wrong dimension" << std::endl;
     return nullptr;
   }
 
   // Check that the plot variables are all actually RooAbsReal's and print a warning if we do not
   // explicitly depend on one of them. Clone any variables that we do not contain directly and
   // redirect them to use our event data.
-  RooArgSet plotClones,localVars;
+  RooArgSet plotClones;
+  RooArgSet localVars;
   for(std::size_t index= 0; index < plotVars.size(); index++) {
     const RooAbsArg *var= plotVars.at(index);
     const RooAbsReal *realVar= dynamic_cast<const RooAbsReal*>(var);
     if(realVar == nullptr) {
       coutE(InputArguments) << ClassName() << "::" << GetName() << ":fillHistogram: cannot plot variable \"" << var->GetName()
-      << "\" of type " << var->ClassName() << endl;
+      << "\" of type " << var->ClassName() << std::endl;
       return nullptr;
     }
     RooAbsArg *found= _vars.find(realVar->GetName());
     if(!found) {
       RooAbsArg *clone= plotClones.addClone(*realVar,true); // do not complain about duplicates
-      assert(0 != clone);
+      assert(nullptr != clone);
       if(!clone->dependsOn(_vars)) {
         coutE(InputArguments) << ClassName() << "::" << GetName()
-            << ":fillHistogram: Data does not contain the variable '" << realVar->GetName() << "'." << endl;
+            << ":fillHistogram: Data does not contain the variable '" << realVar->GetName() << "'." << std::endl;
         return nullptr;
       }
       else {
@@ -1374,31 +1323,31 @@ TH1 *RooAbsData::fillHistogram(TH1 *hist, const RooArgList &plotVars, const char
   if (cuts != nullptr && strlen(cuts) > 0) {
     select = std::make_unique<RooFormula>(cuts, cuts, _vars, false);
     if (!select || !select->ok()) {
-      coutE(InputArguments) << ClassName() << "::" << GetName() << ":fillHistogram: invalid cuts \"" << cuts << "\"" << endl;
+      coutE(InputArguments) << ClassName() << "::" << GetName() << ":fillHistogram: invalid cuts \"" << cuts << "\"" << std::endl;
       return nullptr;
     }
   }
 
   // Lookup each of the variables we are binning in our tree variables
-  const RooAbsReal *xvar = 0;
-  const RooAbsReal *yvar = 0;
-  const RooAbsReal *zvar = 0;
+  const RooAbsReal *xvar = nullptr;
+  const RooAbsReal *yvar = nullptr;
+  const RooAbsReal *zvar = nullptr;
   switch(hdim) {
   case 3:
     zvar= dynamic_cast<RooAbsReal*>(localVars.find(plotVars.at(2)->GetName()));
-    assert(0 != zvar);
+    assert(nullptr != zvar);
     // fall through to next case...
   case 2:
     yvar= dynamic_cast<RooAbsReal*>(localVars.find(plotVars.at(1)->GetName()));
-    assert(0 != yvar);
+    assert(nullptr != yvar);
     // fall through to next case...
   case 1:
     xvar= dynamic_cast<RooAbsReal*>(localVars.find(plotVars.at(0)->GetName()));
-    assert(0 != xvar);
+    assert(nullptr != xvar);
     break;
   default:
     coutE(InputArguments) << ClassName() << "::" << GetName() << ":fillHistogram: cannot fill histogram with "
-    << hdim << " dimensions" << endl;
+    << hdim << " dimensions" << std::endl;
     break;
   }
 
@@ -1409,10 +1358,10 @@ TH1 *RooAbsData::fillHistogram(TH1 *hist, const RooArgList &plotVars, const char
   if (hist->GetSumw2()->fN==0) {
     hist->Sumw2() ;
   }
-  Int_t nevent= numEntries() ; //(Int_t)_tree->GetEntries();
-  for(Int_t i=0; i < nevent; ++i) {
+  int nevent= numEntries() ; //(int)_tree->GetEntries();
+  for(int i=0; i < nevent; ++i) {
 
-    //Int_t entryNumber= _tree->GetEntryNumber(i);
+    //int entryNumber= _tree->GetEntryNumber(i);
     //if (entryNumber<0) break;
     get(i);
 
@@ -1445,7 +1394,7 @@ TH1 *RooAbsData::fillHistogram(TH1 *hist, const RooArgList &plotVars, const char
       continue ;
     }
 
-    Int_t bin(0);
+    int bin(0);
     switch(hdim) {
     case 1:
       bin= hist->FindBin(xvar->getVal());
@@ -1482,7 +1431,7 @@ TH1 *RooAbsData::fillHistogram(TH1 *hist, const RooArgList &plotVars, const char
     //hist->AddBinContent(bin,weight());
     hist->SetBinError(bin,sqrt(error2)) ;
 
-    //cout << "RooTreeData::fillHistogram() bin = " << bin << " weight() = " << weight() << " we = " << we << endl ;
+    //cout << "RooTreeData::fillHistogram() bin = " << bin << " weight() = " << weight() << " we = " << we << std::endl ;
 
   }
 
@@ -1514,7 +1463,7 @@ SplittingSetup initSplit(RooAbsData const &data, RooAbsCategory const &splitCat)
    // Clone splitting category and attach to self
    if (splitCat.isDerived()) {
       RooArgSet(splitCat).snapshot(setup.ownedSet, true);
-      setup.cloneCat = (RooAbsCategory *)setup.ownedSet.find(splitCat.GetName());
+      setup.cloneCat = static_cast<RooAbsCategory *>(setup.ownedSet.find(splitCat.GetName()));
       setup.cloneCat->attachDataSet(data);
    } else {
       setup.cloneCat = dynamic_cast<RooAbsCategory *>(data.get()->find(splitCat.GetName()));
@@ -1542,109 +1491,134 @@ SplittingSetup initSplit(RooAbsData const &data, RooAbsCategory const &splitCat)
    return setup;
 }
 
-TList *splitImpl(RooAbsData const &data, const RooAbsCategory &cloneCat, bool createEmptyDataSets,
-                 std::function<RooAbsData *(const char *label)> createEmptyData)
+RooFit::OwningPtr<TList> splitImpl(RooAbsData const &data, const RooAbsCategory &cloneCat, bool createEmptyDataSets,
+                                   std::function<std::unique_ptr<RooAbsData>(const char *label)> createEmptyData)
 {
-   auto dsetList = new TList;
+   auto dsetList = std::make_unique<TList>();
 
    // If createEmptyDataSets is true, prepopulate with empty sets corresponding to all states
    if (createEmptyDataSets) {
       for (const auto &nameIdx : cloneCat) {
-         dsetList->Add(createEmptyData(nameIdx.first.c_str()));
+         dsetList->Add(createEmptyData(nameIdx.first.c_str()).release());
       }
    }
 
-   bool isDataHist = dynamic_cast<RooDataHist const*>(&data);
+   bool isDataHist = dynamic_cast<RooDataHist const *>(&data);
 
    // Loop over dataset and copy event to matching subset
-   for (Int_t i = 0; i < data.numEntries(); ++i) {
+   for (int i = 0; i < data.numEntries(); ++i) {
       const RooArgSet *row = data.get(i);
       auto subset = static_cast<RooAbsData *>(dsetList->FindObject(cloneCat.getCurrentLabel()));
       if (!subset) {
-         subset = createEmptyData(cloneCat.getCurrentLabel());
+         subset = createEmptyData(cloneCat.getCurrentLabel()).release();
          dsetList->Add(subset);
       }
 
       // For datasets with weight errors or sumW2, the interface to fill
       // RooDataHist and RooDataSet is not the same.
       if (isDataHist) {
-         static_cast<RooDataHist*>(subset)->add(*row, data.weight(), data.weightSquared());
+         static_cast<RooDataHist *>(subset)->add(*row, data.weight(), data.weightSquared());
       } else {
-         static_cast<RooDataSet*>(subset)->add(*row, data.weight(), data.weightError());
+         static_cast<RooDataSet *>(subset)->add(*row, data.weight(), data.weightError());
       }
    }
 
-   return dsetList;
+   return RooFit::makeOwningPtr(std::move(dsetList));
 }
 
 } // namespace
 
 
-////////////////////////////////////////////////////////////////////////////////
-/// Split dataset into subsets based on states of given splitCat in this dataset.
-/// A TList of RooDataSets is returned in which each RooDataSet is named
-/// after the state name of splitCat of which it contains the dataset subset.
-/// The observables splitCat itself is no longer present in the sub datasets.
-/// If createEmptyDataSets is false (default) this method only creates datasets for states
-/// which have at least one entry The caller takes ownership of the returned list and its contents
+/**
+ * \brief Split the dataset into subsets based on states of a categorical variable in this dataset.
+ *
+ * Returns a list of sub-datasets, which each dataset named after a given state
+ * name in the `splitCat`. The observables `splitCat` itself is no longer present
+ * in the sub-datasets.
+ *
+ * \note If you mean to split a dataset into sub-datasets that correspond to
+ * the individual channels of a RooSimultaneous, it is better to use
+ * RooAbsData::split(const RooSimultaneous &, bool), because then the
+ * sub-datasets only contain variables that the pdf for the corresponding
+ * channel depends on. This is much faster in case of many channels, and the
+ * resulting sub-datasets don't waste memory for unused columns.
+ *
+ * \param splitCat The categorical variable used for splitting the dataset.
+ * \param createEmptyDataSets Flag indicating whether to create empty datasets
+ *                            for missing categories (`false` by default).
+ *
+ * \return An owning pointer to a TList of subsets of the dataset.
+ *         Returns `nullptr` if an error occurs.
+ */
 
-TList* RooAbsData::split(const RooAbsCategory& splitCat, bool createEmptyDataSets) const
+RooFit::OwningPtr<TList> RooAbsData::split(const RooAbsCategory &splitCat, bool createEmptyDataSets) const
 {
-  SplittingSetup setup = initSplit(*this, splitCat);
+   SplittingSetup setup = initSplit(*this, splitCat);
 
-  // Something went wrong
-  if(!setup.cloneCat) return nullptr;
+   // Something went wrong
+   if (!setup.cloneCat)
+      return nullptr;
 
-  auto createEmptyData = [&](const char * label) -> RooAbsData* {
-    return emptyClone(label, label, &setup.subsetVars, setup.addWeightVar ? "weight" : nullptr);
-  };
+   auto createEmptyData = [&](const char *label) -> std::unique_ptr<RooAbsData> {
+      return std::unique_ptr<RooAbsData>{
+         emptyClone(label, label, &setup.subsetVars, setup.addWeightVar ? "weight" : nullptr)};
+   };
 
-  return splitImpl(*this, *setup.cloneCat, createEmptyDataSets, createEmptyData);
+   return splitImpl(*this, *setup.cloneCat, createEmptyDataSets, createEmptyData);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-/// Split dataset into subsets based on the categorisation of the RooSimultaneous
-/// A TList of RooDataSets is returned in which each RooDataSet is named
-/// after the state name of splitCat of which it contains the dataset subset.
-/// The observables splitCat itself is no longer present in the sub datasets, as well as the
-/// observables of the other categories.
-/// If createEmptyDataSets is false (default) this method only creates datasets for states
-/// which have at least one entry The caller takes ownership of the returned list and its contents
-
-TList* RooAbsData::split(const RooSimultaneous& simpdf, bool createEmptyDataSets) const
+/**
+ * \brief Split the dataset into subsets based on the channels of a RooSimultaneous.
+ *
+ * Returns a list of sub-datasets, which each dataset named after the
+ * applicable state name of the RooSimultaneous index category. The index
+ * category itself is no longer present in the sub-datasets. The sub-datasets
+ * only contain variables that the pdf for the corresponding channel depends
+ * on.
+ *
+ * \param simPdf The simultaneous pdf used for splitting the dataset.
+ * \param createEmptyDataSets Flag indicating whether to create empty datasets
+ *                            for missing categories (`false` by default).
+ *
+ * \return An owning pointer to a TList of subsets of the dataset.
+ *         Returns `nullptr` if an error occurs.
+ */
+RooFit::OwningPtr<TList> RooAbsData::split(const RooSimultaneous &simPdf, bool createEmptyDataSets) const
 {
-  auto& splitCat = const_cast<RooAbsCategoryLValue&>(simpdf.indexCat());
+   auto &splitCat = const_cast<RooAbsCategoryLValue &>(simPdf.indexCat());
 
-  SplittingSetup setup = initSplit(*this, splitCat);
+   SplittingSetup setup = initSplit(*this, splitCat);
 
-  // Something went wrong
-  if(!setup.cloneCat) return nullptr;
+   // Something went wrong
+   if (!setup.cloneCat)
+      return nullptr;
 
-  // Get the observables for a given pdf in the RooSimultaneous, or an empty
-  // RooArgSet if no pdf is set
-  auto getPdfObservables = [this, &simpdf](const char * label) {
-    RooArgSet obsSet;
-    if(RooAbsPdf* catPdf = simpdf.getPdf(label)) {
-      catPdf->getObservables(this->get(), obsSet);
-    }
-    return obsSet;
-  };
+   // Get the observables for a given pdf in the RooSimultaneous, or an empty
+   // RooArgSet if no pdf is set
+   auto getPdfObservables = [this, &simPdf](const char *label) {
+      RooArgSet obsSet;
+      if (RooAbsPdf *catPdf = simPdf.getPdf(label)) {
+         catPdf->getObservables(this->get(), obsSet);
+      }
+      return obsSet;
+   };
 
-  // By default, remove all category observables from the subdatasets
-  RooArgSet allObservables;
-  for( const auto& catPair : splitCat) {
-    allObservables.add(getPdfObservables(catPair.first.c_str()));
-  }
-  setup.subsetVars.remove(allObservables, true, true);
+   // By default, remove all category observables from the subdatasets
+   RooArgSet allObservables;
+   for (const auto &catPair : splitCat) {
+      allObservables.add(getPdfObservables(catPair.first.c_str()));
+   }
+   setup.subsetVars.remove(allObservables, true, true);
 
-  auto createEmptyData = [&](const char * label) -> RooAbsData* {
-    // Add in the subset only the observables corresponding to this category
-    RooArgSet subsetVarsCat(setup.subsetVars);
-    subsetVarsCat.add(getPdfObservables(label));
-    return this->emptyClone(label, label, &subsetVarsCat, setup.addWeightVar ? "weight" : nullptr);
-  };
+   auto createEmptyData = [&](const char *label) -> std::unique_ptr<RooAbsData> {
+      // Add in the subset only the observables corresponding to this category
+      RooArgSet subsetVarsCat(setup.subsetVars);
+      subsetVarsCat.add(getPdfObservables(label));
+      return std::unique_ptr<RooAbsData>{
+         this->emptyClone(label, label, &subsetVarsCat, setup.addWeightVar ? "weight" : nullptr)};
+   };
 
-  return splitImpl(*this, *setup.cloneCat, createEmptyDataSets, createEmptyData);
+   return splitImpl(*this, *setup.cloneCat, createEmptyDataSets, createEmptyData);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1742,7 +1716,7 @@ RooPlot* RooAbsData::plotOn(RooPlot* frame, const RooLinkedList& argList) const
   // New experimental plotOn() with varargs...
 
   // Define configuration for this method
-  RooCmdConfig pc(Form("RooAbsData::plotOn(%s)",GetName())) ;
+  RooCmdConfig pc("RooAbsData::plotOn(" + std::string(GetName()) + ")");
   pc.defineString("drawOption","DrawOption",0,"P") ;
   pc.defineString("cutRange","CutRange",0,"",true) ;
   pc.defineString("cutString","CutSpec",0,"") ;
@@ -1763,7 +1737,7 @@ RooPlot* RooAbsData::plotOn(RooPlot* frame, const RooLinkedList& argList) const
   pc.defineDouble("markerSize","MarkerSize",0,-999) ;
   pc.defineInt("fillColor","FillColor",0,-999) ;
   pc.defineInt("fillStyle","FillStyle",0,-999) ;
-  pc.defineInt("errorType","DataError",0,(Int_t)RooAbsData::Auto) ;
+  pc.defineInt("errorType","DataError",0,(int)RooAbsData::Auto) ;
   pc.defineInt("histInvisible","Invisible",0,0) ;
   pc.defineInt("refreshFrameNorm","RefreshNorm",0,1) ;
   pc.defineString("addToHistName","AddTo",0,"") ;
@@ -1786,7 +1760,7 @@ RooPlot* RooAbsData::plotOn(RooPlot* frame, const RooLinkedList& argList) const
   o.drawOptions = pc.getString("drawOption") ;
   o.cuts = pc.getString("cutString") ;
   if (pc.hasProcessed("Binning")) {
-    o.bins = (RooAbsBinning*) pc.getObject("binning") ;
+    o.bins = static_cast<RooAbsBinning*>(pc.getObject("binning")) ;
   } else if (pc.hasProcessed("BinningName")) {
     o.bins = &frame->getPlotVar()->getBinning(pc.getString("binningName")) ;
   } else if (pc.hasProcessed("BinningSpec")) {
@@ -1795,14 +1769,14 @@ RooPlot* RooAbsData::plotOn(RooPlot* frame, const RooLinkedList& argList) const
     o.bins = new RooUniformBinning((xlo==xhi)?frame->getPlotVar()->getMin():xlo,
                (xlo==xhi)?frame->getPlotVar()->getMax():xhi,pc.getInt("nbins")) ;
   }
-  const RooAbsCategoryLValue* asymCat = (const RooAbsCategoryLValue*) pc.getObject("asymCat") ;
-  const RooAbsCategoryLValue* effCat = (const RooAbsCategoryLValue*) pc.getObject("effCat") ;
+  const RooAbsCategoryLValue* asymCat = static_cast<const RooAbsCategoryLValue*>(pc.getObject("asymCat")) ;
+  const RooAbsCategoryLValue* effCat = static_cast<const RooAbsCategoryLValue*>(pc.getObject("effCat")) ;
   o.etype = (RooAbsData::ErrorType) pc.getInt("errorType") ;
   o.histInvisible = pc.getInt("histInvisible") ;
   o.xErrorSize = pc.getDouble("xErrorSize") ;
-  o.cutRange = pc.getString("cutRange",0,true) ;
-  o.histName = pc.getString("histName",0,true) ;
-  o.addToHistName = pc.getString("addToHistName",0,true) ;
+  o.cutRange = pc.getString("cutRange",nullptr,true) ;
+  o.histName = pc.getString("histName",nullptr,true) ;
+  o.addToHistName = pc.getString("addToHistName",nullptr,true) ;
   o.addToWgtSelf = pc.getDouble("addToWgtSelf") ;
   o.addToWgtOther = pc.getDouble("addToWgtOther") ;
   o.refreshFrameNorm = pc.getInt("refreshFrameNorm") ;
@@ -1813,13 +1787,13 @@ RooPlot* RooAbsData::plotOn(RooPlot* frame, const RooLinkedList& argList) const
     o.etype = isNonPoissonWeighted() ? SumW2 : Poisson ;
     if (o.etype == SumW2) {
       coutI(InputArguments) << "RooAbsData::plotOn(" << GetName()
-             << ") INFO: dataset has non-integer weights, auto-selecting SumW2 errors instead of Poisson errors" << endl ;
+             << ") INFO: dataset has non-integer weights, auto-selecting SumW2 errors instead of Poisson errors" << std::endl ;
     }
   }
 
   if (o.addToHistName && !frame->findObject(o.addToHistName,RooHist::Class())) {
     coutE(InputArguments) << "RooAbsData::plotOn(" << GetName() << ") cannot find existing histogram " << o.addToHistName
-           << " to add to in RooPlot" << endl ;
+           << " to add to in RooPlot" << std::endl ;
     return frame ;
   }
 
@@ -1832,14 +1806,14 @@ RooPlot* RooAbsData::plotOn(RooPlot* frame, const RooLinkedList& argList) const
     ret = plotEffOn(frame,*effCat,o) ;
   }
 
-  Int_t lineColor   = pc.getInt("lineColor") ;
-  Int_t lineStyle   = pc.getInt("lineStyle") ;
-  Int_t lineWidth   = pc.getInt("lineWidth") ;
-  Int_t markerColor = pc.getInt("markerColor") ;
-  Int_t markerStyle = pc.getInt("markerStyle") ;
+  int lineColor   = pc.getInt("lineColor") ;
+  int lineStyle   = pc.getInt("lineStyle") ;
+  int lineWidth   = pc.getInt("lineWidth") ;
+  int markerColor = pc.getInt("markerColor") ;
+  int markerStyle = pc.getInt("markerStyle") ;
   Size_t markerSize  = pc.getDouble("markerSize") ;
-  Int_t fillColor = pc.getInt("fillColor") ;
-  Int_t fillStyle = pc.getInt("fillStyle") ;
+  int fillColor = pc.getInt("fillColor") ;
+  int fillStyle = pc.getInt("fillStyle") ;
   if (lineColor!=-999) ret->getAttLine()->SetLineColor(lineColor) ;
   if (lineStyle!=-999) ret->getAttLine()->SetLineStyle(lineStyle) ;
   if (lineWidth!=-999) ret->getAttLine()->SetLineWidth(lineWidth) ;
@@ -1870,14 +1844,14 @@ RooPlot* RooAbsData::plotOn(RooPlot* frame, const RooLinkedList& argList) const
 /// \see RooAbsData::plotOn(RooPlot*,const RooLinkedList&) const
 RooPlot *RooAbsData::plotOn(RooPlot *frame, PlotOpt o) const
 {
-  if(0 == frame) {
-    coutE(Plotting) << ClassName() << "::" << GetName() << ":plotOn: frame is null" << endl;
+  if(nullptr == frame) {
+    coutE(Plotting) << ClassName() << "::" << GetName() << ":plotOn: frame is null" << std::endl;
     return nullptr;
   }
   RooAbsRealLValue *var= (RooAbsRealLValue*) frame->getPlotVar();
-  if(0 == var) {
+  if(nullptr == var) {
     coutE(Plotting) << ClassName() << "::" << GetName()
-    << ":plotOn: frame does not specify a plot variable" << endl;
+    << ":plotOn: frame does not specify a plot variable" << std::endl;
     return nullptr;
   }
 
@@ -1897,9 +1871,9 @@ RooPlot *RooAbsData::plotOn(RooPlot *frame, PlotOpt o) const
   // Keep track of sum-of-weights error
   hist->Sumw2() ;
 
-  if(0 == fillHistogram(hist.get(), RooArgList(*var),o.cuts,o.cutRange)) {
+  if(nullptr == fillHistogram(hist.get(), RooArgList(*var),o.cuts,o.cutRange)) {
     coutE(Plotting) << ClassName() << "::" << GetName()
-    << ":plotOn: fillHistogram() failed" << endl;
+    << ":plotOn: fillHistogram() failed" << std::endl;
     return nullptr;
   }
 
@@ -1914,15 +1888,15 @@ RooPlot *RooAbsData::plotOn(RooPlot *frame, PlotOpt o) const
 
   // convert this histogram to a RooHist object on the heap
   RooHist *graph= new RooHist(*hist,nomBinWidth,1,o.etype,o.xErrorSize,o.correctForBinWidth,o.scaleFactor);
-  if(0 == graph) {
+  if(nullptr == graph) {
     coutE(Plotting) << ClassName() << "::" << GetName()
-    << ":plotOn: unable to create a RooHist object" << endl;
+    << ":plotOn: unable to create a RooHist object" << std::endl;
     return nullptr;
   }
 
   // If the dataset variable has a wide range than the plot variable,
   // calculate the number of entries in the dataset in the plot variable fit range
-  RooAbsRealLValue* dataVar = (RooAbsRealLValue*) _vars.find(var->GetName()) ;
+  RooAbsRealLValue* dataVar = static_cast<RooAbsRealLValue*>(_vars.find(var->GetName())) ;
   double nEnt(sumEntries()) ;
   if (dataVar->getMin()<var->getMin() || dataVar->getMax()>var->getMax()) {
     std::unique_ptr<RooAbsData> tmp{const_cast<RooAbsData*>(this)->reduce(*var)};
@@ -1931,7 +1905,7 @@ RooPlot *RooAbsData::plotOn(RooPlot *frame, PlotOpt o) const
 
   // Store the number of entries before the cut, if any was made
   if ((o.cuts && strlen(o.cuts)) || o.cutRange) {
-    coutI(Plotting) << "RooTreeData::plotOn: plotting " << hist->GetSumOfWeights() << " events out of " << nEnt << " total events" << endl ;
+    coutI(Plotting) << "RooTreeData::plotOn: plotting " << hist->GetSumOfWeights() << " events out of " << nEnt << " total events" << std::endl ;
     graph->setRawEntries(nEnt) ;
   }
 
@@ -1940,7 +1914,7 @@ RooPlot *RooAbsData::plotOn(RooPlot *frame, PlotOpt o) const
     RooHist* otherGraph = static_cast<RooHist*>(frame->findObject(o.addToHistName,RooHist::Class())) ;
 
     if (!graph->hasIdenticalBinning(*otherGraph)) {
-      coutE(Plotting) << "RooTreeData::plotOn: ERROR Histogram to be added to, '" << o.addToHistName << "',has different binning" << endl ;
+      coutE(Plotting) << "RooTreeData::plotOn: ERROR Histogram to be added to, '" << o.addToHistName << "',has different binning" << std::endl ;
       delete graph ;
       return frame ;
     }
@@ -1990,21 +1964,23 @@ RooPlot *RooAbsData::plotOn(RooPlot *frame, PlotOpt o) const
 
 RooPlot* RooAbsData::plotAsymOn(RooPlot* frame, const RooAbsCategoryLValue& asymCat, PlotOpt o) const
 {
-  if(0 == frame) {
-    coutE(Plotting) << ClassName() << "::" << GetName() << ":plotAsymOn: frame is null" << endl;
+  if(nullptr == frame) {
+    coutE(Plotting) << ClassName() << "::" << GetName() << ":plotAsymOn: frame is null" << std::endl;
     return nullptr;
   }
   RooAbsRealLValue *var= (RooAbsRealLValue*) frame->getPlotVar();
-  if(0 == var) {
+  if(nullptr == var) {
     coutE(Plotting) << ClassName() << "::" << GetName()
-    << ":plotAsymOn: frame does not specify a plot variable" << endl;
+    << ":plotAsymOn: frame does not specify a plot variable" << std::endl;
     return nullptr;
   }
 
   // create and fill temporary histograms of this variable for each state
-  std::string hist1Name(GetName()),hist2Name(GetName());
+  std::string hist1Name(GetName());
+  std::string hist2Name(GetName());
   hist1Name += "_plot1";
-  std::unique_ptr<TH1> hist1, hist2;
+  std::unique_ptr<TH1> hist1;
+  std::unique_ptr<TH1> hist2;
   hist2Name += "_plot2";
 
   if (o.bins) {
@@ -2021,7 +1997,8 @@ RooPlot* RooAbsData::plotAsymOn(RooPlot* frame, const RooAbsCategoryLValue& asym
 
   assert(hist1 && hist2);
 
-  std::string cuts1,cuts2 ;
+  std::string cuts1;
+  std::string cuts2;
   if (o.cuts && strlen(o.cuts)) {
     cuts1 = Form("(%s)&&(%s>0)",o.cuts,asymCat.GetName());
     cuts2 = Form("(%s)&&(%s<0)",o.cuts,asymCat.GetName());
@@ -2033,7 +2010,7 @@ RooPlot* RooAbsData::plotAsymOn(RooPlot* frame, const RooAbsCategoryLValue& asym
   if(! fillHistogram(hist1.get(), RooArgList(*var),cuts1.c_str(),o.cutRange) ||
      ! fillHistogram(hist2.get(), RooArgList(*var),cuts2.c_str(),o.cutRange)) {
     coutE(Plotting) << ClassName() << "::" << GetName()
-    << ":plotAsymOn: createHistogram() failed" << endl;
+    << ":plotAsymOn: createHistogram() failed" << std::endl;
     return nullptr;
   }
 
@@ -2080,21 +2057,23 @@ RooPlot* RooAbsData::plotAsymOn(RooPlot* frame, const RooAbsCategoryLValue& asym
 
 RooPlot* RooAbsData::plotEffOn(RooPlot* frame, const RooAbsCategoryLValue& effCat, PlotOpt o) const
 {
-  if(0 == frame) {
-    coutE(Plotting) << ClassName() << "::" << GetName() << ":plotEffOn: frame is null" << endl;
+  if(nullptr == frame) {
+    coutE(Plotting) << ClassName() << "::" << GetName() << ":plotEffOn: frame is null" << std::endl;
     return nullptr;
   }
   RooAbsRealLValue *var= (RooAbsRealLValue*) frame->getPlotVar();
-  if(0 == var) {
+  if(nullptr == var) {
     coutE(Plotting) << ClassName() << "::" << GetName()
-    << ":plotEffOn: frame does not specify a plot variable" << endl;
+    << ":plotEffOn: frame does not specify a plot variable" << std::endl;
     return nullptr;
   }
 
   // create and fill temporary histograms of this variable for each state
-  std::string hist1Name(GetName()),hist2Name(GetName());
+  std::string hist1Name(GetName());
+  std::string hist2Name(GetName());
   hist1Name += "_plot1";
-  std::unique_ptr<TH1> hist1, hist2;
+  std::unique_ptr<TH1> hist1;
+  std::unique_ptr<TH1> hist2;
   hist2Name += "_plot2";
 
   if (o.bins) {
@@ -2111,7 +2090,8 @@ RooPlot* RooAbsData::plotEffOn(RooPlot* frame, const RooAbsCategoryLValue& effCa
 
   assert(hist1 && hist2);
 
-  std::string cuts1,cuts2 ;
+  std::string cuts1;
+  std::string cuts2;
   if (o.cuts && strlen(o.cuts)) {
     cuts1 = Form("(%s)&&(%s==1)",o.cuts,effCat.GetName());
     cuts2 = Form("(%s)&&(%s==0)",o.cuts,effCat.GetName());
@@ -2123,7 +2103,7 @@ RooPlot* RooAbsData::plotEffOn(RooPlot* frame, const RooAbsCategoryLValue& effCa
   if(! fillHistogram(hist1.get(), RooArgList(*var),cuts1.c_str(),o.cutRange) ||
      ! fillHistogram(hist2.get(), RooArgList(*var),cuts2.c_str(),o.cutRange)) {
     coutE(Plotting) << ClassName() << "::" << GetName()
-    << ":plotEffOn: createHistogram() failed" << endl;
+    << ":plotEffOn: createHistogram() failed" << std::endl;
     return nullptr;
   }
 
@@ -2166,12 +2146,12 @@ RooPlot* RooAbsData::plotEffOn(RooPlot* frame, const RooAbsCategoryLValue& effCa
 Roo1DTable* RooAbsData::table(const RooAbsCategory& cat, const char* cuts, const char* /*opts*/) const
 {
   // First see if var is in data set
-  RooAbsCategory* tableVar = (RooAbsCategory*) _vars.find(cat.GetName()) ;
+  RooAbsCategory* tableVar = static_cast<RooAbsCategory*>(_vars.find(cat.GetName())) ;
   std::unique_ptr<RooArgSet> tableSet;
   if (!tableVar) {
     if (!cat.dependsOn(_vars)) {
       coutE(Plotting) << "RooTreeData::Table(" << GetName() << "): Argument " << cat.GetName()
-      << " is not in dataset and is also not dependent on data set" << endl ;
+      << " is not in dataset and is also not dependent on data set" << std::endl ;
       return nullptr;
     }
 
@@ -2181,7 +2161,7 @@ Roo1DTable* RooAbsData::table(const RooAbsCategory& cat, const char* cuts, const
       coutE(Plotting) << "RooTreeData::table(" << GetName() << ") Couldn't deep-clone table category, abort." << std::endl;
       return nullptr;
     }
-    tableVar = (RooAbsCategory*) tableSet->find(cat.GetName()) ;
+    tableVar = static_cast<RooAbsCategory*>(tableSet->find(cat.GetName())) ;
 
     //Redirect servers of derived clone to internal ArgSet representing the data in this set
     tableVar->recursiveRedirectServers(_vars) ;
@@ -2199,8 +2179,8 @@ Roo1DTable* RooAbsData::table(const RooAbsCategory& cat, const char* cuts, const
   Roo1DTable* table2 = tableVar->createTable(tableName.c_str());
 
   // Dump contents
-  Int_t nevent= numEntries() ;
-  for(Int_t i=0; i < nevent; ++i) {
+  int nevent= numEntries() ;
+  for(int i=0; i < nevent; ++i) {
     get(i);
 
     if (cutVar && cutVar->getVal()==0) continue ;
@@ -2221,27 +2201,27 @@ bool RooAbsData::getRange(const RooAbsRealLValue& var, double& lowest, double& h
   // Lookup variable in dataset
   const auto arg = _vars.find(var.GetName());
   if (!arg) {
-    coutE(InputArguments) << "RooDataSet::getRange(" << GetName() << ") ERROR: unknown variable: " << var.GetName() << endl ;
+    coutE(InputArguments) << "RooDataSet::getRange(" << GetName() << ") ERROR: unknown variable: " << var.GetName() << std::endl ;
     return true;
   }
 
   auto varPtr = dynamic_cast<const RooRealVar*>(arg);
   // Check if found variable is of type RooRealVar
   if (!varPtr) {
-    coutE(InputArguments) << "RooDataSet::getRange(" << GetName() << ") ERROR: variable " << var.GetName() << " is not of type RooRealVar" << endl ;
+    coutE(InputArguments) << "RooDataSet::getRange(" << GetName() << ") ERROR: variable " << var.GetName() << " is not of type RooRealVar" << std::endl ;
     return true;
   }
 
   // Check if dataset is not empty
   if(sumEntries() == 0.) {
-    coutE(InputArguments) << "RooDataSet::getRange(" << GetName() << ") WARNING: empty dataset" << endl ;
+    coutE(InputArguments) << "RooDataSet::getRange(" << GetName() << ") WARNING: empty dataset" << std::endl ;
     return true;
   }
 
   // Look for highest and lowest value
   lowest = RooNumber::infinity() ;
   highest = -RooNumber::infinity() ;
-  for (Int_t i=0 ; i<numEntries() ; i++) {
+  for (int i=0 ; i<numEntries() ; i++) {
     get(i) ;
     if (varPtr->getVal()<lowest) {
       lowest = varPtr->getVal() ;
@@ -2309,10 +2289,10 @@ void RooAbsData::optimizeReadingWithCaching(RooAbsArg& arg, const RooArgSet& cac
         RooAbsReal* loFunc = rrv->getBinning().lowBoundFunc() ;
         RooAbsReal* hiFunc = rrv->getBinning().highBoundFunc() ;
         if (loFunc) {
-          loFunc->leafNodeServerList(&depObs,0,true) ;
+          loFunc->leafNodeServerList(&depObs,nullptr,true) ;
         }
         if (hiFunc) {
-          hiFunc->leafNodeServerList(&depObs,0,true) ;
+          hiFunc->leafNodeServerList(&depObs,nullptr,true) ;
         }
         if (!depObs.empty()) {
           pruneSet.remove(depObs,true,true) ;
@@ -2329,7 +2309,7 @@ void RooAbsData::optimizeReadingWithCaching(RooAbsArg& arg, const RooArgSet& cac
 
     // Deactivate tree branches here
     cxcoutI(Optimization) << "RooTreeData::optimizeReadingForTestStatistic(" << GetName() << "): Observables " << pruneSet
-             << " in dataset are either not used at all, orserving exclusively p.d.f nodes that are now cached, disabling reading of these observables for TTree" << endl ;
+             << " in dataset are either not used at all, orserving exclusively p.d.f nodes that are now cached, disabling reading of these observables for TTree" << std::endl ;
     setArgStatus(pruneSet,false) ;
   }
 }
@@ -2340,7 +2320,8 @@ void RooAbsData::optimizeReadingWithCaching(RooAbsArg& arg, const RooArgSet& cac
 
 bool RooAbsData::allClientsCached(RooAbsArg* var, const RooArgSet& cacheList)
 {
-  bool ret(true), anyClient(false) ;
+  bool ret(true);
+  bool anyClient(false);
 
   for (const auto client : var->valueClients()) {
     anyClient = true ;
@@ -2441,7 +2422,7 @@ const TTree *RooAbsData::tree() const
       return _dstore->tree();
    } else {
       coutW(InputArguments) << "RooAbsData::tree(" << GetName() << ") WARNING: is not of StorageType::Tree. "
-                            << "Use GetClonedTree() instead or convert to tree storage." << endl;
+                            << "Use GetClonedTree() instead or convert to tree storage." << std::endl;
       return nullptr;
    }
 }
@@ -2511,7 +2492,7 @@ void RooAbsData::SetName(const char* name)
   TNamed::SetName(name) ;
   auto newPtr = RooNameReg::instance().constPtr(GetName()) ;
   if (newPtr != _namePtr) {
-    //cout << "Rename '" << _namePtr->GetName() << "' to '" << name << "' (set flag in new name)" << endl;
+    //cout << "Rename '" << _namePtr->GetName() << "' to '" << name << "' (set flag in new name)" << std::endl;
     _namePtr = newPtr;
     const_cast<TNamed*>(_namePtr)->SetBit(RooNameReg::kRenamedArg);
     RooNameReg::incrementRenameCounter();
@@ -2535,7 +2516,7 @@ void RooAbsData::SetNameTitle(const char *name, const char *title)
 /// Return sum of squared weights of this data.
 
 double RooAbsData::sumEntriesW2() const {
-  const RooSpan<const double> eventWeights = getWeightBatch(0, numEntries(), /*sumW2=*/true);
+  const std::span<const double> eventWeights = getWeightBatch(0, numEntries(), /*sumW2=*/true);
   if (eventWeights.empty()) {
     return numEntries() * weightSquared();
   }
@@ -2615,7 +2596,7 @@ TH2F *RooAbsData::createHistogram(const RooAbsRealLValue &var1, const RooAbsReal
 
    std::unique_ptr<RooAbsReal>  ownedPlotVarY;
    // Is this variable in our dataset?
-   RooAbsReal *plotVarY = (RooAbsReal *)_vars.find(var2.GetName());
+   RooAbsReal *plotVarY = static_cast<RooAbsReal *>(_vars.find(var2.GetName()));
    if (plotVarY == nullptr) {
       // Is this variable a client of our dataset?
       if (!var2.dependsOn(_vars)) {
@@ -2634,7 +2615,7 @@ TH2F *RooAbsData::createHistogram(const RooAbsRealLValue &var1, const RooAbsReal
 
    // Create selection formula if selection cuts are specified
    std::unique_ptr<RooFormula> select;
-   if (0 != cuts && strlen(cuts)) {
+   if (nullptr != cuts && strlen(cuts)) {
       select = std::make_unique<RooFormula>(cuts, cuts, _vars);
       if (!select->ok()) {
          return nullptr;
@@ -2647,13 +2628,13 @@ TH2F *RooAbsData::createHistogram(const RooAbsRealLValue &var1, const RooAbsReal
    auto *histogram =
       new TH2F(histName.c_str(), "Events", nx, var1.getMin(), var1.getMax(), ny, var2.getMin(), var2.getMax());
    if (!histogram) {
-      coutE(DataHandling) << GetName() << "::createHistogram: unable to create a new histogram" << endl;
+      coutE(DataHandling) << GetName() << "::createHistogram: unable to create a new histogram" << std::endl;
       return nullptr;
    }
 
    // Dump contents
-   Int_t nevent = numEntries();
-   for (Int_t i = 0; i < nevent; ++i) {
+   int nevent = numEntries();
+   for (int i = 0; i < nevent; ++i) {
       get(i);
 
       if (select && select->eval() == 0)

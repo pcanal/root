@@ -12,18 +12,15 @@
 #include "RooAbsArg.h"
 #include "RooDataSet.h"
 #include "RooRandom.h"
+#include "RooFit/Detail/NormalizationHelpers.h"
+#include "RooFit/Evaluator.h"
 
 #include "TH1D.h"
 #include "TH2D.h"
 #include "TMath.h"
 #include "TFile.h"
 
-#include "gtest/gtest.h"
-
-// Backward compatibility for gtest version < 1.10.0
-#ifndef INSTANTIATE_TEST_SUITE_P
-#define INSTANTIATE_TEST_SUITE_P INSTANTIATE_TEST_CASE_P
-#endif
+#include "gtest_wrapper.h"
 
 #include <algorithm>
 #include <memory>
@@ -106,7 +103,8 @@ TEST(RooDataHist, UnWeightedEntries)
                0.7); // TODO What is the actual value?
 
    {
-      double lo, hi;
+      double lo;
+      double hi;
       dataHist.weightError(lo, hi, RooAbsData::Poisson);
       EXPECT_LT(lo, hi);
       EXPECT_NEAR(lo, weight - computePoissonLower(weight), 3.E-2);
@@ -116,7 +114,8 @@ TEST(RooDataHist, UnWeightedEntries)
    EXPECT_NEAR(dataHist.weightError(RooAbsData::SumW2), sqrt(targetBinContent), 1.E-14);
 
    {
-      double lo, hi;
+      double lo;
+      double hi;
       dataHist.weightError(lo, hi, RooAbsData::SumW2);
       EXPECT_NEAR(lo, sqrt(targetBinContent), 1.E-14);
       EXPECT_NEAR(lo, sqrt(targetBinContent), 1.E-14);
@@ -158,7 +157,8 @@ TEST(RooDataHist, WeightedEntries)
    EXPECT_NEAR(dataHist.weightError(RooAbsData::Poisson), targetError, 1.5); // TODO What is the actual value?
 
    {
-      double lo, hi;
+      double lo;
+      double hi;
       dataHist.weightError(lo, hi, RooAbsData::Poisson);
       EXPECT_LT(lo, hi);
       EXPECT_NEAR(lo, weight - computePoissonLower(weight), 3.E-2);
@@ -168,7 +168,8 @@ TEST(RooDataHist, WeightedEntries)
    EXPECT_NEAR(dataHist.weightError(RooAbsData::SumW2), targetError, 1.E-14);
 
    {
-      double lo, hi;
+      double lo;
+      double hi;
       dataHist.weightError(lo, hi, RooAbsData::SumW2);
       EXPECT_NEAR(lo, targetError, 1.E-14);
       EXPECT_NEAR(lo, targetError, 1.E-14);
@@ -225,7 +226,8 @@ TEST_P(RooDataHistIO, ReadLegacy)
    EXPECT_NEAR(dataHist.weightError(RooAbsData::Poisson), targetError, 1.5); // TODO What is the actual value?
 
    {
-      double lo, hi;
+      double lo;
+      double hi;
       dataHist.weightError(lo, hi, RooAbsData::Poisson);
       EXPECT_LT(lo, hi);
       EXPECT_NEAR(lo, weight - computePoissonLower(weight), 3.E-2);
@@ -235,7 +237,8 @@ TEST_P(RooDataHistIO, ReadLegacy)
    EXPECT_NEAR(dataHist.weightError(RooAbsData::SumW2), targetError, 1.E-14);
 
    {
-      double lo, hi;
+      double lo;
+      double hi;
       dataHist.weightError(lo, hi, RooAbsData::SumW2);
       EXPECT_NEAR(lo, targetError, 1.E-14);
       EXPECT_NEAR(lo, targetError, 1.E-14);
@@ -448,11 +451,11 @@ TEST(RooDataHist, AnalyticalIntegration)
 
    RooRealVar x("x", "x", 0, 3.5);
    x.setRange("R1", 1.0, 3.0);  // subrange that respects the bin edges
-   x.setRange("R2", 0.5, 3.25); // subrange that slices throught the bins
+   x.setRange("R2", 0.5, 3.25); // subrange that slices through the bins
 
    RooRealVar y("y", "y", 0.5, 0, 3.5);
    y.setRange("R1", 0, 2.5); // subrange that respects the bin edges
-   y.setRange("R2", 0, 3.3); // subrange that slices throught the bins
+   y.setRange("R2", 0, 3.3); // subrange that slices through the bins
 
    RooArgSet bothXandY{x, y};
 
@@ -743,7 +746,10 @@ TEST_P(WeightsTest, VectorizedWeights)
    }
    x.setVal(0.0);
 
-   auto weightsGetValues = absReal->getValues(data);
+   std::unique_ptr<RooAbsReal> clone = RooFit::Detail::compileForNormSet<RooAbsReal>(*absReal, *data.get());
+   RooFit::Evaluator evaluator(*clone);
+   evaluator.setInput(x.GetName(), xVals, false);
+   std::span<const double> weightsGetValues = evaluator.run();
 
    for (std::size_t i = 0; i < nVals; ++i) {
       EXPECT_NEAR(weightsGetVal[i], weightsGetValues[i], 1e-6);

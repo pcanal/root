@@ -16,27 +16,41 @@
 #ifndef ROO_NLL_VAR
 #define ROO_NLL_VAR
 
+// We can't print deprecation warnings when including headers in cling, because
+// this will be done automatically anyway.
+#ifdef __CLING__
+#ifndef ROOFIT_BUILDS_ITSELF
+// These warnings should only be suppressed when building ROOT itself!
+#warning "Including RooNLLVar.h is deprecated, and this header will be removed in ROOT v6.34: please use RooAbsPdf::createNLL() to create likelihood objects"
+#else
+// If we are builting RooFit itself, this will serve as a reminder to actually
+// remove this deprecate public header. Here is now this needs to be done:
+//    1. Move this header file from inc/ to src/
+//    2. Remove the LinkDef entry, ClassDefOverride, and ClassImpl macros for
+//       this class
+//    3. If there are are tests using this class in the test/ directory, change
+//       the include to use a relative path the moved header file in the src/
+//       directory, e.g. #include <RemovedInterface.h> becomes #include
+//       "../src/RemovedInterface.h"
+//    4. Remove this ifndef-else-endif block from the header
+//    5. Remove the deprecation warning at the end of the class declaration
+#include <RVersion.h>
+#if ROOT_VERSION_CODE >= ROOT_VERSION(6, 34, 00)
+#error "Please remove this deprecated public interface."
+#endif
+#endif
+#endif
+
 #include "RooAbsOptTestStatistic.h"
 #include "RooCmdArg.h"
 #include "RooAbsPdf.h"
 #include <vector>
 #include <utility>
 
-class RooRealSumPdf ;
-namespace RooBatchCompute {
-struct RunContext;
-}
-
 class RooNLLVar : public RooAbsOptTestStatistic {
 public:
 
   // Constructors, assignment etc
-  RooNLLVar();
-  RooNLLVar(const char *name, const char* title, RooAbsPdf& pdf, RooAbsData& data,
-       const RooCmdArg& arg1=RooCmdArg::none(), const RooCmdArg& arg2=RooCmdArg::none(),const RooCmdArg& arg3=RooCmdArg::none(),
-       const RooCmdArg& arg4=RooCmdArg::none(), const RooCmdArg& arg5=RooCmdArg::none(),const RooCmdArg& arg6=RooCmdArg::none(),
-       const RooCmdArg& arg7=RooCmdArg::none(), const RooCmdArg& arg8=RooCmdArg::none(),const RooCmdArg& arg9=RooCmdArg::none()) ;
-
   RooNLLVar(const char *name, const char *title, RooAbsPdf& pdf, RooAbsData& data,
             bool extended,
             RooAbsTestStatistic::Configuration const& cfg=RooAbsTestStatistic::Configuration{});
@@ -57,23 +71,15 @@ public:
 
   double defaultErrorLevel() const override { return 0.5 ; }
 
-  void batchMode(bool on = true) {
-    _batchEvaluations = on;
-  }
-
-  void enableBinOffsetting(bool on = true) {
-    _doBinOffset = on;
-  }
+  void enableBinOffsetting(bool on = true);
 
   using ComputeResult = std::pair<ROOT::Math::KahanSum<double>, double>;
 
-  static RooNLLVar::ComputeResult computeBatchedFunc(const RooAbsPdf *pdfClone, RooAbsData *dataClone,
-                                                     std::unique_ptr<RooBatchCompute::RunContext> &evalData,
-                                                 RooArgSet *normSet, bool weightSq, std::size_t stepSize,
-                                                 std::size_t firstEvent, std::size_t lastEvent);
   static RooNLLVar::ComputeResult computeScalarFunc(const RooAbsPdf *pdfClone, RooAbsData *dataClone, RooArgSet *normSet,
                                                 bool weightSq, std::size_t stepSize, std::size_t firstEvent,
-                                                std::size_t lastEvent, bool doBinOffset=false);
+                                                std::size_t lastEvent, RooAbsPdf const* offsetPdf = nullptr);
+
+  bool setDataSlave(RooAbsData& data, bool cloneData=true, bool ownNewDataAnyway=false) override;
 
 protected:
 
@@ -83,22 +89,25 @@ protected:
   static RooArgSet _emptySet ; // Supports named argument constructor
 
 private:
-  ComputeResult computeBatched(std::size_t stepSize, std::size_t firstEvent, std::size_t lastEvent) const;
   ComputeResult computeScalar(std::size_t stepSize, std::size_t firstEvent, std::size_t lastEvent) const;
 
   bool _extended{false};
-  bool _batchEvaluations{false};
   bool _doBinOffset{false};
   bool _weightSq{false}; ///< Apply weights squared?
   mutable bool _first{true}; ///<!
   ROOT::Math::KahanSum<double> _offsetSaveW2{0.0}; ///<!
 
   mutable std::vector<double> _binw ; ///<!
-  mutable RooRealSumPdf* _binnedPdf{nullptr}; ///<!
-  mutable std::unique_ptr<RooBatchCompute::RunContext> _evalData; ///<! Struct to store function evaluation workspaces.
+  mutable RooAbsPdf* _binnedPdf{nullptr}; ///<!
+  std::unique_ptr<RooAbsPdf> _offsetPdf; ///<! An optional per-bin likelihood offset
 
   ClassDefOverride(RooNLLVar,0) // Function representing (extended) -log(L) of p.d.f and dataset
+
+#ifndef ROOFIT_BUILDS_ITSELF
+} R__DEPRECATED(6,34, "Please use RooAbsPdf::createNLL() to create likelihood objects");
+#else
 };
+#endif
 
 #endif
 

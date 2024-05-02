@@ -45,7 +45,7 @@ public:
 
   RooWorkspace() ;
   RooWorkspace(const char* name, bool doCINTExport)
-  R__SUGGEST_ALTERNATIVE("The \"doCINTExprot\" argument has no effect anymore since ROOT 6."
+  R__SUGGEST_ALTERNATIVE("The \"doCINTExport\" argument has no effect anymore since ROOT 6."
           "Consider using RooWorkspace(const char* name, const char* title=nullptr).");
   RooWorkspace(const char* name, const char* title=nullptr) ;
   RooWorkspace(const RooWorkspace& other) ;
@@ -58,21 +58,21 @@ public:
 
   // Import functions for dataset, functions, generic objects
   bool import(const RooAbsArg& arg,
-      const RooCmdArg& arg1=RooCmdArg(),const RooCmdArg& arg2=RooCmdArg(),const RooCmdArg& arg3=RooCmdArg(),
-      const RooCmdArg& arg4=RooCmdArg(),const RooCmdArg& arg5=RooCmdArg(),const RooCmdArg& arg6=RooCmdArg(),
-      const RooCmdArg& arg7=RooCmdArg(),const RooCmdArg& arg8=RooCmdArg(),const RooCmdArg& arg9=RooCmdArg()) ;
+      const RooCmdArg& arg1={},const RooCmdArg& arg2={},const RooCmdArg& arg3={},
+      const RooCmdArg& arg4={},const RooCmdArg& arg5={},const RooCmdArg& arg6={},
+      const RooCmdArg& arg7={},const RooCmdArg& arg8={},const RooCmdArg& arg9={}) ;
   bool import(const RooArgSet& args,
-      const RooCmdArg& arg1=RooCmdArg(),const RooCmdArg& arg2=RooCmdArg(),const RooCmdArg& arg3=RooCmdArg(),
-      const RooCmdArg& arg4=RooCmdArg(),const RooCmdArg& arg5=RooCmdArg(),const RooCmdArg& arg6=RooCmdArg(),
-      const RooCmdArg& arg7=RooCmdArg(),const RooCmdArg& arg8=RooCmdArg(),const RooCmdArg& arg9=RooCmdArg()) ;
+      const RooCmdArg& arg1={},const RooCmdArg& arg2={},const RooCmdArg& arg3={},
+      const RooCmdArg& arg4={},const RooCmdArg& arg5={},const RooCmdArg& arg6={},
+      const RooCmdArg& arg7={},const RooCmdArg& arg8={},const RooCmdArg& arg9={}) ;
   bool import(RooAbsData const& data,
-      const RooCmdArg& arg1=RooCmdArg(),const RooCmdArg& arg2=RooCmdArg(),const RooCmdArg& arg3=RooCmdArg(),
-      const RooCmdArg& arg4=RooCmdArg(),const RooCmdArg& arg5=RooCmdArg(),const RooCmdArg& arg6=RooCmdArg(),
-      const RooCmdArg& arg7=RooCmdArg(),const RooCmdArg& arg8=RooCmdArg(),const RooCmdArg& arg9=RooCmdArg()) ;
+      const RooCmdArg& arg1={},const RooCmdArg& arg2={},const RooCmdArg& arg3={},
+      const RooCmdArg& arg4={},const RooCmdArg& arg5={},const RooCmdArg& arg6={},
+      const RooCmdArg& arg7={},const RooCmdArg& arg8={},const RooCmdArg& arg9={}) ;
   bool import(const char *fileSpec,
-      const RooCmdArg& arg1=RooCmdArg(),const RooCmdArg& arg2=RooCmdArg(),const RooCmdArg& arg3=RooCmdArg(),
-      const RooCmdArg& arg4=RooCmdArg(),const RooCmdArg& arg5=RooCmdArg(),const RooCmdArg& arg6=RooCmdArg(),
-      const RooCmdArg& arg7=RooCmdArg(),const RooCmdArg& arg8=RooCmdArg(),const RooCmdArg& arg9=RooCmdArg()) ;
+      const RooCmdArg& arg1={},const RooCmdArg& arg2={},const RooCmdArg& arg3={},
+      const RooCmdArg& arg4={},const RooCmdArg& arg5={},const RooCmdArg& arg6={},
+      const RooCmdArg& arg7={},const RooCmdArg& arg8={},const RooCmdArg& arg9={}) ;
   bool import(TObject const& object, bool replaceExisting=false) ;
   bool import(TObject const& object, const char* aliasName, bool replaceExisting=false) ;
 
@@ -87,7 +87,7 @@ public:
   bool extendSet(const char* name, const char* newContents) ;
   bool renameSet(const char* name, const char* newName) ;
   bool removeSet(const char* name) ;
-  const RooArgSet* set(const char* name) ;
+  const RooArgSet* set(RooStringView name) ;
   inline const std::map<std::string,RooArgSet>& sets() const { return _namedSets; }
 
   // Import, load and save parameter value snapshots
@@ -112,9 +112,6 @@ public:
   RooAbsArg* arg(RooStringView name) const ;
   RooAbsArg* fundArg(RooStringView name) const ;
   RooArgSet argSet(RooStringView nameList) const ;
-  TIterator* componentIterator() const
-  R__SUGGEST_ALTERNATIVE("Better iterate over RooWorkspace::components() with range-based loop instead of using RooWorkspace::componentIterator().")
-  { return _allOwnedNodes.createIterator() ; }
   const RooArgSet& components() const { return _allOwnedNodes ; }
   TObject* genobj(RooStringView name) const ;
   TObject* obj(RooStringView name) const ;
@@ -178,8 +175,6 @@ public:
           _fmap(other._fmap),
           _ehmap(other._ehmap),
           _compiledOK(other._compiledOK) {} ;
-
-    ~CodeRepo() override {} ;
 
     bool autoImportClass(TClass* tc, bool doReplace=false) ;
     bool compileClasses() ;
@@ -285,6 +280,13 @@ public:
     RooArgSet _sandboxNodes; ///<! Sandbox for incoming objects in a transaction
 
     ClassDefOverride(RooWorkspace, 8) // Persistable project container for (composite) pdfs, functions, variables and datasets
+
+public:
+   // The deprecated functions need to come last, because the R__DEPRECATED
+   // macro is beaking doxygen in some cases.
+   TIterator *componentIterator() const R__DEPRECATED(6, 34,
+                                                      "Better iterate over RooWorkspace::components() with range-based "
+                                                      "loop instead of using RooWorkspace::componentIterator().");
 } ;
 
 #endif

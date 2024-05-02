@@ -19,7 +19,7 @@
 \class RooAICRegistry
 \ingroup Roofitcore
 
-RooAICRegistry is a utility class for operator p.d.f
+Utility class for operator p.d.f
 classes that keeps track of analytical integration codes and
 associated normalization and integration sets.
 **/
@@ -29,9 +29,6 @@ associated normalization and integration sets.
 #include "RooArgSet.h"
 
 #include "Riostream.h"
-
-
-using namespace std;
 
 ClassImp(RooAICRegistry);
 
@@ -64,16 +61,16 @@ RooAICRegistry::RooAICRegistry(UInt_t size)
 /// Copy constructor
 
 RooAICRegistry::RooAICRegistry(const RooAICRegistry& other)
-  : _clArr(other._clArr), _asArr1(other._clArr.size(), 0), _asArr2(other._clArr.size(), 0),
-    _asArr3(other._clArr.size(), 0), _asArr4(other._clArr.size(), 0)
+  : _clArr(other._clArr), _asArr1(other._clArr.size(), nullptr), _asArr2(other._clArr.size(), nullptr),
+    _asArr3(other._clArr.size(), nullptr), _asArr4(other._clArr.size(), nullptr)
 {
   // Copy code-list array if other PDF has one
   UInt_t size = other._clArr.size();
   if (size) {
-    _asArr1.resize(size, 0);
-    _asArr2.resize(size, 0);
-    _asArr3.resize(size, 0);
-    _asArr4.resize(size, 0);
+    _asArr1.resize(size, nullptr);
+    _asArr2.resize(size, nullptr);
+    _asArr3.resize(size, nullptr);
+    _asArr4.resize(size, nullptr);
     for(UInt_t i = 0; i < size; ++i) {
       _asArr1[i] = makeSnapshot(other._asArr1[i]);
       _asArr2[i] = makeSnapshot(other._asArr2[i]);

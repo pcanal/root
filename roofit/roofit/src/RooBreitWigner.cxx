@@ -23,13 +23,11 @@ that models a non-relativistic Breit-Wigner shape
 **/
 
 #include "Riostream.h"
-#include <math.h>
+#include <cmath>
 
 #include "RooBreitWigner.h"
 #include "RooRealVar.h"
 #include "RooBatchCompute.h"
-
-using namespace std;
 
 ClassImp(RooBreitWigner);
 
@@ -63,10 +61,9 @@ double RooBreitWigner::evaluate() const
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Compute multiple values of BreitWigner distribution.
-void RooBreitWigner::computeBatch(cudaStream_t* stream, double* output, size_t nEvents, RooFit::Detail::DataMap const& dataMap) const
+void RooBreitWigner::doEval(RooFit::EvalContext & ctx) const
 {
-  auto dispatch = stream ? RooBatchCompute::dispatchCUDA : RooBatchCompute::dispatchCPU;
-  dispatch->compute(stream, RooBatchCompute::BreitWigner, output, nEvents, {dataMap.at(x), dataMap.at(mean), dataMap.at(width)});
+  RooBatchCompute::compute(ctx.config(this), RooBatchCompute::BreitWigner, ctx.output(), {ctx.at(x), ctx.at(mean), ctx.at(width)});
 }
 
 ////////////////////////////////////////////////////////////////////////////////

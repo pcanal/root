@@ -52,9 +52,9 @@ public:
    class RExceptionHandler : public TStdExceptionHandler {
    public:
       RExceptionHandler() : TStdExceptionHandler() { Add(); }
-      virtual ~RExceptionHandler()                 { Remove(); }
+      ~RExceptionHandler() override                 { Remove(); }
 
-      virtual EStatus Handle(std::exception& exc);
+      EStatus Handle(std::exception& exc) override;
    };
 
    class ChangeGuard {
@@ -145,9 +145,9 @@ protected:
    REveSelection            *fSelection{nullptr};
    REveSelection            *fHighlight{nullptr};
 
-   std::shared_ptr<ROOT::Experimental::RWebWindow>  fWebWindow;
-   std::vector<Conn>                                fConnList;
-   std::queue<std::shared_ptr<MIR> >                fMIRqueue;
+   std::shared_ptr<ROOT::RWebWindow>       fWebWindow;
+   std::vector<Conn>                       fConnList;
+   std::queue<std::shared_ptr<MIR> >       fMIRqueue;
 
    // MIR execution
    std::thread       fMIRExecThread;
@@ -185,8 +185,12 @@ public:
 
    REveScene *GetWorld() const { return fWorld; }
 
+   REveViewer* GetDefaultViewer() const;
+
    REveViewer *SpawnNewViewer(const char *name, const char *title = "");
    REveScene  *SpawnNewScene (const char *name, const char *title = "");
+
+   void AllowMultipleRemoteConnections(bool loopBack = true, bool useAuthKey = true);
 
    void BeginChange();
    void EndChange();
@@ -264,7 +268,7 @@ public:
    // Access to internals, needed for low-level control in advanced
    // applications.
 
-   std::shared_ptr<RWebWindow> GetWebWindow() const { return fWebWindow; }
+   std::shared_ptr<ROOT::RWebWindow> GetWebWindow() const { return fWebWindow; }
 
    // void Send(void* buff, unsigned connid);
    void Send(unsigned connid, const std::string &data);

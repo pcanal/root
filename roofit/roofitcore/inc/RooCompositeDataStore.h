@@ -38,7 +38,7 @@ public:
   // Ctors from DataStore
   RooCompositeDataStore(RooStringView name, RooStringView title, const RooArgSet& vars, RooCategory& indexCat, std::map<std::string,RooAbsDataStore*> const& inputData) ;
 
-  // Empty ctor
+  // Empty constructor.
   RooAbsDataStore* clone(const char* newname=nullptr) const override { return new RooCompositeDataStore(*this,newname) ; }
   RooAbsDataStore* clone(const RooArgSet& vars, const char* newname=nullptr) const override { return new RooCompositeDataStore(*this,vars,newname) ; }
 
@@ -110,7 +110,7 @@ public:
     (void)first; (void)len;
     return {};
   }
-  RooSpan<const double> getWeightBatch(std::size_t first, std::size_t len) const override;
+  std::span<const double> getWeightBatch(std::size_t first, std::size_t len) const override;
 
 
  protected:

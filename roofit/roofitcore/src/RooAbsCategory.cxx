@@ -310,9 +310,10 @@ const RooCatType* RooAbsCategory::lookupType(const RooCatType &other, bool print
 /// Use lookupIndex() (preferred) or lookupName() instead.
 const RooCatType* RooAbsCategory::lookupType(RooAbsCategory::value_type index, bool printError) const
 {
-  for (const auto& item : stateNames())
-  if (item.second == index) {
-    return retrieveLegacyState(index);
+  for (const auto &item : stateNames()) {
+    if (item.second == index) {
+      return retrieveLegacyState(index);
+    }
   }
 
   if (printError) {
@@ -528,7 +529,7 @@ void RooAbsCategory::setTreeBranchStatus(TTree& t, bool active)
 {
   TBranch* branch = t.GetBranch(Form("%s_idx",GetName())) ;
   if (branch) {
-    t.SetBranchStatus(Form("%s_idx",GetName()),active?1:0) ;
+    t.SetBranchStatus(Form("%s_idx",GetName()),active?true:false) ;
   }
 }
 
@@ -632,17 +633,17 @@ unsigned int RooAbsCategory::getCurrentOrdinalNumber() const {
 ////////////////////////////////////////////////////////////////////////////////
 /// Create a RooCategory fundamental object with our properties.
 
-RooAbsArg *RooAbsCategory::createFundamental(const char* newname) const
+RooFit::OwningPtr<RooAbsArg> RooAbsCategory::createFundamental(const char* newname) const
 {
   // Add and precalculate new category column
-  RooCategory *fund= new RooCategory(newname?newname:GetName(),GetTitle()) ;
+  auto fund = std::make_unique<RooCategory>(newname?newname:GetName(),GetTitle()) ;
 
   // Copy states
   for (const auto& type : stateNames()) {
     fund->defineStateUnchecked(type.first, type.second);
   }
 
-  return fund;
+  return RooFit::makeOwningPtr<RooAbsArg>(std::move(fund));
 }
 
 

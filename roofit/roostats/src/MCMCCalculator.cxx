@@ -51,28 +51,18 @@ ClassImp(RooStats::MCMCCalculator);
 
 using namespace RooFit;
 using namespace RooStats;
-using namespace std;
+using std::endl;
 
 ////////////////////////////////////////////////////////////////////////////////
 /// default constructor
 
 MCMCCalculator::MCMCCalculator() :
-   fPropFunc(0),
-   fPdf(0),
-   fPriorPdf(0),
-   fData(0),
-   fAxes(0)
+   fPropFunc(nullptr),
+   fPdf(nullptr),
+   fPriorPdf(nullptr),
+   fData(nullptr),
+   fAxes(nullptr)
 {
-   fNumIters = 0;
-   fNumBurnInSteps = 0;
-   fNumBins = 0;
-   fUseKeys = false;
-   fUseSparseHist = false;
-   fSize = -1;
-   fIntervalType = MCMCInterval::kShortest;
-   fLeftSideTF = -1;
-   fEpsilon = -1;
-   fDelta = -1;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -80,9 +70,9 @@ MCMCCalculator::MCMCCalculator() :
 /// by SetupBasicUsage()
 
 MCMCCalculator::MCMCCalculator(RooAbsData& data, const ModelConfig & model) :
-   fPropFunc(0),
+   fPropFunc(nullptr),
    fData(&data),
-   fAxes(0)
+   fAxes(nullptr)
 {
    SetModel(model);
    SetupBasicUsage();
@@ -115,7 +105,7 @@ void MCMCCalculator::SetModel(const ModelConfig & model) {
 
 void MCMCCalculator::SetupBasicUsage()
 {
-   fPropFunc = 0;
+   fPropFunc = nullptr;
    fNumIters = 10000;
    fNumBurnInSteps = 40;
    fNumBins = 50;
@@ -149,8 +139,8 @@ void MCMCCalculator::SetLeftSideTailFraction(double a)
 MCMCInterval* MCMCCalculator::GetInterval() const
 {
 
-   if (!fData || !fPdf   ) return 0;
-   if (fPOI.empty()) return 0;
+   if (!fData || !fPdf   ) return nullptr;
+   if (fPOI.empty()) return nullptr;
 
    if (fSize < 0) {
       coutE(InputArguments) << "MCMCCalculator::GetInterval: "
@@ -159,8 +149,8 @@ MCMCInterval* MCMCCalculator::GetInterval() const
    }
 
    // if a proposal function has not been specified create a default one
-   bool useDefaultPropFunc = (fPropFunc == 0);
-   bool usePriorPdf = (fPriorPdf != 0);
+   bool useDefaultPropFunc = (fPropFunc == nullptr);
+   bool usePriorPdf = (fPriorPdf != nullptr);
    if (useDefaultPropFunc) fPropFunc = new UniformProposal();
 
    // if prior is given create product
@@ -179,7 +169,7 @@ MCMCInterval* MCMCCalculator::GetInterval() const
       SetBins(*params, fNumBins);
       SetBins(fPOI, fNumBins);
       if (dynamic_cast<PdfProposal*>(fPropFunc)) {
-         std::unique_ptr<RooArgSet> proposalVars{((PdfProposal*)fPropFunc)->GetPdf()->
+         std::unique_ptr<RooArgSet> proposalVars{(static_cast<PdfProposal*>(fPropFunc))->GetPdf()->
                                                getParameters((RooAbsData*)nullptr)};
          SetBins(*proposalVars, fNumBins);
       }
@@ -190,7 +180,7 @@ MCMCInterval* MCMCCalculator::GetInterval() const
    mh.SetType(MetropolisHastings::kLog);
    mh.SetSign(MetropolisHastings::kNegative);
    mh.SetParameters(*params);
-   if (fChainParams.getSize() > 0) mh.SetChainParameters(fChainParams);
+   if (!fChainParams.empty()) mh.SetChainParameters(fChainParams);
    mh.SetProposalFunction(*fPropFunc);
    mh.SetNumIters(fNumIters);
 

@@ -66,11 +66,11 @@ construction by:
 #include "TMath.h"
 #include "TH1F.h"
 
-ClassImp(RooStats::NeymanConstruction); ;
+ClassImp(RooStats::NeymanConstruction);
 
 using namespace RooFit;
 using namespace RooStats;
-using namespace std;
+using std::endl, std::string;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -80,10 +80,10 @@ NeymanConstruction::NeymanConstruction(RooAbsData& data, ModelConfig& model):
    fSize(0.05),
    fData(data),
    fModel(model),
-   fTestStatSampler(0),
-   fPointsToTest(0),
+   fTestStatSampler(nullptr),
+   fPointsToTest(nullptr),
    fLeftSideFraction(0),
-   fConfBelt(0),  // constructed with tree data
+   fConfBelt(nullptr),  // constructed with tree data
    fAdaptiveSampling(false),
    fAdditionalNToysFactor(1.),
    fSaveBeltToFile(false),
@@ -110,7 +110,7 @@ NeymanConstruction::~NeymanConstruction() {
 
 PointSetInterval* NeymanConstruction::GetInterval() const {
 
-  TFile* f=0;
+  TFile* f=nullptr;
   if(fSaveBeltToFile){
     //coverity[FORWARD_NULL]
     oocoutI(f,Contents) << "NeymanConstruction saving ConfidenceBelt to file SamplingDistributions.root" << endl;
@@ -131,7 +131,7 @@ PointSetInterval* NeymanConstruction::GetInterval() const {
   // loop over points to test
   for(Int_t i=0; i<fPointsToTest->numEntries(); ++i){
      // get a parameter point from the list of points to test.
-    point = (RooArgSet*) fPointsToTest->get(i);//->clone("temp");
+    point = const_cast<RooArgSet*>(fPointsToTest->get(i));//->clone("temp");
 
     // set parameters of interest to current point
     fPOI->assign(*point);
@@ -152,10 +152,14 @@ PointSetInterval* NeymanConstruction::GetInterval() const {
     // find the lower & upper thresholds on the test statistic that
     // define the acceptance region in the data
 
-    SamplingDistribution* samplingDist=0;
+    SamplingDistribution* samplingDist=nullptr;
     double sigma;
-    double upperEdgeOfAcceptance, upperEdgeMinusSigma, upperEdgePlusSigma;
-    double lowerEdgeOfAcceptance, lowerEdgeMinusSigma, lowerEdgePlusSigma;
+    double upperEdgeOfAcceptance;
+    double upperEdgeMinusSigma;
+    double upperEdgePlusSigma;
+    double lowerEdgeOfAcceptance;
+    double lowerEdgeMinusSigma;
+    double lowerEdgePlusSigma;
     Int_t additionalMC=0;
 
     // the adaptive sampling algorithm wants at least one toy event to be outside
@@ -191,7 +195,7 @@ PointSetInterval* NeymanConstruction::GetInterval() const {
                      additionalMC);
         if (!samplingDist) {
            oocoutE(nullptr,Eval) << "Neyman Construction: error generating sampling distribution" << endl;
-           return 0;
+           return nullptr;
         }
    totalMC=samplingDist->GetSize();
 
@@ -240,7 +244,7 @@ PointSetInterval* NeymanConstruction::GetInterval() const {
       samplingDist = fTestStatSampler->GetSamplingDistribution(*point);
       if (!samplingDist) {
          oocoutE(nullptr,Eval) << "Neyman Construction: error generating sampling distribution" << endl;
-         return 0;
+         return nullptr;
       }
 
       lowerEdgeOfAcceptance =

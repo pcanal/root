@@ -5,8 +5,8 @@
 /// enhanced one-dimensional projection of a multi-dimensional pdf
 ///
 /// \macro_image
-/// \macro_output
 /// \macro_code
+/// \macro_output
 ///
 /// \date July 2008
 /// \author Wouter Verkerke
@@ -49,7 +49,7 @@ void rf316_llratioplot()
    RooRealVar fsig("fsig", "signal fraction", 0.1, 0., 1.);
    RooAddPdf model("model", "model", RooArgList(sig, bkg), fsig);
 
-   RooDataSet *data = model.generate(RooArgSet(x, y, z), 20000);
+   std::unique_ptr<RooDataSet> data{model.generate({x, y, z}, 20000)};
 
    // P r o j e c t   p d f   a n d   d a t a   o n   x
    // -------------------------------------------------
@@ -77,7 +77,7 @@ void rf316_llratioplot()
    data->addColumn(llratio_func);
 
    // Extract the subset of data with large signal likelihood
-   RooDataSet *dataSel = (RooDataSet *)data->reduce(Cut("llratio>0.7"));
+   std::unique_ptr<RooAbsData> dataSel{data->reduce(Cut("llratio>0.7"))};
 
    // Make plot frame
    RooPlot *frame2 = x.frame(Title("Same projection on X with LLratio(y,z)>0.7"), Bins(40));
@@ -89,11 +89,11 @@ void rf316_llratioplot()
    // ---------------------------------------------------------------------------------------------
 
    // Generate large number of events for MC integration of pdf projection
-   RooDataSet *mcprojData = model.generate(RooArgSet(x, y, z), 10000);
+   std::unique_ptr<RooDataSet> mcprojData{model.generate({x, y, z}, 10000)};
 
    // Calculate LL ratio for each generated event and select MC events with llratio)0.7
    mcprojData->addColumn(llratio_func);
-   RooDataSet *mcprojDataSel = (RooDataSet *)mcprojData->reduce(Cut("llratio>0.7"));
+   std::unique_ptr<RooAbsData> mcprojDataSel{mcprojData->reduce(Cut("llratio>0.7"))};
 
    // Project model on x, integrating projected observables (y,z) with Monte Carlo technique
    // on set of events with the same llratio cut as was applied to data

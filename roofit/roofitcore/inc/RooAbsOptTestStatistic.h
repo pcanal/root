@@ -16,6 +16,31 @@
 #ifndef ROO_ABS_OPT_TEST_STATISTIC
 #define ROO_ABS_OPT_TEST_STATISTIC
 
+// We can't print deprecation warnings when including headers in cling, because
+// this will be done automatically anyway.
+#ifdef __CLING__
+#ifndef ROOFIT_BUILDS_ITSELF
+// These warnings should only be suppressed when building ROOT itself!
+#warning "Including RooAbsOptTestStatistic.h is deprecated, and this header will be removed in ROOT v6.34: it is an implementation detail that should not be part of the public user interface"
+#else
+// If we are builting RooFit itself, this will serve as a reminder to actually
+// remove this deprecate public header. Here is now this needs to be done:
+//    1. Move this header file from inc/ to src/
+//    2. Remove the LinkDef entry, ClassDefOverride, and ClassImpl macros for
+//       this class
+//    3. If there are are tests using this class in the test/ directory, change
+//       the include to use a relative path the moved header file in the src/
+//       directory, e.g. #include <RemovedInterface.h> becomes #include
+//       "../src/RemovedInterface.h"
+//    4. Remove this ifndef-else-endif block from the header
+//    5. Remove the deprecation warning at the end of the class declaration
+#include <RVersion.h>
+#if ROOT_VERSION_CODE >= ROOT_VERSION(6, 34, 00)
+#error "Please remove this deprecated public interface."
+#endif
+#endif
+#endif
+
 #include "RooAbsTestStatistic.h"
 #include "RooSetProxy.h"
 #include "RooCategoryProxy.h"
@@ -29,7 +54,6 @@ class RooAbsOptTestStatistic : public RooAbsTestStatistic {
 public:
 
   // Constructors, assignment etc
-  RooAbsOptTestStatistic() ;
   RooAbsOptTestStatistic(const char *name, const char *title, RooAbsReal& real, RooAbsData& data,
                          const RooArgSet& projDeps,
                          RooAbsTestStatistic::Configuration const& cfg);
@@ -74,24 +98,30 @@ protected:
   virtual RooArgSet requiredExtraObservables() const { return RooArgSet() ; }
   void optimizeCaching() ;
   void optimizeConstantTerms(bool,bool=true) ;
+  void runRecalculateCache(std::size_t firstEvent, std::size_t lastEvent, std::size_t stepSize) const override;
 
-  RooArgSet*  _normSet ;           ///< Pointer to set with observables used for normalization
-  RooArgSet*  _funcCloneSet ;      ///< Set owning all components of internal clone of input function
-  RooAbsData* _dataClone{nullptr}; ///< Pointer to internal clone if input data
-  RooAbsReal* _funcClone ;   ///< Pointer to internal clone of input function
-  RooArgSet*  _projDeps ;    ///< Set of projected observable
-  bool      _ownData  ;    ///< Do we own the dataset
-  bool      _sealed ;      ///< Is test statistic sealed -- i.e. no access to data
+  RooArgSet*  _normSet = nullptr;           ///< Pointer to set with observables used for normalization
+  RooArgSet*  _funcCloneSet = nullptr;      ///< Set owning all components of internal clone of input function
+  RooAbsData* _dataClone = nullptr; ///< Pointer to internal clone if input data
+  RooAbsReal* _funcClone = nullptr;   ///< Pointer to internal clone of input function
+  RooArgSet*  _projDeps = nullptr;    ///< Set of projected observable
+  bool      _ownData = false;    ///< Do we own the dataset
+  bool      _sealed = false;      ///< Is test statistic sealed -- i.e. no access to data
   TString     _sealNotice ;  ///< User-defined notice shown when reading a sealed likelihood
-  RooArgSet*  _funcObsSet ;  ///< List of observables in the pdf expression
+  RooArgSet*  _funcObsSet = nullptr;  ///< List of observables in the pdf expression
   RooArgSet   _cachedNodes ; ///<! List of nodes that are cached as constant expressions
+  bool _skipZeroWeights = false; ///<! Whether to skip entries with weight zero in the evaluation
 
-  RooAbsReal* _origFunc ;  ///< Original function
-  RooAbsData* _origData ;  ///< Original data
-  bool      _optimized ; ///<!
+  RooAbsReal* _origFunc = nullptr;  ///< Original function
+  RooAbsData* _origData = nullptr;  ///< Original data
+  bool      _optimized = false; ///<!
   double      _integrateBinsPrecision{-1.}; // Precision for finer sampling of bins.
 
   ClassDefOverride(RooAbsOptTestStatistic,0) // Abstract base class for optimized test statistics
+#ifndef ROOFIT_BUILDS_ITSELF
+} R__DEPRECATED(6,34, "RooAbsOptTestStatistic is a RooFit implementation detail that should not be instantiated in user code.");
+#else
 };
+#endif
 
 #endif

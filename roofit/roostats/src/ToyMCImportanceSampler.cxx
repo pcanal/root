@@ -25,7 +25,7 @@ Implementation based on a work by   Cranmer, Kreiss, Read (in Preparation)
 #include "TMath.h"
 
 using namespace RooFit;
-using namespace std;
+using std::endl, std::vector;
 
 
 ClassImp(RooStats::ToyMCImportanceSampler);
@@ -96,7 +96,7 @@ RooDataSet* ToyMCImportanceSampler::GetSamplingDistributionsSingleWorker(RooArgS
 
       RooDataSet* result = ToyMCSampler::GetSamplingDistributionsSingleWorker( paramPoint );
 
-      if (result->get()->getSize() > Int_t(fTestStatistics.size())) {
+      if (result->get()->size() > fTestStatistics.size()) {
          // add label
          densityLabel.setIndex( i );
          result->addColumn( densityLabel );
@@ -252,10 +252,10 @@ RooAbsData* ToyMCImportanceSampler::GenerateToyData(
    }
 
    // catch the case when NLLs are not created (e.g. when ToyMCSampler was streamed for Proof)
-   if( fNullNLLs.empty()  &&  fNullDensities.size() > 0 ) {
+   if( fNullNLLs.empty()  &&  !fNullDensities.empty() ) {
       for( unsigned int i = 0; i < fNullDensities.size(); i++ ) fNullNLLs.push_back( nullptr );
    }
-   if( fImpNLLs.empty()  &&  fImportanceDensities.size() > 0 ) {
+   if( fImpNLLs.empty()  &&  !fImportanceDensities.empty() ) {
       for( unsigned int i = 0; i < fImportanceDensities.size(); i++ ) fImpNLLs.push_back( nullptr );
    }
 
@@ -291,7 +291,7 @@ RooAbsData* ToyMCImportanceSampler::GenerateToyData(
 
    // generate global observables
    RooArgSet observables(*fObservables);
-   if(fGlobalObservables  &&  fGlobalObservables->getSize()) {
+   if(fGlobalObservables  &&  !fGlobalObservables->empty()) {
       observables.remove(*fGlobalObservables);
       // WHAT TODO FOR MANY nullptr DENSITIES?
       GenerateGlobalObservables(*fNullDensities[0]);
@@ -328,7 +328,7 @@ RooAbsData* ToyMCImportanceSampler::GenerateToyData(
    if( fGenerateFromNull ) {
       //cout << "gen from null" << endl;
       allVars->assign(*fNullSnapshots[fIndexGenDensity]);
-      data = Generate(*fNullDensities[fIndexGenDensity], observables);
+      data = Generate(*fNullDensities[fIndexGenDensity], observables).release();
    }else{
       // need to be careful here not to overwrite the current state of the
       // nuisance parameters, ie they must not be part of the snapshot
@@ -336,7 +336,7 @@ RooAbsData* ToyMCImportanceSampler::GenerateToyData(
       if(fImportanceSnapshots[fIndexGenDensity]) {
         allVars->assign(*fImportanceSnapshots[fIndexGenDensity]);
       }
-      data = Generate(*fImportanceDensities[fIndexGenDensity], observables);
+      data = Generate(*fImportanceDensities[fIndexGenDensity], observables).release();
    }
    //cout << "data generated: " << data << endl;
 

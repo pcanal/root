@@ -30,14 +30,16 @@ RooExpPoly::RooExpPoly(const char*, const char*, RooAbsReal&, const RooArgList&,
 #include <RooMath.h>
 #include <RooMsgService.h>
 #include <RooRealVar.h>
+#include "RooBatchCompute.h"
 
 #include <TMath.h>
 #include <TError.h>
 
-#include <cmath>
-#include <sstream>
+#include <array>
 #include <cassert>
+#include <cmath>
 #include <complex>
+#include <sstream>
 
 ClassImp(RooExpPoly);
 
@@ -62,7 +64,9 @@ ClassImp(RooExpPoly);
 /// \f]
 
 RooExpPoly::RooExpPoly(const char *name, const char *title, RooAbsReal &x, const RooArgList &coefList, int lowestOrder)
-   : RooAbsPdf(name, title), _x("x", "Dependent", this, x), _coefList("coefList", "List of coefficients", this),
+   : RooAbsPdf(name, title),
+     _x("x", "Dependent", this, x),
+     _coefList("coefList", "List of coefficients", this),
      _lowestOrder(lowestOrder)
 {
    // Check lowest order
@@ -72,29 +76,16 @@ RooExpPoly::RooExpPoly(const char *name, const char *title, RooAbsReal &x, const
       _lowestOrder = 0;
    }
 
-   for (auto coef : coefList) {
-      if (!dynamic_cast<RooAbsReal *>(coef)) {
-         coutE(InputArguments) << "RooExpPoly::ctor(" << GetName() << ") ERROR: coefficient " << coef->GetName()
-                               << " is not of type RooAbsReal" << std::endl;
-         R__ASSERT(0);
-      }
-      _coefList.add(*coef);
-   }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-
-RooExpPoly::RooExpPoly(const char *name, const char *title, RooAbsReal &x)
-   : RooAbsPdf(name, title), _x("x", "Dependent", this, x), _coefList("coefList", "List of coefficients", this),
-     _lowestOrder(1)
-{
+   _coefList.addTyped<RooAbsReal>(coefList);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Copy constructor
 
 RooExpPoly::RooExpPoly(const RooExpPoly &other, const char *name)
-   : RooAbsPdf(other, name), _x("x", this, other._x), _coefList("coefList", this, other._coefList),
+   : RooAbsPdf(other, name),
+     _x("x", this, other._x),
+     _coefList("coefList", this, other._coefList),
      _lowestOrder(other._lowestOrder)
 {
 }
@@ -135,6 +126,25 @@ double RooExpPoly::evaluateLog() const
 
 ////////////////////////////////////////////////////////////////////////////////
 
+/// Compute multiple values of ExpPoly distribution.
+void RooExpPoly::doEval(RooFit::EvalContext &ctx) const
+{
+   std::vector<std::span<const double>> vars;
+   vars.reserve(_coefList.size() + 1);
+   vars.push_back(ctx.at(_x));
+
+   std::vector<double> coefVals;
+   for (RooAbsArg *coef : _coefList) {
+      vars.push_back(ctx.at(coef));
+   }
+
+   std::array<double, 2> args{static_cast<double>(_lowestOrder), static_cast<double>(_coefList.size())};
+
+   RooBatchCompute::compute(ctx.config(this), RooBatchCompute::ExpPoly, ctx.output(), vars, args);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
 void RooExpPoly::adjustLimits()
 {
    // Adjust the limits of all the coefficients to reflect the numeric boundaries
@@ -168,7 +178,7 @@ double RooExpPoly::evaluate() const
    // Calculate and return value of function
 
    const double logval = this->evaluateLog();
-   const double val = exp(logval);
+   const double val = std::exp(logval);
    if (std::isinf(val)) {
       coutE(InputArguments) << "RooExpPoly::evaluate(" << GetName()
                             << ") ERROR: result of exponentiation is infinite! exponent was " << logval << std::endl;
@@ -237,7 +247,8 @@ double deltaerfi(double x1, double x2)
 
 double RooExpPoly::analyticalIntegral(int /*code*/, const char *rangeName) const
 {
-   const double xmin = _x.min(rangeName), xmax = _x.max(rangeName);
+   const double xmin = _x.min(rangeName);
+   const double xmax = _x.max(rangeName);
    const unsigned sz = _coefList.size();
    if (!sz)
       return xmax - xmin;
@@ -293,10 +304,11 @@ std::string RooExpPoly::getFormulaExpression(bool expand) const
    for (auto coef : _coefList) {
       if (order != _lowestOrder)
          ss << "+";
-      if (expand)
-         ss << ((RooAbsReal *)coef)->getVal();
-      else
+      if (expand) {
+         ss << (static_cast<RooAbsReal *>(coef))->getVal();
+      } else {
          ss << coef->GetName();
+      }
       ss << "*pow(" << _x.GetName() << "," << order << ")";
       ++order;
    }

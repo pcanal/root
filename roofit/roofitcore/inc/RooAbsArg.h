@@ -16,17 +16,18 @@
 #ifndef ROO_ABS_ARG
 #define ROO_ABS_ARG
 
-#include "TNamed.h"
-#include "TObjArray.h"
-#include "TRefArray.h"
-#include "RooPrintable.h"
-#include "RooSTLRefCountList.h"
-#include "RooAbsCache.h"
-#include "RooNameReg.h"
-#include "RooLinkedListIter.h"
+#include <RooAbsCache.h>
 #include <RooFit/Config.h>
 #include <RooFit/Detail/NormalizationHelpers.h>
+#include <RooLinkedListIter.h>
+#include <RooNameReg.h>
+#include <RooPrintable.h>
+#include <RooSTLRefCountList.h>
 #include <RooStringView.h>
+
+#include <TNamed.h>
+#include <TObjArray.h>
+#include <TRefArray.h>
 
 #include <deque>
 #include <iostream>
@@ -35,6 +36,7 @@
 #include <set>
 #include <stack>
 #include <string>
+#include <unordered_map>
 
 
 class TTree ;
@@ -59,12 +61,9 @@ class CodeSquashContext;
 
 class RooRefArray : public TObjArray {
  public:
-  RooRefArray() : TObjArray() {
-  } ;
-  RooRefArray(const RooRefArray& other) : TObjArray(other) {
-  }
-  RooRefArray& operator=(const RooRefArray& other) = default;
-  ~RooRefArray() override {} ;
+    RooRefArray() = default;
+    RooRefArray(const RooRefArray &other) : TObjArray(other) {}
+    RooRefArray &operator=(const RooRefArray &other) = default;
  protected:
   ClassDefOverride(RooRefArray,1) // Helper class for proxy lists
 } ;
@@ -98,7 +97,6 @@ public:
   virtual bool isDerived() const {
     return true ;
   }
-  bool isCloneOf(const RooAbsArg& other) const ;
 
   /// Check whether this object depends on values from an element in the `serverList`.
   ///
@@ -117,7 +115,13 @@ public:
     return dependsOn(server,ignoreArg,true) ;
   }
   bool dependsOn(const RooAbsCollection& serverList, const RooAbsArg* ignoreArg=nullptr, bool valueOnly=false) const ;
-  bool dependsOn(const RooAbsArg& server, const RooAbsArg* ignoreArg=nullptr, bool valueOnly=false) const ;
+  /// Test whether we depend on (ie, are served by) the specified object.
+  /// Note that RooAbsArg objects are considered equivalent if they have
+  /// the same name.
+  inline bool dependsOn(const RooAbsArg& server, const RooAbsArg* ignoreArg=nullptr, bool valueOnly=false) const {
+    return dependsOn(server.namePtr(), ignoreArg, valueOnly);
+  }
+  bool dependsOn(TNamed const* namePtr, const RooAbsArg* ignoreArg=nullptr, bool valueOnly=false) const ;
   bool overlaps(const RooAbsArg& testArg, bool valueOnly=false) const ;
   bool hasClients() const { return !_clientList.empty(); }
 
@@ -129,46 +133,43 @@ public:
 
   /// Retrieve a client iterator.
   inline TIterator* clientIterator() const
-  R__SUGGEST_ALTERNATIVE("Use clients() and begin(), end() or range-based loops.") {
+  R__DEPRECATED(6,34, "Use clients() and begin(), end() or range-based loops.") {
     // Return iterator over all client RooAbsArgs
     return makeLegacyIterator(_clientList);
   }
   inline TIterator* valueClientIterator() const
-  R__SUGGEST_ALTERNATIVE("Use valueClients() and begin(), end() or range-based loops.") {
+  R__DEPRECATED(6,34, "Use valueClients() and begin(), end() or range-based loops.") {
     // Return iterator over all shape client RooAbsArgs
     return makeLegacyIterator(_clientListValue);
   }
   inline TIterator* shapeClientIterator() const
-  R__SUGGEST_ALTERNATIVE("Use shapeClients() and begin(), end() or range-based loops.") {
+  R__DEPRECATED(6,34, "Use shapeClients() and begin(), end() or range-based loops.") {
     // Return iterator over all shape client RooAbsArgs
     return makeLegacyIterator(_clientListShape);
   }
   inline TIterator* serverIterator() const
-  R__SUGGEST_ALTERNATIVE("Use servers() and begin(), end() or range-based loops.") {
+  R__DEPRECATED(6,34, "Use servers() and begin(), end() or range-based loops.") {
     // Return iterator over all server RooAbsArgs
     return makeLegacyIterator(_serverList);
   }
 
   inline RooFIter valueClientMIterator() const
-  R__SUGGEST_ALTERNATIVE("Use valueClients() and begin(), end() or range-based loops.") {
+  R__DEPRECATED(6,34, "Use valueClients() and begin(), end() or range-based loops.") {
     return RooFIter(std::unique_ptr<RefCountListLegacyIterator_t>(makeLegacyIterator(_clientListValue)));
   }
   inline RooFIter shapeClientMIterator() const
-  R__SUGGEST_ALTERNATIVE("Use shapeClients() and begin(), end() or range-based loops.") {
+  R__DEPRECATED(6,34, "Use shapeClients() and begin(), end() or range-based loops.") {
     return RooFIter(std::unique_ptr<RefCountListLegacyIterator_t>(makeLegacyIterator(_clientListShape)));
   }
   inline RooFIter serverMIterator() const
-  R__SUGGEST_ALTERNATIVE("Use servers() and begin(), end() or range-based loops.") {
+  R__DEPRECATED(6,34, "Use servers() and begin(), end() or range-based loops.") {
     return RooFIter(std::unique_ptr<RefCountListLegacyIterator_t>(makeLegacyIterator(_serverList)));
   }
 
   // --- Obsolete functions for backward compatibility
-  /// \deprecated Use getObservables()
-  inline RooArgSet* getDependents(const RooArgSet& set) const { return getObservables(set) ; }
-  /// \deprecated Use getObservables()
-  inline RooArgSet* getDependents(const RooAbsData* set) const { return getObservables(set) ; }
-  /// \deprecated Use getObservables()
-  inline RooArgSet* getDependents(const RooArgSet* depList) const { return getObservables(depList) ; }
+  RooFit::OwningPtr<RooArgSet> getDependents(const RooArgSet& set) const;
+  RooFit::OwningPtr<RooArgSet> getDependents(const RooAbsData* set) const;
+  RooFit::OwningPtr<RooArgSet> getDependents(const RooArgSet* depList) const;
   /// \deprecated Use observableOverlaps()
   inline bool dependentOverlaps(const RooAbsData* dset, const RooAbsArg& testArg) const { return observableOverlaps(dset,testArg) ; }
   /// \deprecated Use observableOverlaps()
@@ -252,7 +253,7 @@ public:
   /// Create a fundamental-type object that stores our type of value. The
   /// created object will have a valid value, but not necessarily the same
   /// as our value. The caller is responsible for deleting the returned object.
-  virtual RooAbsArg *createFundamental(const char* newname=nullptr) const = 0;
+  virtual RooFit::OwningPtr<RooAbsArg> createFundamental(const char* newname=nullptr) const = 0;
 
   /// Is this argument an l-value, i.e., can it appear on the left-hand side
   /// of an assignment expression? LValues are also special since they can
@@ -264,6 +265,7 @@ public:
 
   // Server redirection interface
   bool redirectServers(const RooAbsCollection& newServerList, bool mustReplaceAll=false, bool nameChange=false, bool isRecursionStep=false) ;
+  bool redirectServers(std::unordered_map<RooAbsArg*, RooAbsArg*> const& replacements);
   bool recursiveRedirectServers(const RooAbsCollection& newServerList, bool mustReplaceAll=false, bool nameChange=false, bool recurseInNewSet=true) ;
 
   virtual bool redirectServersHook(const RooAbsCollection & newServerList, bool mustReplaceAll,
@@ -292,22 +294,16 @@ public:
   RooFit::OwningPtr<RooArgSet> getParameters(const RooArgSet& observables, bool stripDisconnected=true) const;
   RooFit::OwningPtr<RooArgSet> getParameters(const RooArgSet* observables, bool stripDisconnected=true) const;
   virtual bool getParameters(const RooArgSet* observables, RooArgSet& outputSet, bool stripDisconnected=true) const;
-  /// Given a set of possible observables, return the observables that this PDF depends on.
-  RooArgSet* getObservables(const RooArgSet& set, bool valueOnly=true) const {
-    return getObservables(&set,valueOnly) ;
-  }
-  RooArgSet* getObservables(const RooAbsData* data) const ;
-  /// Return the observables of this pdf given the observables defined by `data`.
-  RooArgSet* getObservables(const RooAbsData& data) const {
-    return getObservables(&data) ;
-  }
-  RooArgSet* getObservables(const RooArgSet* depList, bool valueOnly=true) const ;
+  RooFit::OwningPtr<RooArgSet> getObservables(const RooArgSet& set, bool valueOnly=true) const;
+  RooFit::OwningPtr<RooArgSet> getObservables(const RooAbsData* data) const;
+  RooFit::OwningPtr<RooArgSet> getObservables(const RooAbsData& data) const;
+  RooFit::OwningPtr<RooArgSet> getObservables(const RooArgSet* depList, bool valueOnly=true) const;
   bool getObservables(const RooAbsCollection* depList, RooArgSet& outputSet, bool valueOnly=true) const;
   bool observableOverlaps(const RooAbsData* dset, const RooAbsArg& testArg) const ;
   bool observableOverlaps(const RooArgSet* depList, const RooAbsArg& testArg) const ;
   virtual bool checkObservables(const RooArgSet* nset) const ;
   bool recursiveCheckObservables(const RooArgSet* nset) const ;
-  RooArgSet* getComponents() const ;
+  RooFit::OwningPtr<RooArgSet> getComponents() const ;
 
 
 
@@ -365,7 +361,6 @@ public:
   inline bool isConstant() const {
     return _isConstant ; //getAttribute("Constant") ;
   }
-  RooLinkedList getCloningAncestors() const ;
 
   // Sorting
   Int_t Compare(const TObject* other) const override ;
@@ -383,7 +378,7 @@ public:
     return true ;
   }
   virtual bool hasRange(const char*) const {
-    // Has this argument a defined range (dummy interface always returns flase)
+    // Has this argument a defined range (dummy interface always returns false)
     return false ;
   }
 
@@ -533,7 +528,7 @@ public:
   //   * passing an initializer list
   // Before, there was only an overload taking a RooArg set, which caused an
   // implicit creation of a RooArgSet when a RooArgList was passed. This needs
-  // to be avoided, because if the passed RooArgList is owning the argumnets,
+  // to be avoided, because if the passed RooArgList is owning the arguments,
   // this information will be lost with the copy. The solution is to have one
   // overload that takes a general RooAbsCollection, and one overload for
   // RooArgList that is invoked in the case of passing an initializer list.
@@ -697,7 +692,7 @@ private:
   // Debug stuff
   static bool _verboseDirty ; // Static flag controlling verbose messaging for dirty state changes
   static bool _inhibitDirty ; // Static flag controlling global inhibit of dirty state propagation
-  bool _deleteWatch ; //! Delete watch flag
+  bool _deleteWatch = false; //! Delete watch flag
 
   bool inhibitDirty() const ;
 
@@ -707,38 +702,38 @@ private:
 
   /// Returns the token for retrieving results in the BatchMode. For internal use only.
   std::size_t dataToken() const { return _dataToken; }
-
-  /// Sets the token for retrieving results in the BatchMode. For internal use only.
-  void setDataToken(std::size_t index) { _dataToken = index; }
+  bool hasDataToken() const { return _dataToken != std::numeric_limits<std::size_t>::max(); }
+  void setDataToken(std::size_t index);
+  void resetDataToken() { _dataToken = std::numeric_limits<std::size_t>::max(); }
  protected:
 
 
-  mutable bool _valueDirty ;  // Flag set if value needs recalculating because input values modified
-  mutable bool _shapeDirty ;  // Flag set if value needs recalculating because input shapes modified
+  mutable bool _valueDirty = true;  // Flag set if value needs recalculating because input values modified
+  mutable bool _shapeDirty = true;  // Flag set if value needs recalculating because input shapes modified
 
-  mutable OperMode _operMode ; // Dirty state propagation mode
+  mutable OperMode _operMode = Auto; // Dirty state propagation mode
   mutable bool _fast = false; // Allow fast access mode in getVal() and proxies
 
   // Owned components
-  RooArgSet* _ownedComponents ; //! Set of owned component
+  RooArgSet* _ownedComponents = nullptr; //! Set of owned component
 
-  mutable bool _prohibitServerRedirect ; //! Prohibit server redirects -- Debugging tool
+  mutable bool _prohibitServerRedirect = false; //! Prohibit server redirects -- Debugging tool
 
   mutable RooExpensiveObjectCache* _eocache{nullptr}; //! Pointer to global cache manager for any expensive components created by this object
 
-  mutable const TNamed * _namePtr ; //! De-duplicated name pointer. This will be equal for all objects with the same name.
-  bool _isConstant ; //! Cached isConstant status
+  mutable const TNamed * _namePtr = nullptr; //! De-duplicated name pointer. This will be equal for all objects with the same name.
+  bool _isConstant = false; //! Cached isConstant status
 
-  mutable bool _localNoInhibitDirty ; //! Prevent 'AlwaysDirty' mode for this node
+  mutable bool _localNoInhibitDirty = false; //! Prevent 'AlwaysDirty' mode for this node
 
 /*   RooArgSet _leafNodeCache ; //! Cached leaf nodes */
 /*   RooArgSet _branchNodeCache //! Cached branch nodes     */
 
-  mutable RooWorkspace *_myws; //! In which workspace do I live, if any
+  mutable RooWorkspace *_myws = nullptr; //! In which workspace do I live, if any
 
-  std::size_t _dataToken = 0; //! Set by the RooFitDriver for this arg to retrieve its result in the run context
+  std::size_t _dataToken = std::numeric_limits<std::size_t>::max(); //! Set by the RooFitDriver for this arg to retrieve its result in the run context
 
-  /// \cond Internal
+  /// \cond ROOFIT_INTERNAL
   // Legacy streamers need the following statics:
   friend class RooFitResult;
 
@@ -747,6 +742,10 @@ private:
  protected:
   static std::stack<RooAbsArg*> _ioReadStack ; // reading stack
   /// \endcond
+
+ private:
+  void substituteServer(RooAbsArg *oldServer, RooAbsArg *newServer);
+  bool callRedirectServersHook(RooAbsCollection const& newSet, bool mustReplaceAll, bool nameChange, bool isRecursionStep);
 
   ClassDefOverride(RooAbsArg,9) // Abstract variable
 };

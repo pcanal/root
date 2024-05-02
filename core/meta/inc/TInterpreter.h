@@ -45,11 +45,7 @@ class TSeqCollection;
 
 R__EXTERN TVirtualMutex *gInterpreterMutex;
 
-#if defined (_REENTRANT) || defined (WIN32)
 # define R__LOCKGUARD_CLING(mutex)  ::ROOT::Internal::InterpreterMutexRegistrationRAII _R__UNIQUE_(R__guard)(mutex); { }
-#else
-# define R__LOCKGUARD_CLING(mutex)  (void)(mutex); { }
-#endif
 
 namespace ROOT {
 namespace Internal {
@@ -161,7 +157,7 @@ public:
    virtual Int_t    GenerateDictionary(const char *classes, const char *includes = nullptr, const char *options = nullptr) = 0;
    virtual char    *GetPrompt() = 0;
    virtual const char *GetSharedLibs() = 0;
-   virtual const char *GetClassSharedLibs(const char *cls) = 0;
+   virtual const char *GetClassSharedLibs(const char *cls, bool skipCore = true) = 0;
    virtual const char *GetSharedLibDeps(const char *lib, bool tryDyld = false) = 0;
    virtual const char *GetIncludePath() = 0;
    virtual const char *GetSTLIncludePath() const { return ""; }
@@ -521,6 +517,7 @@ public:
    virtual const char *MethodArgInfo_Name(MethodArgInfo_t * /* marginfo */) const {return nullptr;}
    virtual const char *MethodArgInfo_TypeName(MethodArgInfo_t * /* marginfo */) const {return nullptr;}
    virtual std::string MethodArgInfo_TypeNormalizedName(MethodArgInfo_t * /* marginfo */) const = 0;
+   virtual TypeInfo_t *MethodArgInfo_TypeInfo(MethodArgInfo_t * /* marginfo */) const {return nullptr;}
 
 
    // TypeInfo interface
@@ -535,6 +532,7 @@ public:
    virtual int    TypeInfo_RefType(TypeInfo_t * /* tinfo */) const {return 0;}
    virtual int    TypeInfo_Size(TypeInfo_t * /* tinfo */) const {return 0;}
    virtual const char *TypeInfo_TrueName(TypeInfo_t * /* tinfo */) const {return nullptr;}
+   virtual void  *TypeInfo_QualTypePtr(TypeInfo_t * /* tinfo */) const {return nullptr;}
 
 
    // TypedefInfo interface
@@ -551,6 +549,18 @@ public:
    virtual const char *TypedefInfo_Name(TypedefInfo_t * /* tinfo */) const {return nullptr;}
    virtual const char *TypedefInfo_Title(TypedefInfo_t * /* tinfo */) const {return nullptr;}
 
+   // QualType Opaque Ptr interface
+   virtual Bool_t IsSameType(const void * /* QualTypePtr1 */, const void * /* QualTypePtr2 */) const {return 0;}
+   virtual Bool_t IsIntegerType(const void * /* QualTypePtr */) const {return 0;}
+   virtual Bool_t IsSignedIntegerType(const void * /* QualTypePtr */) const {return 0;}
+   virtual Bool_t IsUnsignedIntegerType(const void * /* QualTypePtr */) const {return 0;}
+   virtual Bool_t IsFloatingType(const void * /* QualTypePtr */) const {return 0;}
+   virtual Bool_t IsPointerType(const void * /* QualTypePtr */) const {return 0;}
+   virtual Bool_t IsVoidPointerType(const void * /* QualTypePtr */) const {return 0;}
+
+   // FunctionDecl interface
+   virtual Bool_t FunctionDeclId_IsMethod(DeclId_t /* fdeclid */) const {return 0;}
+
    static TInterpreter *Instance();
 
    ClassDefOverride(TInterpreter,0)  //ABC defining interface to generic interpreter
@@ -560,10 +570,8 @@ public:
 typedef TInterpreter *CreateInterpreter_t(void* shlibHandle, const char* argv[]);
 typedef void *DestroyInterpreter_t(TInterpreter*);
 
-#ifndef __CINT__
 #define gInterpreter (TInterpreter::Instance())
 R__EXTERN TInterpreter* gCling;
-#endif
 
 inline ROOT::Internal::InterpreterMutexRegistrationRAII::InterpreterMutexRegistrationRAII(TVirtualMutex* mutex):
    fLockGuard(mutex)

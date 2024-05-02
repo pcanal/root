@@ -16,19 +16,22 @@
 #ifndef ROO_ABS_COLLECTION
 #define ROO_ABS_COLLECTION
 
-#include "TObject.h"
-#include "TString.h"
-#include "RooAbsArg.h"
-#include "RooPrintable.h"
-#include "RooCmdArg.h"
-#include "RooLinkedListIter.h"
+#include <RooAbsArg.h>
+#include <RooCmdArg.h>
+#include <RooFit/UniqueId.h>
+#include <RooLinkedListIter.h>
+#include <RooPrintable.h>
 
 // The range casts are not used in this file, but if you want to work with
 // RooFit collections you also want to have static_range_cast and
 // dynamic_range_cast available without including RangeCast.h every time.
-#include "ROOT/RRangeCast.hxx"
+#include <ROOT/RRangeCast.hxx>
 
-#include "ROOT/RSpan.hxx"
+#include <ROOT/RSpan.hxx>
+
+#include <TClass.h>
+#include <TObject.h>
+#include <TString.h>
 
 #include <string>
 #include <unordered_map>
@@ -52,8 +55,6 @@ ROOT::RRangeCast<T, true, Range_t> dynamic_range_cast(Range_t &&coll)
    return ROOT::RangeDynCast<T>(std::forward<Range_t>(coll));
 }
 
-
-class RooCmdArg;
 
 namespace RooFit {
 namespace Detail {
@@ -90,6 +91,12 @@ public:
   // Move constructor
   RooAbsCollection(RooAbsCollection && other);
 
+  /// Returns a unique ID that is different for every instantiated
+  /// RooAbsCollection. This ID can be used to check whether two collections
+  /// are the same object, which is safer than memory address comparisons that
+  /// might result in false positives when memory is recycled.
+  RooFit::UniqueId<RooAbsCollection> const& uniqueId() const { return _uniqueId; }
+
   // Copy list and contents (and optionally 'deep' servers)
   RooAbsCollection *snapshot(bool deepCopy=true) const ;
   bool snapshot(RooAbsCollection& output, bool deepCopy=true) const ;
@@ -110,7 +117,16 @@ public:
 
   // List content management
   virtual bool add(const RooAbsArg& var, bool silent=false) ;
+// The following function is not memory safe, because it takes ownership of var
+// without moving it. It is not publicly available in the memory safe
+// interfaces mode.
+#ifdef ROOFIT_MEMORY_SAFE_INTERFACES
+protected:
+#endif
   virtual bool addOwned(RooAbsArg& var, bool silent=false);
+#ifdef ROOFIT_MEMORY_SAFE_INTERFACES
+public:
+#endif
   bool addOwned(std::unique_ptr<RooAbsArg> var, bool silent=false);
   virtual RooAbsArg *addClone(const RooAbsArg& var, bool silent=false) ;
   virtual bool replace(const RooAbsArg& var1, const RooAbsArg& var2) ;
@@ -134,6 +150,32 @@ public:
   bool add(const RooAbsCollection& list, bool silent=false) {
     return add(list._list.begin(), list._list.end(), silent);
   }
+   /**
+    * \brief Adds elements of a given RooAbsCollection to the container if they match the specified type.
+    *
+    * This function iterates through the elements of the provided RooAbsCollection and checks if each element
+    * matches the specified type. If any element doesn't match the type, it throws an exception.
+    *
+    * \tparam Arg_t The type to match for elements in the collection. Must inherit from RooAbsArg.
+    * \param list The RooAbsCollection containing elements to be added.
+    * \param silent Forwarded to the non-typed add function. If true,
+    *               suppresses error messages when adding elements, e.g. when
+    *               the collection is a RooArgSet and the element is already in
+    *               the set.
+    * \return Returns true if all elements could be added, else false.
+    *
+    * \throws std::invalid_argument if an element in the collection doesn't match the specified type.
+    */
+   template <class Arg_t>
+   bool addTyped(const RooAbsCollection &list, bool silent = false)
+   {
+      for (RooAbsArg *arg : list) {
+         if (!dynamic_cast<Arg_t *>(arg)) {
+            throwAddTypedException(Arg_t::Class(), arg);
+         }
+      }
+      return add(list, silent);
+   }
   virtual bool addOwned(const RooAbsCollection& list, bool silent=false);
   bool addOwned(RooAbsCollection&& list, bool silent=false);
   virtual void   addClone(const RooAbsCollection& list, bool silent=false);
@@ -211,7 +253,7 @@ public:
   /// \note These iterators are slow. Use begin() and end() or
   /// range-based for loop instead.
   inline TIterator* createIterator(bool dir = kIterForward) const
-  R__SUGGEST_ALTERNATIVE("begin(), end() and range-based for loops.") {
+  R__DEPRECATED(6,34, "begin(), end() and range-based for loops.") {
     // Create and return an iterator over the elements in this collection
     return new RooLinkedListIter(makeLegacyIterator(dir));
   }
@@ -219,14 +261,14 @@ public:
   /// TIterator-style iteration over contained elements.
   /// \note This iterator is slow. Use begin() and end() or range-based for loop instead.
   RooLinkedListIter iterator(bool dir = kIterForward) const
-  R__SUGGEST_ALTERNATIVE("begin(), end() and range-based for loops.") {
+  R__DEPRECATED(6,34, "begin(), end() and range-based for loops.") {
     return RooLinkedListIter(makeLegacyIterator(dir));
   }
 
   /// One-time forward iterator.
   /// \note Use begin() and end() or range-based for loop instead.
   RooFIter fwdIterator() const
-  R__SUGGEST_ALTERNATIVE("begin(), end() and range-based for loops.") {
+  R__DEPRECATED(6,34, "begin(), end() and range-based for loops.") {
     return RooFIter(makeLegacyIterator());
   }
 
@@ -308,10 +350,10 @@ public:
   Int_t defaultPrintContents(Option_t* opt) const override ;
 
   // Latex printing methods
-  void printLatex(const RooCmdArg& arg1=RooCmdArg(), const RooCmdArg& arg2=RooCmdArg(),
-        const RooCmdArg& arg3=RooCmdArg(), const RooCmdArg& arg4=RooCmdArg(),
-        const RooCmdArg& arg5=RooCmdArg(), const RooCmdArg& arg6=RooCmdArg(),
-        const RooCmdArg& arg7=RooCmdArg(), const RooCmdArg& arg8=RooCmdArg()) const ;
+  void printLatex(const RooCmdArg& arg1={}, const RooCmdArg& arg2={},
+        const RooCmdArg& arg3={}, const RooCmdArg& arg4={},
+        const RooCmdArg& arg5={}, const RooCmdArg& arg6={},
+        const RooCmdArg& arg7={}, const RooCmdArg& arg8={}) const ;
   void printLatex(std::ostream& ofs, Int_t ncol, const char* option="NEYU", Int_t sigDigit=1,
                   const RooLinkedList& siblingLists=RooLinkedList(), const RooCmdArg* formatCmd=nullptr) const ;
 
@@ -387,13 +429,25 @@ protected:
   }
 
 private:
+
+#if ROOT_VERSION_CODE < ROOT_VERSION(6, 34, 00)
+  // TODO: Remove this friend declaration and function in 6.34, where it's not
+  // needed anymore because the deprecated legacy iterators will be removed.
+  friend class RooWorkspace;
   std::unique_ptr<LegacyIterator_t> makeLegacyIterator (bool forward = true) const;
+#else
+#error "Please remove this unneeded code."
+#endif
 
   using HashAssistedFind = RooFit::Detail::HashAssistedFind;
   mutable std::unique_ptr<HashAssistedFind> _hashAssistedFind; ///<!
   std::size_t _sizeThresholdForMapSearch = 100; ///<!
 
   void insert(RooAbsArg*);
+
+  static void throwAddTypedException(TClass *klass, RooAbsArg *arg);
+
+  const RooFit::UniqueId<RooAbsCollection> _uniqueId; //!
 
   ClassDefOverride(RooAbsCollection,3) // Collection of RooAbsArg objects
 };

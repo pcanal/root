@@ -10,10 +10,11 @@ add_subdirectory(fitpanel)
 add_subdirectory(guibuilder)
 add_subdirectory(guihtml)
 add_subdirectory(recorder)
-add_subdirectory(sessionviewer)
+if(proof)
+   add_subdirectory(sessionviewer)
+endif()
 
 if(webgui)
-   add_subdirectory(webdisplay)
    if(cefweb)
       add_subdirectory(cefdisplay)
    endif()
@@ -23,6 +24,9 @@ if(webgui)
    if(qt6web)
       add_subdirectory(qt6webdisplay)
    endif()
+
+   add_subdirectory(webdisplay)
+
    add_subdirectory(webgui6)
 
    if(root7)

@@ -47,6 +47,7 @@ ExternalProject_Add(
                -DCMAKE_OSX_DEPLOYMENT_TARGET=${CMAKE_OSX_DEPLOYMENT_TARGET}
                -DENABLE_PYTHON=OFF
                -DENABLE_CEPH=OFF
+               -DXRDCL_LIB_ONLY=ON
                ${XROOTD_WITH_OPENSSL3}
                -DCMAKE_INSTALL_RPATH:STRING=${XROOTD_PREFIX}/${XROOTD_LIBDIR}
     INSTALL_COMMAND ${CMAKE_COMMAND} --build . --target install
@@ -84,6 +85,10 @@ set_property(TARGET xrootd PROPERTY INTERFACE_BUILD_RPATH ${XROOTD_PREFIX}/${XRO
 add_dependencies(xrootd XROOTD)
 
 add_library(Xrootd::Xrootd ALIAS xrootd)
+
+# So that we can use ${XROOTD_CLIENT_LIBRARIES} in target_link_libraries, just
+# like you would do when finding and external xrootd with find_package(XRootD).
+set(XROOTD_CLIENT_LIBRARIES Xrootd::Xrootd CACHE INTERNAL "" FORCE)
 
 set_property(GLOBAL APPEND PROPERTY ROOT_BUILTIN_TARGETS XROOTD)
 

@@ -55,12 +55,14 @@
 #pragma link C++ class ROOT::Detail::RDF::RMergeableValue<TH3D>+;
 #pragma link C++ class ROOT::Detail::RDF::RMergeableValue<THnD>+;
 #pragma link C++ class ROOT::Detail::RDF::RMergeableValue<TGraph>+;
+#pragma link C++ class ROOT::Detail::RDF::RMergeableValue<TGraphAsymmErrors>+;
 #pragma link C++ class ROOT::Detail::RDF::RMergeableValue<TStatistic>+;
 #pragma link C++ class ROOT::Detail::RDF::RMergeableValue<TProfile>+;
 #pragma link C++ class ROOT::Detail::RDF::RMergeableValue<TProfile2D>+;
 #pragma link C++ class ROOT::Detail::RDF::RMergeableVariationsBase+;
 #pragma link C++ class TNotifyLink<ROOT::Internal::RDF::RNewSampleFlag>;
 #pragma link C++ class ROOT::RDF::RCutFlowReport;
+#pragma link C++ class ROOT::RDF::TCutInfo;
 
 #endif
 

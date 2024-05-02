@@ -42,7 +42,7 @@ in the input dataset.
 
 #include "TError.h"
 
-using namespace std;
+using std::cout, std::endl, std::string, std::vector, std::pair, std::map;
 
 ClassImp(RooNDKeysPdf);
 
@@ -58,7 +58,7 @@ ClassImp(RooNDKeysPdf);
 ///  - 'v' = Verbose flag
 ///
 /// The parameter rho (default = 1) provides an overall scale factor that can
-/// be applied to the bandwith calculated for each kernel. The nSigma parameter
+/// be applied to the bandwidth calculated for each kernel. The nSigma parameter
 /// determines the size of the box that is used to search for contributing kernels
 /// around a given point in observable space. The nSigma parameters is used
 /// in case of non-adaptive bandwidths and for the 1st non-adaptive pass for
@@ -70,22 +70,12 @@ ClassImp(RooNDKeysPdf);
 RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, const RooArgList &varList, const RooDataSet &data,
                            TString options, double rho, double nSigma, bool rotate, bool sortInput)
    : RooAbsPdf(name, title), _varList("varList", "List of variables", this),
-     _rhoList("rhoList", "List of rho parameters", this), _data(&data), _options(options), _widthFactor(rho),
+     _rhoList("rhoList", "List of rho parameters", this), _options(options), _widthFactor(rho),
      _nSigma(nSigma), _rotate(rotate), _sortInput(sortInput), _nAdpt(1)
 {
-  // Constructor
+  _varList.addTyped<RooAbsReal>(varList);
 
-  for (const auto var : varList) {
-    if (!dynamic_cast<const RooAbsReal*>(var)) {
-      coutE(InputArguments) << "RooNDKeysPdf::ctor(" << GetName() << ") ERROR: variable " << var->GetName()
-             << " is not of type RooAbsReal" << endl ;
-      R__ASSERT(0) ;
-    }
-    _varList.add(*var) ;
-    _varName.push_back(var->GetName());
-  }
-
-  createPdf();
+  createPdf(true, data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -94,21 +84,13 @@ RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, const RooArgList
 RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, const RooArgList &varList, const TH1 &hist,
                            TString options, double rho, double nSigma, bool rotate, bool sortInput)
    : RooAbsPdf(name, title), _varList("varList", "List of variables", this),
-     _rhoList("rhoList", "List of rho parameters", this), _ownedData(createDatasetFromHist(varList, hist)), _data(_ownedData.get()),
+     _rhoList("rhoList", "List of rho parameters", this),
      _options(options), _widthFactor(rho), _nSigma(nSigma), _rotate(rotate),
      _sortInput(sortInput), _nAdpt(1)
 {
-   for (const auto var : varList) {
-      if (!dynamic_cast<const RooAbsReal *>(var)) {
-         coutE(InputArguments) << "RooNDKeysPdf::ctor(" << GetName() << ") ERROR: variable " << var->GetName()
-                               << " is not of type RooAbsReal" << endl;
-         assert(0);
-      }
-      _varList.add(*var);
-      _varName.push_back(var->GetName());
-   }
+   _varList.addTyped<RooAbsReal>(varList);
 
-   createPdf();
+   createPdf(true, *std::unique_ptr<RooDataSet>{createDatasetFromHist(varList, hist)});
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -117,25 +99,17 @@ RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, const RooArgList
 RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, const RooArgList &varList, const RooDataSet &data,
                            const TVectorD &rho, TString options, double nSigma, bool rotate, bool sortInput)
    : RooAbsPdf(name, title), _varList("varList", "List of variables", this),
-     _rhoList("rhoList", "List of rho parameters", this), _data(&data), _options(options), _widthFactor(-1.0),
+     _rhoList("rhoList", "List of rho parameters", this), _options(options), _widthFactor(-1.0),
      _nSigma(nSigma), _rotate(rotate), _sortInput(sortInput), _nAdpt(1)
 {
-  for (const auto var : varList) {
-    if (!dynamic_cast<const RooAbsReal*>(var)) {
-       coutE(InputArguments) << "RooNDKeysPdf::ctor(" << GetName() << ") ERROR: variable " << var->GetName()
-                             << " is not of type RooAbsReal" << endl;
-       R__ASSERT(0);
-    }
-    _varList.add(*var) ;
-    _varName.push_back(var->GetName());
-  }
+  _varList.addTyped<RooAbsReal>(varList);
 
   // copy rho widths
-  if( _varList.getSize() != rho.GetNrows() ) {
+  if(int( _varList.size()) != rho.GetNrows() ) {
      coutE(InputArguments)
         << "ERROR:  RooNDKeysPdf::RooNDKeysPdf() : The vector-size of rho is different from that of varList."
         << "Unable to create the PDF." << endl;
-     R__ASSERT(_varList.getSize() == rho.GetNrows());
+     R__ASSERT(int(_varList.size()) == rho.GetNrows());
   }
 
   // negative width factor will serve as a switch in initialize()
@@ -146,7 +120,7 @@ RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, const RooArgList
      _rho[j] = rho[j]; /*cout<<"RooNDKeysPdf ctor, _rho["<<j<<"]="<<_rho[j]<<endl;*/
   }
 
-  createPdf(); // calls initialize ...
+  createPdf(true, data); // calls initialize ...
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -156,20 +130,12 @@ RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, const RooArgList
 RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, const RooArgList &varList, const RooDataSet &data,
                            const RooArgList &rhoList, TString options, double nSigma, bool rotate, bool sortInput)
    : RooAbsPdf(name, title), _varList("varList", "List of variables", this),
-     _rhoList("rhoList", "List of rho parameters", this), _data(&data), _options(options), _widthFactor(-1.0),
+     _rhoList("rhoList", "List of rho parameters", this), _options(options), _widthFactor(-1.0),
      _nSigma(nSigma), _rotate(rotate), _sortInput(sortInput), _nAdpt(1)
 {
-   for (const auto var : varList) {
-      if (!dynamic_cast<RooAbsReal *>(var)) {
-         coutE(InputArguments) << "RooNDKeysPdf::ctor(" << GetName() << ") ERROR: variable " << var->GetName()
-                               << " is not of type RooAbsReal" << endl;
-         assert(0);
-      }
-      _varList.add(*var);
-      _varName.push_back(var->GetName());
-   }
+   _varList.addTyped<RooAbsReal>(varList);
 
-   _rho.resize(rhoList.getSize(), 1.0);
+   _rho.resize(rhoList.size(), 1.0);
 
    for (unsigned int i=0; i < rhoList.size(); ++i) {
       const auto rho = rhoList.at(i);
@@ -183,17 +149,17 @@ RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, const RooArgList
    }
 
    // copy rho widths
-   if ((_varList.getSize() != _rhoList.getSize())) {
+   if ((_varList.size() != _rhoList.size())) {
       coutE(InputArguments) << "ERROR:  RooNDKeysPdf::RooNDKeysPdf() : The size of rhoList is different from varList."
                             << "Unable to create the PDF." << endl;
-      assert(_varList.getSize() == _rhoList.getSize());
+      assert(_varList.size() == _rhoList.size());
    }
 
    // keep track of changes in rho parameters
    _tracker = new RooChangeTracker("tracker", "track rho parameters", _rhoList, true); // check for value updates
    (void)_tracker->hasChanged(true); // first evaluation always true for new parameters (?)
 
-   createPdf();
+   createPdf(true, data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -202,22 +168,14 @@ RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, const RooArgList
 RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, const RooArgList &varList, const TH1 &hist,
                            const RooArgList &rhoList, TString options, double nSigma, bool rotate, bool sortInput)
    : RooAbsPdf(name, title), _varList("varList", "List of variables", this),
-     _rhoList("rhoList", "List of rho parameters", this), _ownedData(createDatasetFromHist(varList, hist)), _data(_ownedData.get()),
+     _rhoList("rhoList", "List of rho parameters", this),
      _options(options), _widthFactor(-1), _nSigma(nSigma), _rotate(rotate), _sortInput(sortInput),
      _nAdpt(1)
 {
-   for (const auto var : varList) {
-      if (!dynamic_cast<RooAbsReal *>(var)) {
-         coutE(InputArguments) << "RooNDKeysPdf::ctor(" << GetName() << ") ERROR: variable " << var->GetName()
-                               << " is not of type RooAbsReal" << endl;
-         assert(0);
-      }
-      _varList.add(*var);
-      _varName.push_back(var->GetName());
-   }
+   _varList.addTyped<RooAbsReal>(varList);
 
    // copy rho widths
-   _rho.resize(rhoList.getSize(), 1.0);
+   _rho.resize(rhoList.size(), 1.0);
 
    for (unsigned int i=0; i < rhoList.size(); ++i) {
       const auto rho = rhoList.at(i);
@@ -230,17 +188,17 @@ RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, const RooArgList
       _rho[i] = (dynamic_cast<RooAbsReal *>(rho))->getVal();
    }
 
-   if ((_varList.getSize() != _rhoList.getSize())) {
+   if ((_varList.size() != _rhoList.size())) {
       coutE(InputArguments) << "ERROR:  RooNDKeysPdf::RooNDKeysPdf() : The size of rhoList is different from varList."
                             << "Unable to create the PDF." << endl;
-      assert(_varList.getSize() == _rhoList.getSize());
+      assert(_varList.size() == _rhoList.size());
    }
 
    // keep track of changes in rho parameters
    _tracker = new RooChangeTracker("tracker", "track rho parameters", _rhoList, true); // check for value updates
    (void)_tracker->hasChanged(true); // first evaluation always true for new parameters (?)
 
-   createPdf();
+   createPdf(true, *std::unique_ptr<RooDataSet>{createDatasetFromHist(varList, hist)});
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -249,20 +207,20 @@ RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, const RooArgList
 RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, RooAbsReal &x, const RooDataSet &data, Mirror mirror,
                            double rho, double nSigma, bool rotate, bool sortInput)
    : RooAbsPdf(name, title), _varList("varList", "List of variables", this),
-     _rhoList("rhoList", "List of rho parameters", this), _data(&data), _options("a"), _widthFactor(rho),
+     _rhoList("rhoList", "List of rho parameters", this), _options("a"), _widthFactor(rho),
      _nSigma(nSigma), _rotate(rotate), _sortInput(sortInput), _nAdpt(1)
 {
    _varList.add(x);
-   _varName.push_back(x.GetName());
 
    if (mirror != NoMirror) {
-      if (mirror != MirrorBoth)
+      if (mirror != MirrorBoth) {
          coutW(InputArguments) << "RooNDKeysPdf::RooNDKeysPdf() : Warning : asymmetric mirror(s) no longer supported."
                                << endl;
+      }
       _options = "m";
    }
 
-   createPdf();
+   createPdf(true, data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -272,88 +230,82 @@ RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, RooAbsReal &x, c
 RooNDKeysPdf::RooNDKeysPdf(const char *name, const char *title, RooAbsReal &x, RooAbsReal &y, const RooDataSet &data,
                            TString options, double rho, double nSigma, bool rotate, bool sortInput)
    : RooAbsPdf(name, title), _varList("varList", "List of variables", this),
-     _rhoList("rhoList", "List of rho parameters", this), _data(&data), _options(options), _widthFactor(rho),
+     _rhoList("rhoList", "List of rho parameters", this), _options(options), _widthFactor(rho),
      _nSigma(nSigma), _rotate(rotate), _sortInput(sortInput), _nAdpt(1)
 {
    _varList.add(RooArgSet(x, y));
-   _varName.push_back(x.GetName());
-   _varName.push_back(y.GetName());
 
-   createPdf();
+   createPdf(true, data);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Constructor
 
 RooNDKeysPdf::RooNDKeysPdf(const RooNDKeysPdf &other, const char *name)
-   : RooAbsPdf(other, name), _varList("varList", this, other._varList), _rhoList("rhoList", this, other._rhoList),
-     _ownedData(other._ownedData ? new RooDataSet(*other._ownedData) : nullptr),
-     _data(_ownedData ? _ownedData.get() : other._data), _options(other._options), _widthFactor(other._widthFactor),
-     _nSigma(other._nSigma), _rotate(other._rotate), _sortInput(other._sortInput),
-     _nAdpt(other._nAdpt)
+   : RooAbsPdf(other, name),
+     _varList("varList", this, other._varList),
+     _rhoList("rhoList", this, other._rhoList),
+     _options(other._options),
+     _widthFactor(other._widthFactor),
+     _nSigma(other._nSigma),
+     _fixedShape(other._fixedShape),
+     _mirror(other._mirror),
+     _debug(other._debug),
+     _verbose(other._verbose),
+     _nDim(other._nDim),
+     _nEvents(other._nEvents),
+     _nEventsM(other._nEventsM),
+     _nEventsW(other._nEventsW),
+     _d(other._d),
+     _n(other._n),
+     _dataPts(other._dataPts),
+     _dataPtsR(other._dataPtsR),
+     _weights0(other._weights0),
+     _weights1(other._weights1),
+     _weights(_options.Contains("a") ? &_weights1 : &_weights0),
+     _sortTVIdcs(other._sortTVIdcs),
+     _rho(other._rho),
+     _x(other._x),
+     _x0(other._x0),
+     _x1(other._x1),
+     _x2(other._x2),
+     _mean(other._mean),
+     _sigma(other._sigma),
+     _xDatLo(other._xDatLo),
+     _xDatHi(other._xDatHi),
+     _xDatLo3s(other._xDatLo3s),
+     _xDatHi3s(other._xDatHi3s),
+     _netFluxZ(other._netFluxZ),
+     _nEventsBW(other._nEventsBW),
+     _nEventsBMSW(other._nEventsBMSW),
+     _xVarLo(other._xVarLo),
+     _xVarHi(other._xVarHi),
+     _xVarLoM3s(other._xVarLoM3s),
+     _xVarLoP3s(other._xVarLoP3s),
+     _xVarHiM3s(other._xVarHiM3s),
+     _xVarHiP3s(other._xVarHiP3s),
+     _bpsIdcs(other._bpsIdcs),
+     _ibNoSort(other._ibNoSort),
+     _sIdcs(other._sIdcs),
+     _bIdcs(other._bIdcs),
+     _bmsIdcs(other._bmsIdcs),
+     _rangeBoxInfo(other._rangeBoxInfo),
+     _fullBoxInfo(other._fullBoxInfo),
+     _idx(other._idx),
+     _minWeight(other._minWeight),
+     _maxWeight(other._maxWeight),
+     _wMap(other._wMap),
+     _covMat(new TMatrixDSym(*other._covMat)),
+     _corrMat(new TMatrixDSym(*other._corrMat)),
+     _rotMat(new TMatrixD(*other._rotMat)),
+     _sigmaR(new TVectorD(*other._sigmaR)),
+     _dx(new TVectorD(*other._dx)),
+     _sigmaAvgR(other._sigmaAvgR),
+     _rotate(other._rotate),
+     _sortInput(other._sortInput),
+     _nAdpt(other._nAdpt),
+     _tracker(other._tracker != nullptr ? new RooChangeTracker(*other._tracker) : nullptr)
 {
-   _tracker = (other._tracker != nullptr ? new RooChangeTracker(*other._tracker) : nullptr);
-   // if (_tracker!=nullptr) { _tracker->hasChanged(true); }
-
-   _fixedShape = other._fixedShape;
-   _mirror = other._mirror;
-   _debug = other._debug;
-   _verbose = other._verbose;
-   _nDim = other._nDim;
-   _nEvents = other._nEvents;
-   _nEventsM = other._nEventsM;
-   _nEventsW = other._nEventsW;
-   _d = other._d;
-   _n = other._n;
-   _dataPts = other._dataPts;
-   _dataPtsR = other._dataPtsR;
-   _weights0 = other._weights0;
-   _weights1 = other._weights1;
-   _weights = _options.Contains("a") ? &_weights1 : &_weights0;
-   _sortTVIdcs = other._sortTVIdcs;
-   _varName = other._varName;
-   _rho = other._rho;
-   _x = other._x;
-   _x0 = other._x0;
-   _x1 = other._x1;
-   _x2 = other._x2;
-   _xDatLo = other._xDatLo;
-   _xDatHi = other._xDatHi;
-   _xDatLo3s = other._xDatLo3s;
-   _xDatHi3s = other._xDatHi3s;
-   _mean = other._mean;
-   _sigma = other._sigma;
-
-   // BoxInfo
-   _netFluxZ = other._netFluxZ;
-   _nEventsBW = other._nEventsBW;
-   _nEventsBMSW = other._nEventsBMSW;
-   _xVarLo = other._xVarLo;
-   _xVarHi = other._xVarHi;
-   _xVarLoM3s = other._xVarLoM3s;
-   _xVarLoP3s = other._xVarLoP3s;
-   _xVarHiM3s = other._xVarHiM3s;
-   _xVarHiP3s = other._xVarHiP3s;
-   _bpsIdcs = other._bpsIdcs;
-   _ibNoSort = other._ibNoSort;
-   _sIdcs = other._sIdcs;
-   _bIdcs = other._bIdcs;
-   _bmsIdcs = other._bmsIdcs;
-
-   _rangeBoxInfo = other._rangeBoxInfo;
-   _fullBoxInfo = other._fullBoxInfo;
-
-   _idx = other._idx;
-   _minWeight = other._minWeight;
-   _maxWeight = other._maxWeight;
-   _wMap = other._wMap;
-
-   _covMat = new TMatrixDSym(*other._covMat);
-   _corrMat = new TMatrixDSym(*other._corrMat);
-   _rotMat = new TMatrixD(*other._rotMat);
-   _sigmaR = new TVectorD(*other._sigmaR);
-   _dx = new TVectorD(*other._dx);
-   _sigmaAvgR = other._sigmaAvgR;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -380,24 +332,24 @@ RooNDKeysPdf::~RooNDKeysPdf()
 ////////////////////////////////////////////////////////////////////////////////
 /// evaluation order of constructor.
 
-void RooNDKeysPdf::createPdf(bool firstCall)
+void RooNDKeysPdf::createPdf(bool firstCall, RooDataSet const& data)
 {
   if (firstCall) {
     // set options
     setOptions();
     // initialization
-    initialize();
+    initialize(data);
   }
 
 
   // copy dataset, calculate sigma_i's, determine min and max event weight
-  loadDataSet(firstCall);
+  loadDataSet(firstCall, data);
 
   // mirror dataset around dataset boundaries -- does not depend on event weights
   if (_mirror) mirrorDataSet();
 
   // store indices and weights of events with high enough weights
-  loadWeightSet();
+  loadWeightSet(data);
 
   // store indices of events in variable boundaries and box shell.
 //calculateShell(&_fullBoxInfo);
@@ -451,10 +403,10 @@ void RooNDKeysPdf::setOptions()
 ////////////////////////////////////////////////////////////////////////////////
 /// initialization
 
-void RooNDKeysPdf::initialize()
+void RooNDKeysPdf::initialize(RooDataSet const& data)
 {
-  _nDim      = _varList.getSize();
-  _nEvents   = (Int_t)_data->numEntries();
+  _nDim      = _varList.size();
+  _nEvents   = (Int_t)data.numEntries();
   _nEventsM  = _nEvents;
   _fixedShape= false;
 
@@ -476,7 +428,7 @@ void RooNDKeysPdf::initialize()
 
   _d         = static_cast<double>(_nDim);
 
-  vector<double> dummy(_nDim,0.);
+  std::vector<double> dummy(_nDim,0.);
   _dataPts.resize(_nEvents,dummy);
   _weights0.resize(_nEvents,dummy);
 
@@ -498,16 +450,16 @@ void RooNDKeysPdf::initialize()
   _xDatLo3s.resize(_nDim,0.);
   _xDatHi3s.resize(_nDim,0.);
 
-  boxInfoInit(&_fullBoxInfo,0,0xFFFF);
+  boxInfoInit(&_fullBoxInfo,nullptr,0xFFFF);
 
   _minWeight=0;
   _maxWeight=0;
   _wMap.clear();
 
-  _covMat = 0;
-  _corrMat= 0;
-  _rotMat = 0;
-  _sigmaR = 0;
+  _covMat = nullptr;
+  _corrMat= nullptr;
+  _rotMat = nullptr;
+  _sigmaR = nullptr;
   _dx = new TVectorD(_nDim); _dx->Zero();
   _dataPtsR.resize(_nEvents,*_dx);
 
@@ -521,7 +473,7 @@ void RooNDKeysPdf::initialize()
 ////////////////////////////////////////////////////////////////////////////////
 /// copy the dataset and calculate some useful variables
 
-void RooNDKeysPdf::loadDataSet(bool firstCall)
+void RooNDKeysPdf::loadDataSet(bool firstCall, RooDataSet const& data)
 {
   // first some initialization
   _nEventsW=0.;
@@ -538,22 +490,22 @@ void RooNDKeysPdf::loadDataSet(bool firstCall)
   _rotMat->Zero();
   _sigmaR->Zero();
 
-  const RooArgSet* values= _data->get();
+  const RooArgSet* values= data.get();
   vector<RooRealVar*> dVars(_nDim);
   for  (Int_t j=0; j<_nDim; j++) {
-    dVars[j] = (RooRealVar*)values->find(_varName[j].c_str());
+    dVars[j] = static_cast<RooRealVar*>(values->find(_varList[j].GetName()));
     _x0[j]=_x1[j]=_x2[j]=0.;
   }
 
   _idx.clear();
   for (Int_t i=0; i<_nEvents; i++) {
 
-    _data->get(i); // fills dVars
+    data.get(i); // fills dVars
     _idx.push_back(i);
-    vector<double>& point  = _dataPts[i];
+    std::vector<double>& point  = _dataPts[i];
     TVectorD& pointV = _dataPtsR[i];
 
-    double myweight = _data->weight(); // default is one?
+    double myweight = data.weight(); // default is one?
     if ( TMath::Abs(myweight)>_maxWeight ) { _maxWeight = TMath::Abs(myweight); }
     _nEventsW += myweight;
 
@@ -741,13 +693,13 @@ void RooNDKeysPdf::mirrorDataSet()
 
 ////////////////////////////////////////////////////////////////////////////////
 
-void RooNDKeysPdf::loadWeightSet()
+void RooNDKeysPdf::loadWeightSet(RooDataSet const& data)
 {
   _wMap.clear();
 
   for (Int_t i=0; i<_nEventsM; i++) {
-    _data->get(_idx[i]);
-    double myweight = _data->weight();
+    data.get(_idx[i]);
+    double myweight = data.weight();
     //if ( TMath::Abs(myweight)>_minWeight ) {
       _wMap[i] = myweight;
     //}
@@ -866,9 +818,10 @@ void RooNDKeysPdf::sortDataIndices(BoxInfo* bi)
   vector<TVectorD>::iterator dpRItr = _dataPtsR.begin();
   for (Int_t i = 0; dpRItr != _dataPtsR.end(); ++dpRItr, ++i) {
     if (bi) {
-      if (bi->bpsIdcs.find(i) != bi->bpsIdcs.end())
+      if (bi->bpsIdcs.find(i) != bi->bpsIdcs.end()) {
         // if (_wMap.find(i)!=_wMap.end())
         itrVecR.push_back(itPair(i, dpRItr));
+      }
     } else
       itrVecR.push_back(itPair(i, dpRItr));
   }
@@ -924,8 +877,8 @@ void RooNDKeysPdf::calculateBandWidth()
      vector<double> dummy(_nDim, 0.);
      _weights1.resize(_nEvents, dummy);
 
-     std::vector<std::vector<double>> *weights_prev(0);
-     std::vector<std::vector<double>> *weights_new(0);
+     std::vector<std::vector<double>> *weights_prev(nullptr);
+     std::vector<std::vector<double>> *weights_new(nullptr);
 
      // cout << "Number of adaptive iterations: " << _nAdpt << endl;
 
@@ -1140,10 +1093,11 @@ double RooNDKeysPdf::evaluate() const
   double val = gauss(_x,*_weights);
   //cout<<"returning "<<val<<endl;
 
-  if (val>=1E-20)
-    return val ;
-  else
-    return (1E-20) ;
+  if (val >= 1E-20) {
+     return val;
+  } else {
+     return (1E-20);
+  }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1175,7 +1129,7 @@ double RooNDKeysPdf::analyticalIntegral(Int_t code, const char* rangeName) const
   vector<bool> doInt(_nDim,true);
 
   // get BoxInfo
-  BoxInfo* bi(0);
+  BoxInfo* bi(nullptr);
 
   if (rangeName) {
     string rangeNameStr(rangeName) ;
@@ -1236,15 +1190,17 @@ double RooNDKeysPdf::analyticalIntegral(Int_t code, const char* rangeName) const
       for (Int_t j=0; j<_nDim; j++) {
    if(!doInt[j]) continue;
 
-   if ((x[j]>bi->xVarLoM3s[j] && x[j]<bi->xVarLoP3s[j]) && x[j]<(bi->xVarLo[j]+bi->xVarHi[j])/2.)
-     chi[j] = (x[j]-bi->xVarLo[j])/weight[j];
-   else if ((x[j]>bi->xVarHiM3s[j] && x[j]<bi->xVarHiP3s[j]) && x[j]>(bi->xVarLo[j]+bi->xVarHi[j])/2.)
-     chi[j] = (bi->xVarHi[j]-x[j])/weight[j];
+   if ((x[j] > bi->xVarLoM3s[j] && x[j] < bi->xVarLoP3s[j]) && x[j] < (bi->xVarLo[j] + bi->xVarHi[j]) / 2.) {
+              chi[j] = (x[j] - bi->xVarLo[j]) / weight[j];
+   } else if ((x[j] > bi->xVarHiM3s[j] && x[j] < bi->xVarHiP3s[j]) && x[j] > (bi->xVarLo[j] + bi->xVarHi[j]) / 2.) {
+              chi[j] = (bi->xVarHi[j] - x[j]) / weight[j];
+   }
 
-   if (chi[j]>0) // inVarRange
-     prob *= (0.5 + TMath::Erf(std::abs(chi[j])/sqrt(2.))/2.);
-   else // outside Var range
-     prob *= (0.5 - TMath::Erf(std::abs(chi[j])/sqrt(2.))/2.);
+   if (chi[j] > 0) { // inVarRange
+              prob *= (0.5 + TMath::Erf(std::abs(chi[j]) / sqrt(2.)) / 2.);
+   } else { // outside Var range
+              prob *= (0.5 - TMath::Erf(std::abs(chi[j]) / sqrt(2.)) / 2.);
+   }
       }
 
       norm += prob * _wMap.at(_idx[bi->sIdcs[i]]);

@@ -37,13 +37,13 @@
 #include <mach-o/dyld.h>
 #endif
 
-#ifdef __sun
-#   ifndef _REENTRANT
-#      if __SUNPRO_CC > 0x420
-#         define GLOBAL_ERRNO
-#      endif
-#   endif
-#endif
+#ifdef R__FBSD
+#include <sys/param.h>
+#include <sys/user.h>
+#include <sys/types.h>
+#include <libutil.h>
+#include <libprocstat.h>
+#endif // R__FBSD
 
 #if defined(__CYGWIN__) && defined(__GNUC__)
 #define ROOTBINARY "root_exe.exe"
@@ -82,20 +82,12 @@ using ROOT::ROOTX::gChildpid;
 static int gChildpid;
 static int GetErrno()
 {
-#ifdef GLOBAL_ERRNO
-   return ::errno;
-#else
    return errno;
-#endif
 }
 
 static void ResetErrno()
 {
-#ifdef GLOBAL_ERRNO
-   ::errno = 0;
-#else
    errno = 0;
-#endif
 }
 
 #endif
@@ -120,6 +112,19 @@ static const char *GetExePath()
          buf[ret] = 0;
          exepath = buf;
       }
+#endif
+#if defined(R__FBSD)
+  procstat* ps = procstat_open_sysctl();  //
+  kinfo_proc* kp = kinfo_getproc(getpid());
+
+  if (kp!=NULL) {
+     char path_str[PATH_MAX] = "";
+     procstat_getpathname(ps, kp, path_str, sizeof(path_str));
+     exepath = path_str;
+  }
+
+  free(kp);
+  procstat_close(ps);
 #endif
    }
    return exepath.c_str();
@@ -155,50 +160,54 @@ static void SetLibraryPath()
 # endif
    // Set library path for the different platforms.
 
-   char *msg;
+      char *msg;
 
-# if defined(__hpux)  || defined(_HIUX_SOURCE)
-   if (getenv("SHLIB_PATH")) {
-      msg = new char [strlen(getenv("ROOTSYS"))+strlen(getenv("SHLIB_PATH"))+100];
-      sprintf(msg, "SHLIB_PATH=%s/lib:%s", getenv("ROOTSYS"),
-                                           getenv("SHLIB_PATH"));
-   } else {
-      msg = new char [strlen(getenv("ROOTSYS"))+100];
-      sprintf(msg, "SHLIB_PATH=%s/lib", getenv("ROOTSYS"));
-   }
-# elif defined(_AIX)
+#if defined(__hpux) || defined(_HIUX_SOURCE)
+      if (getenv("SHLIB_PATH")) {
+         const auto msgLen = strlen(getenv("ROOTSYS")) + strlen(getenv("SHLIB_PATH")) + 100;
+         msg = new char[msgLen];
+         snprintf(msg, msgLen, "SHLIB_PATH=%s/lib:%s", getenv("ROOTSYS"), getenv("SHLIB_PATH"));
+      } else {
+         const auto msgLen = strlen(getenv("ROOTSYS")) + 100;
+         msg = new char[msgLen];
+         snprintf(msg, msgLen, "SHLIB_PATH=%s/lib", getenv("ROOTSYS"));
+      }
+#elif defined(_AIX)
    if (getenv("LIBPATH")) {
-      msg = new char [strlen(getenv("ROOTSYS"))+strlen(getenv("LIBPATH"))+100];
-      sprintf(msg, "LIBPATH=%s/lib:%s", getenv("ROOTSYS"),
-                                        getenv("LIBPATH"));
+      const auto msgLen = strlen(getenv("ROOTSYS")) + strlen(getenv("LIBPATH")) + 100;
+      msg = new char[msgLen];
+      snprintf(msg, msgLen, "LIBPATH=%s/lib:%s", getenv("ROOTSYS"), getenv("LIBPATH"));
    } else {
-      msg = new char [strlen(getenv("ROOTSYS"))+100];
-      sprintf(msg, "LIBPATH=%s/lib:/lib:/usr/lib", getenv("ROOTSYS"));
+      const auto msgLen = strlen(getenv("ROOTSYS")) + 100;
+      msg = new char[msgLen];
+      snprintf(msg, msgLen, "LIBPATH=%s/lib:/lib:/usr/lib", getenv("ROOTSYS"));
    }
-# elif defined(__APPLE__)
+#elif defined(__APPLE__)
    if (getenv("DYLD_LIBRARY_PATH")) {
-      msg = new char [strlen(getenv("ROOTSYS"))+strlen(getenv("DYLD_LIBRARY_PATH"))+100];
-      sprintf(msg, "DYLD_LIBRARY_PATH=%s/lib:%s", getenv("ROOTSYS"),
-                                                  getenv("DYLD_LIBRARY_PATH"));
+      const auto msgLen = strlen(getenv("ROOTSYS")) + strlen(getenv("DYLD_LIBRARY_PATH")) + 100;
+      msg = new char[msgLen];
+      snprintf(msg, msgLen, "DYLD_LIBRARY_PATH=%s/lib:%s", getenv("ROOTSYS"), getenv("DYLD_LIBRARY_PATH"));
    } else {
-      msg = new char [strlen(getenv("ROOTSYS"))+100];
-      sprintf(msg, "DYLD_LIBRARY_PATH=%s/lib", getenv("ROOTSYS"));
+      const auto msgLen = strlen(getenv("ROOTSYS")) + 100;
+      msg = new char[msgLen];
+      snprintf(msg, msgLen, "DYLD_LIBRARY_PATH=%s/lib", getenv("ROOTSYS"));
    }
-# else
+#else
    if (getenv("LD_LIBRARY_PATH")) {
-      msg = new char [strlen(getenv("ROOTSYS"))+strlen(getenv("LD_LIBRARY_PATH"))+100];
-      sprintf(msg, "LD_LIBRARY_PATH=%s/lib:%s", getenv("ROOTSYS"),
-                                                getenv("LD_LIBRARY_PATH"));
+      const auto msgLen = strlen(getenv("ROOTSYS")) + strlen(getenv("LD_LIBRARY_PATH")) + 100;
+      msg = new char[msgLen];
+      snprintf(msg, msgLen, "LD_LIBRARY_PATH=%s/lib:%s", getenv("ROOTSYS"), getenv("LD_LIBRARY_PATH"));
    } else {
-      msg = new char [strlen(getenv("ROOTSYS"))+100];
-#  if defined(__sun)
-      sprintf(msg, "LD_LIBRARY_PATH=%s/lib:/usr/dt/lib", getenv("ROOTSYS"));
-#  else
-      sprintf(msg, "LD_LIBRARY_PATH=%s/lib", getenv("ROOTSYS"));
-#  endif
+      const auto msgLen = strlen(getenv("ROOTSYS")) + 100;
+      msg = new char[msgLen];
+#if defined(__sun)
+      snprintf(msg, msgLen, "LD_LIBRARY_PATH=%s/lib:/usr/dt/lib", getenv("ROOTSYS"));
+#else
+      snprintf(msg, msgLen, "LD_LIBRARY_PATH=%s/lib", getenv("ROOTSYS"));
+#endif
    }
-# endif
-   putenv(msg);
+#endif
+      putenv(msg);
 # ifdef ROOTPREFIX
    } else /* if (getenv("ROOTIGNOREPREFIX")) */ {
       std::string ldLibPath = "LD_LIBRARY_PATH=" ROOTLIBDIR;
@@ -311,7 +320,7 @@ int main(int argc, char **argv)
       if (!strcmp(argv[i], "-?") || !strncmp(argv[i], "-h", 2) ||
           !strncmp(argv[i], "--help", 6)) {
          PrintUsage();
-         return 1;
+         return 0;
       }
       if (!strcmp(argv[i], "-b"))         batch    = true;
       if (!strcmp(argv[i], "-l"))         gNoLogo  = true;

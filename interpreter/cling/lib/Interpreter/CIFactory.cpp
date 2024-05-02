@@ -195,7 +195,7 @@ namespace {
     } else {
       std::string resourcePath;
       llvm::SmallString<512> tmp(llvmdir);
-      llvm::sys::path::append(tmp, "lib", "clang", CLANG_VERSION_STRING);
+      llvm::sys::path::append(tmp, "lib", "clang", CLANG_VERSION_MAJOR_STRING);
       resourcePath.assign(&tmp[0], tmp.size());
       return resourcePath;
     }
@@ -386,6 +386,7 @@ namespace {
 #else
     Opts.RTTIData = 0;
 #endif // _CPPRTTI
+    Opts.MSVolatile = 1;
     Opts.Trigraphs = 0;
     Opts.setDefaultCallingConv(clang::LangOptions::DCC_CDecl);
 #else // !_MSC_VER
@@ -414,7 +415,7 @@ namespace {
     Opts.MathErrno = 0;
 #endif
 
-#ifdef _REENTRANT
+#ifndef _WIN32
     Opts.POSIXThreads = 1;
 #endif
 #ifdef __FAST_MATH__
@@ -609,7 +610,7 @@ namespace {
       llvm::sys::path::append(systemLoc, modulemapFilename);
       // Check if we need to mount a custom modulemap. We may have it, for
       // instance when we are on osx or using libc++.
-      if (AllowModulemapOverride &&llvm::sys::fs::exists(systemLoc.str())) {
+      if (AllowModulemapOverride && llvm::sys::fs::exists(systemLoc.str())) {
         if (HSOpts.Verbose)
           cling::log() << "Loading '" << systemLoc.str() << "'\n";
 
@@ -651,6 +652,8 @@ namespace {
         ModuleMapFiles.push_back(systemLoc.str().str());
     };
 
+    const llvm::Triple &Triple = CI.getTarget().getTriple();
+
     if (!HSOpts.ImplicitModuleMaps) {
       // Register the modulemap files.
       llvm::SmallString<512> resourceDirLoc(HSOpts.ResourceDir);
@@ -659,17 +662,20 @@ namespace {
       llvm::SmallString<512> clingModuleMap(clingIncLoc);
       llvm::sys::path::append(clingModuleMap, "module.modulemap");
       ModuleMapFiles.push_back(clingModuleMap.str().str());
-#ifdef __APPLE__
-      llvm::SmallString<512> libcModuleMap(cIncLoc);
-      llvm::sys::path::append(libcModuleMap, "module.modulemap");
-      ModuleMapFiles.push_back(libcModuleMap.str().str());
-      llvm::SmallString<512> stdModuleMap(stdIncLoc);
-      llvm::sys::path::append(stdModuleMap, "module.modulemap");
-      ModuleMapFiles.push_back(stdModuleMap.str().str());
-#endif // __APPLE__
+      if (Triple.isMacOSX()) {
+        llvm::SmallString<512> libcModuleMap(cIncLoc);
+        llvm::sys::path::append(libcModuleMap, "module.modulemap");
+        ModuleMapFiles.push_back(libcModuleMap.str().str());
+        if (CI.getTarget().getSDKVersion() < VersionTuple(14, 4)) {
+          llvm::SmallString<512> stdModuleMap(stdIncLoc);
+          llvm::sys::path::append(stdModuleMap, "module.modulemap");
+          ModuleMapFiles.push_back(stdModuleMap.str().str());
+        }
+      }
     }
 
     std::string MOverlay;
+
 #ifdef _WIN32
     maybeAppendOverlayEntry(vcIncLoc.str(), "vcruntime.modulemap",
                             clingIncLoc.str().str(), MOverlay,
@@ -687,6 +693,12 @@ namespace {
                             clingIncLoc.str().str(), MOverlay,
                             /*RegisterModuleMap=*/ true,
                             /*AllowModulemapOverride=*/ false);
+#elif __APPLE__
+    if (Triple.isMacOSX() && CI.getTarget().getSDKVersion() >= VersionTuple(14, 4))
+      maybeAppendOverlayEntry(stdIncLoc.str(), "std_darwin.modulemap",
+                              clingIncLoc.str().str(), MOverlay,
+                              /*RegisterModuleMap=*/ true,
+                              /*AllowModulemapOverride=*/ false);
 #else
     maybeAppendOverlayEntry(cIncLoc.str(), "libc.modulemap",
                             clingIncLoc.str().str(), MOverlay,
@@ -742,8 +754,11 @@ namespace {
       if (!FS.get())
         llvm::errs() << "Error in modulemap.overlay!\n";
 
-      // Load virtual modulemap overlay file
-      CI.getInvocation().addOverlay(FS);
+      // Load virtual modulemap overlay file - we set up an OverlayFileSystem
+      // when calling createFileManager.
+      auto& OverlayVFS =
+          static_cast<llvm::vfs::OverlayFileSystem&>(CI.getVirtualFileSystem());
+      OverlayVFS.pushOverlay(FS);
     }
   }
 
@@ -1210,7 +1225,7 @@ namespace {
       DumpModuleInfoListener Listener(Out);
       HeaderSearchOptions &HSOpts =
         PP.getHeaderSearchInfo().getHeaderSearchOpts();
-      ASTReader::readASTFileControlBlock(CurInput, FileMgr,
+      ASTReader::readASTFileControlBlock(CurInput, FileMgr, CI.getModuleCache(),
                                          CI.getPCHContainerReader(),
                                          /*FindModuleFileExtensions=*/true,
                                          Listener,
@@ -1338,18 +1353,21 @@ namespace {
     if(COpts.CUDAHost)
       argvCompile.push_back("--cuda-host-only");
 
+    // argv[0] already inserted, get the rest
+    argvCompile.insert(argvCompile.end(), argv+1, argv + argc);
+
 #ifdef __linux__
     // Keep frame pointer to make JIT stack unwinding reliable for profiling
     if (profilingEnabled)
       argvCompile.push_back("-fno-omit-frame-pointer");
 #endif
 
-    // Disable optimizations and keep frame pointer when debugging
-    if (debuggingEnabled)
-      argvCompile.push_back("-O0 -fno-omit-frame-pointer");
-
-    // argv[0] already inserted, get the rest
-    argvCompile.insert(argvCompile.end(), argv+1, argv + argc);
+    // Disable optimizations and keep frame pointer when debugging, overriding
+    // other optimization options that might be in argv
+    if (debuggingEnabled) {
+      argvCompile.push_back("-O0");
+      argvCompile.push_back("-fno-omit-frame-pointer");
+    }
 
     // Add host specific includes, -resource-dir if necessary, and -isysroot
     std::string ClingBin = GetExecutablePath(argv[0]);
@@ -1450,7 +1468,9 @@ namespace {
       return CI.release();
     }
 
-    CI->createFileManager();
+    IntrusiveRefCntPtr<llvm::vfs::OverlayFileSystem> Overlay =
+        new llvm::vfs::OverlayFileSystem(llvm::vfs::getRealFileSystem());
+    CI->createFileManager(Overlay);
     clang::CompilerInvocation& Invocation = CI->getInvocation();
     std::string& PCHFile = Invocation.getPreprocessorOpts().ImplicitPCHInclude;
     bool InitLang = true, InitTarget = true;
@@ -1494,6 +1514,7 @@ namespace {
         PCHListener listener(Invocation);
         if (ASTReader::readASTFileControlBlock(PCHFile,
                                                CI->getFileManager(),
+                                               CI->getModuleCache(),
                                                CI->getPCHContainerReader(),
                                                false /*FindModuleFileExt*/,
                                                listener,
@@ -1665,7 +1686,6 @@ namespace {
     // Set CodeGen options.
     CodeGenOptions& CGOpts = CI->getCodeGenOpts();
 #ifdef _MSC_VER
-    CGOpts.MSVolatile = 1;
     CGOpts.RelaxedAliasing = 1;
     CGOpts.EmitCodeView = 1;
     CGOpts.CXXCtorDtorAliases = 1;

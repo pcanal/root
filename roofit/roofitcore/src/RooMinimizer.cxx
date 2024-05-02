@@ -18,7 +18,7 @@
 \class RooMinimizer
 \ingroup Roofitcore
 
-RooMinimizer is a wrapper class around ROOT::Fit:Fitter that
+Wrapper class around ROOT::Fit:Fitter that
 provides a seamless interface between the minimizer functionality
 and the native RooFit interface.
 By default the Minimizer is MINUIT for classic mode and MINUIT2
@@ -56,7 +56,7 @@ automatic PDF optimization.
 #include "TestStatistics/MinuitFcnGrad.h"
 #include "RooFit/TestStatistics/RooAbsL.h"
 #include "RooFit/TestStatistics/RooRealL.h"
-#ifdef R__HAS_ROOFIT_MULTIPROCESS
+#ifdef ROOFIT_MULTIPROCESS
 #include "RooFit/MultiProcess/Config.h"
 #include "RooFit/MultiProcess/ProcessTimer.h"
 #endif
@@ -71,10 +71,9 @@ automatic PDF optimization.
 #include <iostream>
 #include <stdexcept> // logic_error
 
-using namespace std;
+using std::endl;
 
 ClassImp(RooMinimizer);
-;
 
 std::unique_ptr<ROOT::Fit::Fitter> RooMinimizer::_theFitter = {};
 
@@ -107,13 +106,13 @@ RooMinimizer::RooMinimizer(RooAbsReal &function, Config const &cfg) : _cfg(cfg)
    if (nll_real != nullptr) {
       if (_cfg.parallelize != 0) { // new test statistic with multiprocessing library with
                                    // parallel likelihood or parallel gradient
-#ifdef R__HAS_ROOFIT_MULTIPROCESS
+#ifdef ROOFIT_MULTIPROCESS
          if (!_cfg.enableParallelGradient) {
             // Note that this is necessary because there is currently no serial-mode LikelihoodGradientWrapper.
             // We intend to repurpose RooGradMinimizerFcn to build such a LikelihoodGradientSerial class.
             coutI(InputArguments) << "Modular likelihood detected and likelihood parallelization requested, "
                                   << "also setting parallel gradient calculation mode." << std::endl;
-            _cfg.enableParallelGradient = 1;
+            _cfg.enableParallelGradient = true;
          }
          // If _cfg.parallelize is larger than zero set the number of workers to that value. Otherwise do not do
          // anything and let RooFit::MultiProcess handle the number of workers
@@ -223,7 +222,7 @@ void RooMinimizer::setMaxIterations(int n)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Change maximum number of likelihood function calss from MINUIT
+/// Change maximum number of likelihood function class from MINUIT
 /// (RooMinimizer default 500 * #%parameters)
 
 void RooMinimizer::setMaxFunctionCalls(int n)
@@ -312,7 +311,7 @@ bool RooMinimizer::fitFcn() const
 int RooMinimizer::minimize(const char *type, const char *alg)
 {
    if (_cfg.timingAnalysis) {
-#ifdef R__HAS_ROOFIT_MULTIPROCESS
+#ifdef ROOFIT_MULTIPROCESS
       addParamsToProcessTimer();
 #else
       throw std::logic_error("ProcessTimer, but ROOT was not compiled with multiprocessing enabled, "
@@ -323,7 +322,7 @@ int RooMinimizer::minimize(const char *type, const char *alg)
    _fcn->Synchronize(_theFitter->Config().ParamsSettings());
 
    setMinimizerType(type);
-   _theFitter->Config().SetMinimizer(type, alg);
+   _theFitter->Config().SetMinimizer(_cfg.minimizerType.c_str(), alg);
 
    profileStart();
    {
@@ -373,7 +372,7 @@ int RooMinimizer::migrad()
 
 int RooMinimizer::hesse()
 {
-   if (_theFitter->GetMinimizer() == 0) {
+   if (_theFitter->GetMinimizer() == nullptr) {
       coutW(Minimization) << "RooMinimizer::hesse: Error, run Migrad before Hesse!" << endl;
       _status = -1;
    } else {
@@ -404,7 +403,7 @@ int RooMinimizer::hesse()
 
 int RooMinimizer::minos()
 {
-   if (_theFitter->GetMinimizer() == 0) {
+   if (_theFitter->GetMinimizer() == nullptr) {
       coutW(Minimization) << "RooMinimizer::minos: Error, run Migrad before Minos!" << endl;
       _status = -1;
    } else {
@@ -436,7 +435,7 @@ int RooMinimizer::minos()
 
 int RooMinimizer::minos(const RooArgSet &minosParamList)
 {
-   if (_theFitter->GetMinimizer() == 0) {
+   if (_theFitter->GetMinimizer() == nullptr) {
       coutW(Minimization) << "RooMinimizer::minos: Error, run Migrad before Minos!" << endl;
       _status = -1;
    } else if (!minosParamList.empty()) {
@@ -456,8 +455,8 @@ int RooMinimizer::minos(const RooArgSet &minosParamList)
             }
          }
 
-         if (paramInd.size()) {
-            // set the parameter indeces
+         if (!paramInd.empty()) {
+            // set the parameter indices
             _theFitter->Config().SetMinosErrors(paramInd);
 
             _theFitter->Config().SetMinimizer(_cfg.minimizerType.c_str());
@@ -584,17 +583,18 @@ void RooMinimizer::optimizeConst(int flag)
 /// EDM setting, number of calls with evaluation problems, the minimized
 /// function value and the full correlation matrix.
 
-RooFitResult *RooMinimizer::save(const char *userName, const char *userTitle)
+RooFit::OwningPtr<RooFitResult> RooMinimizer::save(const char *userName, const char *userTitle)
 {
-   if (_theFitter->GetMinimizer() == 0) {
+   if (_theFitter->GetMinimizer() == nullptr) {
       coutW(Minimization) << "RooMinimizer::save: Error, run minimization before!" << endl;
       return nullptr;
    }
 
-   TString name, title;
+   TString name;
+   TString title;
    name = userName ? userName : Form("%s", _fcn->getFunctionName().c_str());
    title = userTitle ? userTitle : Form("%s", _fcn->getFunctionTitle().c_str());
-   RooFitResult *fitRes = new RooFitResult(name, title);
+   auto fitRes = std::make_unique<RooFitResult>(name, title);
 
    // Move eventual fixed parameters in floatList to constList
    RooArgList saveConstList(*(_fcn->GetConstParamList()));
@@ -640,7 +640,7 @@ RooFitResult *RooMinimizer::save(const char *userName, const char *userTitle)
 
    fitRes->setStatusHistory(_statusHistory);
 
-   return fitRes;
+   return RooFit::makeOwningPtr(std::move(fitRes));
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -690,7 +690,7 @@ RooPlot *RooMinimizer::contour(RooRealVar &var1, RooRealVar &var2, double n1, do
 
    // check first if a inimizer is available. If not means
    // the minimization is not done , so do it
-   if (_theFitter->GetMinimizer() == 0) {
+   if (_theFitter->GetMinimizer() == nullptr) {
       coutW(Minimization) << "RooMinimizer::contour: Error, run Migrad before contours!" << endl;
       return frame;
    }
@@ -748,7 +748,7 @@ RooPlot *RooMinimizer::contour(RooRealVar &var1, RooRealVar &var2, double n1, do
 
 void RooMinimizer::addParamsToProcessTimer()
 {
-#ifdef R__HAS_ROOFIT_MULTIPROCESS
+#ifdef ROOFIT_MULTIPROCESS
    // parameter indices for use in timing heat matrix
    std::vector<std::string> parameter_names;
    for (auto &&parameter : *_fcn->GetFloatParamList()) {
@@ -808,17 +808,17 @@ void RooMinimizer::applyCovarianceMatrix(TMatrixDSym const &V)
    _fcn->ApplyCovarianceMatrix(*_extV);
 }
 
-RooFitResult *RooMinimizer::lastMinuitFit()
+RooFit::OwningPtr<RooFitResult> RooMinimizer::lastMinuitFit()
 {
    return RooMinimizer::lastMinuitFit({});
 }
 
-RooFitResult *RooMinimizer::lastMinuitFit(const RooArgList &varList)
+RooFit::OwningPtr<RooFitResult> RooMinimizer::lastMinuitFit(const RooArgList &varList)
 {
    // Import the results of the last fit performed, interpreting
    // the fit parameters as the given varList of parameters.
 
-   if (_theFitter == 0 || _theFitter->GetMinimizer() == 0) {
+   if (_theFitter == nullptr || _theFitter->GetMinimizer() == nullptr) {
       oocoutE(nullptr, InputArguments) << "RooMinimizer::save: Error, run minimization before!" << endl;
       return nullptr;
    }
@@ -841,7 +841,7 @@ RooFitResult *RooMinimizer::lastMinuitFit(const RooArgList &varList)
       }
    }
 
-   RooFitResult *res = new RooFitResult("lastMinuitFit", "Last MINUIT fit");
+   auto res = std::make_unique<RooFitResult>("lastMinuitFit", "Last MINUIT fit");
 
    // Extract names of fit parameters
    // and construct corresponding RooRealVars
@@ -910,7 +910,7 @@ RooFitResult *RooMinimizer::lastMinuitFit(const RooArgList &varList)
    }
    res->fillCorrMatrix(globalCC, corrs, covs);
 
-   return res;
+   return RooFit::makeOwningPtr(std::move(res));
 }
 
 /// Try to recover from invalid function values. When invalid function values
@@ -927,10 +927,11 @@ void RooMinimizer::setRecoverFromNaNStrength(double strength)
 bool RooMinimizer::setLogFile(const char *logf)
 {
    _cfg.logf = logf;
-   if (_cfg.logf)
+   if (_cfg.logf) {
       return _fcn->SetLogFile(_cfg.logf);
-   else
+   } else {
       return false;
+   }
 }
 
 int RooMinimizer::evalCounter() const
@@ -958,7 +959,7 @@ double &RooMinimizer::maxFCN()
 
 int RooMinimizer::Config::getDefaultWorkers()
 {
-#ifdef R__HAS_ROOFIT_MULTIPROCESS
+#ifdef ROOFIT_MULTIPROCESS
    return RooFit::MultiProcess::Config::getDefaultNWorkers();
 #else
    return 0;

@@ -5,7 +5,7 @@
  * Project: TMVA - a Root-integrated toolkit for multivariate data analysis       *
  * Package: TMVA                                                                  *
  * Class  : VariableNormalizeTransform                                            *
- * Web    : http://tmva.sourceforge.net                                           *
+ *                                             *
  *                                                                                *
  * Description:                                                                   *
  *      Implementation (see header for description)                               *
@@ -24,7 +24,7 @@
  *                                                                                *
  * Redistribution and use in source and binary forms, with or without             *
  * modification, are permitted according to the terms listed in LICENSE           *
- * (http://tmva.sourceforge.net/LICENSE)                                          *
+ * (see tmva/doc/LICENSE)                                          *
  **********************************************************************************/
 
 /*! \class TMVA::VariableNormalizeTransform
@@ -288,8 +288,8 @@ std::vector<TString>* TMVA::VariableNormalizeTransform::GetTransformationStrings
       TString str("");
       VariableInfo& varInfo = (type=='v'?fDsi.GetVariableInfo(idx):(type=='t'?fDsi.GetTargetInfo(idx):fDsi.GetSpectatorInfo(idx)));
 
-      if (offset < 0) str = Form( "2*%g*([%s] + %g) - 1", scale, varInfo.GetLabel().Data(), -offset );
-      else            str = Form( "2*%g*([%s] - %g) - 1", scale, varInfo.GetLabel().Data(),  offset );
+      if (offset < 0) str = TString::Format( "2*%g*([%s] + %g) - 1", scale, varInfo.GetLabel().Data(), -offset );
+      else            str = TString::Format( "2*%g*([%s] - %g) - 1", scale, varInfo.GetLabel().Data(),  offset );
       (*strVec)[iinp] = str;
 
       ++iinp;

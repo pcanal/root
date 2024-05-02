@@ -16,8 +16,6 @@
 #include <cassert>
 #include <cmath>
 
-using namespace std;
-
 namespace ROOT {
 
    namespace Fit
@@ -67,7 +65,7 @@ namespace ROOT {
       InitDataVector( );
     }
 
-    /** constructurs using external data */
+    /** constructors using external data */
 
     /**
       constructor from external data for 1D with errors on  coordinate and value
@@ -275,7 +273,7 @@ namespace ROOT {
         if ( !fData.empty() )
           fDataPtr = &fData.front();
 
-         // copy coordinate erro and set correct pointers
+         // copy coordinate errors and set correct pointers
         fCoordErrors = rhs.fCoordErrors;
         if (!fCoordErrors.empty()) {
            assert(kCoordError == fErrorType || kAsymError == fErrorType);
@@ -822,7 +820,9 @@ namespace ROOT {
              double y = Value(i);
              double err = Error(i);
              fSumContent += y;
-             if (y != 0 || err != 1.0)  fSumError2 += err*err;
+             if (fErrorType != kNoError) {
+               if (y != 0 || err != 1.0 )  fSumError2 += err*err;
+             }
           }
        }
        else {
@@ -836,7 +836,8 @@ namespace ROOT {
           }
        }
        // set the weight flag
-       fIsWeighted =  (fSumContent != fSumError2);
+       if (fErrorType != kNoError)
+        fIsWeighted =  (fSumContent != fSumError2);
     }
 
   } // end namespace Fit

@@ -27,7 +27,6 @@
 #include "TRegexp.h"
 #include "TPRegexp.h"
 #include "TException.h"
-#include "Demangle.h"
 #include "TEnv.h"
 #include "Getline.h"
 #include "TInterpreter.h"
@@ -80,6 +79,14 @@
 #elif defined(R__FBSD) || defined(R__OBSD)
 #   include <sys/param.h>
 #   include <sys/mount.h>
+# ifdef R__FBSD
+#   include <sys/user.h>
+#   include <sys/types.h>
+#   include <sys/param.h>
+#   include <sys/queue.h>
+#   include <libprocstat.h>
+#   include <libutil.h>
+# endif
 #else
 #   include <sys/statfs.h>
 #endif
@@ -155,6 +162,14 @@ extern "C" {
 };
 #endif
 
+#if defined(R__ARC4_STDLIB)
+// do nothing, stdlib.h already included
+#elif defined(R__ARC4_BSDLIB)
+#include <bsd/stdlib.h>
+#elif defined(R__GETRANDOM_CLIB)
+#include <sys/random.h>
+#endif
+
 #ifdef HAVE_UTMPX_H
 #include <utmpx.h>
 #define STRUCT_UTMP struct utmpx
@@ -180,7 +195,7 @@ extern "C" {
 #   endif
 #   define HAVE_DLADDR
 #endif
-#if defined(R__MACOSX)
+#if defined(R__MACOSX) || defined(R__FBSD)
 #      define HAVE_BACKTRACE_SYMBOLS_FD
 #      define HAVE_DLADDR
 #endif
@@ -404,7 +419,7 @@ static const char *GetExePath()
 #if defined(R__MACOSX)
       exepath = _dyld_get_image_name(0);
 #elif defined(R__LINUX) || defined(R__SOLARIS) || defined(R__FBSD)
-      char buf[kMAXPATHLEN];  // exe path name
+      char buf[kMAXPATHLEN]="";  // exe path name
 
       // get the name from the link in /proc
 #if defined(R__LINUX)
@@ -412,7 +427,16 @@ static const char *GetExePath()
 #elif defined(R__SOLARIS)
       int ret = readlink("/proc/self/path/a.out", buf, kMAXPATHLEN);
 #elif defined(R__FBSD)
-      int ret = readlink("/proc/curproc/file", buf, kMAXPATHLEN);
+      procstat* ps = procstat_open_sysctl();
+      kinfo_proc* kp = kinfo_getproc(getpid());
+
+      int ret{0};
+      if (kp!=NULL) {
+	procstat_getpathname(ps, kp, buf, sizeof(buf));
+      }
+      free(kp);
+      procstat_close(ps);
+      exepath = buf;
 #endif
       if (ret > 0 && ret < kMAXPATHLEN) {
          buf[ret] = 0;
@@ -705,6 +729,24 @@ const char *TUnixSystem::GetError()
    if (err < 0 || err >= sys_nerr)
       return Form("errno out of range %d", err);
    return sys_errlist[err];
+#endif
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Return cryptographic random number
+/// Fill provided buffer with random values
+/// Returns number of bytes written to buffer or -1 in case of error
+
+Int_t TUnixSystem::GetCryptoRandom(void *buf, Int_t len)
+{
+#if defined(R__ARC4_STDLIB) || defined(R__ARC4_BSDLIB)
+   arc4random_buf(buf, len);
+   return len;
+#elif defined(R__GETRANDOM_CLIB)
+   return getrandom(buf, len, GRND_NONBLOCK);
+#else
+#error "Reliable cryptographic random function not defined"
+   return -1;
 #endif
 }
 
@@ -1465,20 +1507,25 @@ const char *TUnixSystem::TempDirectory() const
 /// Create a secure temporary file by appending a unique
 /// 6 letter string to base. The file will be created in
 /// a standard (system) directory or in the directory
-/// provided in dir. The full filename is returned in base
+/// provided in dir. Optionally one can provide suffix
+/// append to the final name - like extension ".txt" or ".html".
+/// The full filename is returned in base
 /// and a filepointer is returned for safely writing to the file
 /// (this avoids certain security problems). Returns 0 in case
 /// of error.
 
-FILE *TUnixSystem::TempFileName(TString &base, const char *dir)
+FILE *TUnixSystem::TempFileName(TString &base, const char *dir, const char *suffix)
 {
    char *b = ConcatFileName(dir ? dir : TempDirectory(), base);
    base = b;
    base += "XXXXXX";
+   const bool hasSuffix = suffix && *suffix;
+   if (hasSuffix)
+      base.Append(suffix);
    delete [] b;
 
    char *arg = StrDup(base);
-   int fd = mkstemp(arg);
+   int fd = hasSuffix ? mkstemps(arg, strlen(suffix)) : mkstemp(arg);
    base = arg;
    delete [] arg;
 
@@ -4755,6 +4802,38 @@ const char *TUnixSystem::FindDynamicLibrary(TString& sLib, Bool_t quiet)
 
 //---- System, CPU and Memory info ---------------------------------------------
 
+#if defined(R__FBSD)
+///////////////////////////////////////////////////////////////////////////////
+//// Get system info for FreeBSD
+
+static void GetFreeBSDSysInfo(SysInfo_t *sysinfo)
+{
+   // it probably would be better to get this information from syscalls
+   // this is possibly less error prone
+   FILE *p = gSystem->OpenPipe("sysctl -n kern.ostype hw.model hw.ncpu "
+                               "hw.physmem dev.cpu.0.freq", "r");
+   TString s;
+   s.Gets(p);
+   sysinfo->fOS = s;
+   s.Gets(p);
+   sysinfo->fModel = s;
+   s.Gets(p);
+   sysinfo->fCpus = s.Atoi();
+   s.Gets(p);
+   Long64_t t = s.Atoll();
+   sysinfo->fPhysRam = Int_t(t / 1024 / 1024);
+   s.Gets(p);
+   t = s.Atoll();
+   sysinfo->fCpuSpeed = Int_t(t / 1000000);
+   gSystem->ClosePipe(p);
+}
+
+static void GetFreeBSDCpuInfo(CpuInfo_t*, Int_t)
+{
+  //not yet implemented
+}
+#endif
+
 #if defined(R__MACOSX)
 #include <sys/resource.h>
 #include <mach/mach.h>
@@ -5206,6 +5285,8 @@ int TUnixSystem::GetSysInfo(SysInfo_t *info) const
       GetDarwinSysInfo(&sysinfo);
 #elif defined(R__LINUX)
       GetLinuxSysInfo(&sysinfo);
+#elif defined(R__FBSD)
+      GetFreeBSDSysInfo(&sysinfo);
 #endif
    }
 
@@ -5227,6 +5308,8 @@ int TUnixSystem::GetCpuInfo(CpuInfo_t *info, Int_t sampleTime) const
    GetDarwinCpuInfo(info, sampleTime);
 #elif defined(R__LINUX)
    GetLinuxCpuInfo(info, sampleTime);
+#elif defined(R__FBSD)
+   GetFreeBSDCpuInfo(info, sampleTime);
 #endif
 
    return 0;

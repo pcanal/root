@@ -398,7 +398,7 @@ RModel Parse(std::string filename, std::vector<std::vector<size_t>> inputShapes,
     PyRunString("import torch",fGlobalNS,fLocalNS);
     PyRunString("print('Torch Version: '+torch.__version__)",fGlobalNS,fLocalNS);
     PyRunString("from torch.onnx.utils import _model_to_graph",fGlobalNS,fLocalNS);
-    PyRunString("from torch.onnx.symbolic_helper import _set_onnx_shape_inference",fGlobalNS,fLocalNS);
+    //PyRunString("from torch.onnx.symbolic_helper import _set_onnx_shape_inference",fGlobalNS,fLocalNS);
     PyRunString(TString::Format("model= torch.jit.load('%s')",filename.c_str()),fGlobalNS,fLocalNS);
     PyRunString("globals().update(locals())",fGlobalNS,fLocalNS);
     PyRunString("model.cpu()",fGlobalNS,fLocalNS);
@@ -416,18 +416,24 @@ RModel Parse(std::string filename, std::vector<std::vector<size_t>> inputShapes,
 
 
     //Getting the ONNX graph from model using the dummy inputs and example outputs
-    PyRunString("_set_onnx_shape_inference(True)",fGlobalNS,fLocalNS);
+    //PyRunString("_set_onnx_shape_inference(True)",fGlobalNS,fLocalNS);
     PyRunString("graph=_model_to_graph(model,dummyInputs)",fGlobalNS,fLocalNS);
 
 
     //Extracting the model information in list modelData
     PyRunString("modelData=[]",fGlobalNS,fLocalNS);
+    // The '_node_get' helper function is used to avoid dependency on onnx submodule
+    // (for the subscript operator of torch._C.Node), as done in https://github.com/pytorch/pytorch/pull/82628
+    PyRunString("def _node_get(node, key):\n"
+                "    sel = node.kindOf(key)\n"
+                "    return getattr(node, sel)(key)\n",
+                fGlobalNS, fLocalNS);
     PyRunString("for i in graph[0].nodes():\n"
                 "    globals().update(locals())\n"
                 "    nodeData={}\n"
                 "    nodeData['nodeType']=i.kind()\n"
                 "    nodeAttributeNames=[x for x in i.attributeNames()]\n"
-                "    nodeAttributes={j:i[j] for j in nodeAttributeNames}\n"
+                "    nodeAttributes={j: _node_get(i, j) for j in nodeAttributeNames}\n"
                 "    nodeData['nodeAttributes']=nodeAttributes\n"
                 "    nodeInputs=[x for x in i.inputs()]\n"
                 "    nodeInputNames=[x.debugName() for x in nodeInputs]\n"
@@ -437,7 +443,8 @@ RModel Parse(std::string filename, std::vector<std::vector<size_t>> inputShapes,
                 "    nodeData['nodeOutputs']=nodeOutputNames\n"
                 "    nodeDType=[x.type().scalarType() for x in nodeOutputs]\n"
                 "    nodeData['nodeDType']=nodeDType\n"
-                "    modelData.append(nodeData)",fGlobalNS,fLocalNS);
+                "    modelData.append(nodeData)",
+                fGlobalNS, fLocalNS);
 
     PyObject* fPModel = PyDict_GetItemString(fLocalNS,"modelData");
     Py_ssize_t fPModelSize = PyList_Size(fPModel);

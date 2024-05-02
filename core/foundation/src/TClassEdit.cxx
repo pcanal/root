@@ -24,12 +24,12 @@
 #include <stack>
 // for shared_ptr
 #include <memory>
-#include "ROOT/RStringView.hxx"
+#include <string_view>
 #include <algorithm>
 
 #include "TSpinLockGuard.h"
 
-using namespace std;
+using std::string, std::string_view, std::vector, std::set;
 
 namespace {
    static TClassEdit::TInterpreterLookupHelper *gInterpreterHelper = nullptr;
@@ -2005,10 +2005,10 @@ public:
       auto argPos = std::find_if(argsBeginPlusOne, argsEnd,
            [](std::string& arg){return (!arg.empty() && arg.front() == ':');});
       if (argPos != argsEnd) {
-         const int lenght = clName.size();
+         const int length = clName.size();
          int wedgeBalance = 0;
          int lastOpenWedge = 0;
-         for (int i=lenght-1;i>-1;i--) {
+         for (int i=length-1;i>-1;i--) {
             auto& c = clName.at(i);
             if (c == '<') {
                wedgeBalance++;

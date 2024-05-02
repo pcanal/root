@@ -34,16 +34,12 @@ class RooArgList;
 class RooArgSet;
 class RooChangeTracker;
 
-#ifndef __CINT__
 class VecVecDouble : public std::vector<std::vector<double> >  { } ;
 class VecTVecDouble : public std::vector<TVectorD> { } ;
 typedef std::pair<Int_t, VecVecDouble::iterator > iiPair;
 typedef std::vector< iiPair > iiVec;
 typedef std::pair<Int_t, VecTVecDouble::iterator > itPair;
 typedef std::vector< itPair > itVec;
-#else
-class itPair ;
-#endif
 
 class RooNDKeysPdf : public RooAbsPdf {
 
@@ -90,11 +86,6 @@ public:
   Int_t getAnalyticalIntegral(RooArgSet& allVars, RooArgSet& analVars, const char* rangeName=nullptr) const override ;
   double analyticalIntegral(Int_t code, const char* rangeName=nullptr) const override ;
 
-  inline void fixShape(bool fix) {
-    createPdf(false);
-    _fixedShape=fix;
-  }
-
   TMatrixD getWeights(const int &k) const;
 
   struct BoxInfo {
@@ -117,12 +108,12 @@ protected:
 
   double evaluate() const override;
 
-  void createPdf(bool firstCall = true);
+  void createPdf(bool firstCall, RooDataSet const& data);
   void setOptions();
-  void initialize();
-  void loadDataSet(bool firstCall);
+  void initialize(RooDataSet const& data);
+  void loadDataSet(bool firstCall, RooDataSet const& data);
   void mirrorDataSet();
-  void loadWeightSet();
+  void loadWeightSet(RooDataSet const& data);
   void calculateShell(BoxInfo *bi) const;
   void calculatePreNorm(BoxInfo *bi) const;
   void sortDataIndices(BoxInfo *bi = nullptr);
@@ -138,8 +129,6 @@ protected:
     const_cast<RooNDKeysPdf*>(this)->calculateBandWidth();
   }
 
-  std::unique_ptr<RooDataSet> _ownedData{nullptr};
-  const RooDataSet* _data; //! do not persist
   mutable TString _options;
   double _widthFactor;
   double _nSigma;
@@ -165,7 +154,6 @@ protected:
 
   std::vector<itVec> _sortTVIdcs; //!
 
-  std::vector<std::string> _varName;
   mutable std::vector<double> _rho;
   RooArgSet _dataVars;
   mutable std::vector<double> _x; // Cache for x values
@@ -207,7 +195,7 @@ protected:
 
   RooChangeTracker *_tracker{nullptr}; //
 
-  ClassDefOverride(RooNDKeysPdf, 1) // General N-dimensional non-parametric kernel estimation p.d.f
+  ClassDefOverride(RooNDKeysPdf, 3) // General N-dimensional non-parametric kernel estimation p.d.f
 };
 
 #endif

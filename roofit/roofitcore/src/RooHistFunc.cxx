@@ -19,7 +19,7 @@
 \class RooHistFunc
 \ingroup Roofitcore
 
-RooHistFunc implements a real-valued function sampled from a
+A real-valued function sampled from a
 multidimensional histogram. The histogram can have an arbitrary number of real or
 discrete dimensions and may have negative values.
 **/
@@ -31,7 +31,7 @@ discrete dimensions and may have negative values.
 #include "RooCategory.h"
 #include "RooWorkspace.h"
 #include "RooHistPdf.h"
-#include "RooHelpers.h"
+#include "RooFitImplHelpers.h"
 
 #include "TError.h"
 #include "TBuffer.h"
@@ -53,10 +53,9 @@ RooHistFunc::RooHistFunc(const char *name, const char *title, const RooArgSet& v
              const RooDataHist& dhist, Int_t intOrder) :
   RooAbsReal(name,title),
   _depList("depList","List of dependents",this),
-  _dataHist((RooDataHist*)&dhist),
+  _dataHist(const_cast<RooDataHist*>(&dhist)),
   _codeReg(10),
-  _intOrder(intOrder),
-  _cdfBoundaries(false)
+  _intOrder(intOrder)
 {
   _histObsList.addClone(vars) ;
   _depList.add(vars) ;
@@ -77,7 +76,7 @@ RooHistFunc::RooHistFunc(const char *name, const char *title, const RooArgSet& v
     }
   }
 
-  TRACE_CREATE
+  TRACE_CREATE;
 }
 
 
@@ -93,10 +92,9 @@ RooHistFunc::RooHistFunc(const char *name, const char *title, const RooArgList& 
              const RooDataHist& dhist, Int_t intOrder) :
   RooAbsReal(name,title),
   _depList("depList","List of dependents",this),
-  _dataHist((RooDataHist*)&dhist),
+  _dataHist(const_cast<RooDataHist*>(&dhist)),
   _codeReg(10),
-  _intOrder(intOrder),
-  _cdfBoundaries(false)
+  _intOrder(intOrder)
 {
   _histObsList.addClone(histObs) ;
   _depList.add(funcObs) ;
@@ -117,23 +115,21 @@ RooHistFunc::RooHistFunc(const char *name, const char *title, const RooArgList& 
     }
   }
 
-  TRACE_CREATE
+  TRACE_CREATE;
 }
 
-
-RooHistFunc::RooHistFunc(const char *name, const char *title, const RooArgSet& vars,
-           std::unique_ptr<RooDataHist> dhist, int intOrder)
-  : RooHistFunc{name, title, vars, *dhist, intOrder}
+RooHistFunc::RooHistFunc(const char *name, const char *title, const RooArgSet &vars, std::unique_ptr<RooDataHist> dhist,
+                         int intOrder)
+   : RooHistFunc{name, title, vars, *dhist, intOrder}
 {
-  _ownedDataHist = std::move(dhist);
+   initializeOwnedDataHist(std::move(dhist));
 }
 
-
-RooHistFunc::RooHistFunc(const char *name, const char *title, const RooArgList& pdfObs, const RooArgList& histObs,
-           std::unique_ptr<RooDataHist> dhist, int intOrder)
-  : RooHistFunc{name, title, pdfObs, histObs, *dhist, intOrder}
+RooHistFunc::RooHistFunc(const char *name, const char *title, const RooArgList &pdfObs, const RooArgList &histObs,
+                         std::unique_ptr<RooDataHist> dhist, int intOrder)
+   : RooHistFunc{name, title, pdfObs, histObs, *dhist, intOrder}
 {
-  _ownedDataHist = std::move(dhist);
+   initializeOwnedDataHist(std::move(dhist));
 }
 
 
@@ -150,7 +146,7 @@ RooHistFunc::RooHistFunc(const RooHistFunc& other, const char* name) :
   _totVolume(other._totVolume),
   _unitNorm(other._unitNorm)
 {
-  TRACE_CREATE
+  TRACE_CREATE;
 
   _histObsList.addClone(other._histObsList) ;
 }
@@ -161,7 +157,7 @@ RooHistFunc::RooHistFunc(const RooHistFunc& other, const char* name) :
 
 RooHistFunc::~RooHistFunc()
 {
-  TRACE_DESTROY
+  TRACE_DESTROY;
 }
 
 
@@ -183,7 +179,7 @@ double RooHistFunc::evaluate() const
       if (harg != parg) {
         parg->syncCache() ;
         harg->copyCache(parg,true) ;
-        if (!harg->inRange(0)) {
+        if (!harg->inRange(nullptr)) {
           return 0 ;
         }
       }
@@ -194,26 +190,33 @@ double RooHistFunc::evaluate() const
   return ret ;
 }
 
+void RooHistFunc::translate(RooFit::Detail::CodeSquashContext &ctx) const
+{
+   RooHistPdf::rooHistTranslateImpl(this, ctx, _intOrder, _dataHist, _depList, false);
+}
 
-void RooHistFunc::computeBatch(cudaStream_t*, double* output, size_t size, RooFit::Detail::DataMap const& dataMap) const {
+void RooHistFunc::doEval(RooFit::EvalContext & ctx) const
+{
+  std::span<double> output = ctx.output();
+  std::size_t nEvents = output.size();
+
   if (_depList.size() == 1) {
-    auto xVals = dataMap.at(_depList[0]);
-    _dataHist->weights(output, xVals, _intOrder, false, _cdfBoundaries);
+    auto xVals = ctx.at(_depList[0]);
+    _dataHist->weights(output.data(), xVals, _intOrder, false, _cdfBoundaries);
     return;
   }
 
-  std::vector<RooSpan<const double>> inputValues;
+  std::vector<std::span<const double>> inputValues;
   for (const auto& obs : _depList) {
     auto realObs = dynamic_cast<const RooAbsReal*>(obs);
     if (realObs) {
-      auto inputs = dataMap.at(realObs);
-      inputValues.push_back(std::move(inputs));
+      inputValues.push_back(ctx.at(realObs));
     } else {
       inputValues.emplace_back();
     }
   }
 
-  for (std::size_t i = 0; i < size; ++i) {
+  for (std::size_t i = 0; i < nEvents; ++i) {
     bool skip = false;
 
     for (auto j = 0u; j < _histObsList.size(); ++j) {
@@ -319,6 +322,11 @@ bool RooHistFunc::forceAnalyticalInt(const RooAbsArg& dep) const
    return RooHistPdf::forceAnalyticalInt(_depList, dep);
 }
 
+std::string RooHistFunc::buildCallToAnalyticIntegral(int code, const char * /* rangeName */,
+                                                     RooFit::Detail::CodeSquashContext & /* ctx */) const
+{
+   return RooHistPdf::rooHistIntegralTranslateImpl(code, this, _dataHist, _depList, true);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Return sampling hint for making curves of (projections) of this function
@@ -340,11 +348,11 @@ std::list<double>* RooHistFunc::binBoundaries(RooAbsRealLValue& obs, double xlo,
 {
   // No hints are required when interpolation is used
   if (_intOrder>1) {
-    return 0 ;
+    return nullptr ;
   }
 
   // Find histogram observable corresponding to pdf observable
-  RooAbsArg* hobs(0) ;
+  RooAbsArg* hobs(nullptr) ;
   for (auto i = 0u; i < _histObsList.size(); ++i) {
     const auto harg = _histObsList[i];
     const auto parg = _depList[i];
@@ -373,7 +381,7 @@ std::list<double>* RooHistFunc::binBoundaries(RooAbsRealLValue& obs, double xlo,
     // Not found, or check that matching pdf observable is an l-value dependent on histogram observable fails
     if (!hobs || !(pobs->dependsOn(obs) && dynamic_cast<RooAbsRealLValue*>(pobs))) {
       std::cout << "RooHistFunc::binBoundaries(" << GetName() << ") obs = " << obs.GetName() << " hobs is not found, returning null" << std::endl ;
-      return 0 ;
+      return nullptr ;
     }
 
     // Now we are in business - we are in a situation where the pdf observable LV(x), mapping to a histogram observable x
@@ -390,12 +398,12 @@ std::list<double>* RooHistFunc::binBoundaries(RooAbsRealLValue& obs, double xlo,
   if (!xtmp) {
     std::cout << "RooHistFunc::binBoundaries(" << GetName() << ") hobs = " << hobs->GetName() << " is not found in dataset?" << std::endl ;
     _dataHist->get()->Print("v") ;
-    return 0 ;
+    return nullptr ;
   }
   RooAbsLValue* lvarg = dynamic_cast<RooAbsLValue*>(_dataHist->get()->find(hobs->GetName())) ;
   if (!lvarg) {
     std::cout << "RooHistFunc::binBoundaries(" << GetName() << ") hobs = " << hobs->GetName() << " but is not an LV, returning null" << std::endl ;
-    return 0 ;
+    return nullptr ;
   }
 
   // Retrieve position of all bin boundaries
@@ -444,10 +452,10 @@ bool RooHistFunc::importWorkspaceHook(RooWorkspace& ws)
     if (wsdata->InheritsFrom(RooDataHist::Class())) {
 
       // Check if histograms are identical
-      if (areIdentical((RooDataHist&)*wsdata,*_dataHist)) {
+      if (areIdentical(static_cast<RooDataHist&>(*wsdata),*_dataHist)) {
 
         // Exists and is of correct type, and identical -- adjust internal pointer to WS copy
-        _dataHist = (RooDataHist*) wsdata ;
+        _dataHist = static_cast<RooDataHist*>(wsdata) ;
       } else {
 
         // not identical, clone rename and import
@@ -457,7 +465,7 @@ bool RooHistFunc::importWorkspaceHook(RooWorkspace& ws)
           coutE(ObjectHandling) << " RooHistPdf::importWorkspaceHook(" << GetName() << ") unable to import clone of underlying RooDataHist with unique name " << uniqueName << ", abort" << std::endl ;
           return true ;
         }
-        _dataHist = (RooDataHist*) ws.embeddedData(uniqueName.c_str()) ;
+        _dataHist = static_cast<RooDataHist*>(ws.embeddedData(uniqueName)) ;
       }
 
     } else {
@@ -469,7 +477,7 @@ bool RooHistFunc::importWorkspaceHook(RooWorkspace& ws)
         coutE(ObjectHandling) << " RooHistPdf::importWorkspaceHook(" << GetName() << ") unable to import clone of underlying RooDataHist with unique name " << uniqueName << ", abort" << std::endl ;
         return true ;
       }
-      _dataHist = static_cast<RooDataHist*>(ws.embeddedData(uniqueName.c_str()));
+      _dataHist = static_cast<RooDataHist*>(ws.embeddedData(uniqueName));
 
     }
     return false ;
@@ -479,7 +487,7 @@ bool RooHistFunc::importWorkspaceHook(RooWorkspace& ws)
   ws.import(*_dataHist,RooFit::Embedded()) ;
 
   // Redirect our internal pointer to the copy in the workspace
-  _dataHist = (RooDataHist*) ws.embeddedData(_dataHist->GetName()) ;
+  _dataHist = static_cast<RooDataHist*>(ws.embeddedData(_dataHist->GetName())) ;
   return false ;
 }
 
@@ -559,19 +567,19 @@ Int_t RooHistFunc::getBin() const {
 ////////////////////////////////////////////////////////////////////////////////
 /// Compute bin numbers corresponding to all coordinates in `evalData`.
 /// \return Vector of bin numbers. If a bin is not in the current range of the observables, return -1.
-std::vector<Int_t> RooHistFunc::getBins(RooFit::Detail::DataMap const& dataMap) const {
-  std::vector<RooSpan<const double>> depData;
+std::vector<Int_t> RooHistFunc::getBins(RooFit::EvalContext & ctx) const {
+  std::vector<std::span<const double>> depData;
   for (const auto dep : _depList) {
     auto real = dynamic_cast<const RooAbsReal*>(dep);
     if (real) {
-      depData.push_back(dataMap.at(real));
+      depData.push_back(ctx.at(real));
     } else {
-      depData.emplace_back(nullptr, 0);
+      depData.emplace_back();
     }
   }
 
   const auto batchSize = std::max_element(depData.begin(), depData.end(),
-      [](const RooSpan<const double>& a, const RooSpan<const double>& b){ return a.size() < b.size(); })->size();
+      [](const std::span<const double>& a, const std::span<const double>& b){ return a.size() < b.size(); })->size();
   std::vector<Int_t> results;
 
   for (std::size_t evt = 0; evt < batchSize; ++evt) {

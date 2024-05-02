@@ -13,11 +13,6 @@
 #include <sstream>
 #include <cmath>
 
-// Backward compatibility for gtest version < 1.10.0
-#ifndef INSTANTIATE_TEST_SUITE_P
-#define INSTANTIATE_TEST_SUITE_P INSTANTIATE_TEST_CASE_P
-#endif
-
 using namespace ROOT;
 using namespace ROOT::VecOps;
 using namespace ROOT::Detail::VecOps; // for `IsSmall` and `IsAdopting`
@@ -818,12 +813,32 @@ TEST(VecOps, TakeLast)
    CheckEqual(v2, none);
 }
 
+TEST(VecOps, TakeN)
+{
+   RVec<int> x = {1,2,3,4};
+   auto res = Take(x,5,1);
+   RVec<int> expected = {1,2,3,4,1};
+   CheckEqual(res, expected); // Check the contents of the output vector are correct
+    
+   res = Take(x,-5,1);
+   expected = {1,1,2,3,4};
+   CheckEqual(res, expected); // Check the contents of the output vector are correct
+    
+   res = Take(x,-1,1);
+   expected = {4};
+   CheckEqual(res, expected); // Check the contents of the output vector are correct
+    
+   res = Take(x,4,1);
+   expected = {1,2,3,4};
+   CheckEqual(res, expected); // Check the contents of the output vector are correct
+}
+
 TEST(VecOps, TakeWithDefault)
 {
    RVec<int> v0{1, 2, 3};
 
-   auto v1 = Take(v0, {0, 1, 2, 3}, -999);
-   RVec<int> ref{1, 2, 3, -999};
+   auto v1 = Take(v0, {0, 3}, -999);
+   RVec<int> ref{1, -999};
    CheckEqual(v1, ref);
 }
 
@@ -847,6 +862,21 @@ TEST(VecOps, RangeBeginEnd)
    CheckEqual(Range(1, 4), ref);
 
    CheckEqual(Range(4, 1), RVecI{});
+}
+
+TEST(VecOps, RangeBeginEndStride)
+{
+    const RVecI ref{1, 3};
+    CheckEqual(Range(1, 5, 2), ref);
+    
+    CheckEqual(Range(-1, 8, 3), RVecI{-1, 2, 5});
+    CheckEqual(Range(6, 1, -1), RVecI{6, 5, 4, 3, 2});
+    CheckEqual(Range(-3, -9, -2), RVecI{-3, -5, -7});
+    CheckEqual(Range(1, 8, 2), RVecI{1, 3, 5, 7});
+    CheckEqual(Range(-1, -8, -2), RVecI{-1, -3, -5, -7});
+    CheckEqual(Range(-4, -7, 1), RVecI{});
+    CheckEqual(Range(-4, -1, -1), RVecI{});
+    CheckEqual(Range(1, 3, 5), RVecI{1});
 }
 
 TEST(VecOps, Drop)
@@ -1177,6 +1207,24 @@ TEST(VecOps, DeltaPhi)
    auto dphi4 = DeltaPhi(v4, v3);
    auto r4 = -1.f * r3;
    CheckEqual(dphi4, r4);
+
+   // Checks that calling with different argument types works and yields the
+   // expected return types and values
+   EXPECT_TRUE((std::is_same_v<decltype(DeltaPhi(0.f, 0.0)), double>)) << "DeltaPhi should return double if one of the arguments is double";
+   EXPECT_EQ(DeltaPhi(0.f, 2.0), 2.0);
+   EXPECT_EQ(DeltaPhi(1.0, 0.0, 180.f), -1.0);
+
+   RVec<double> v1d = {0.0, 1.0, -0.5, 0.0, 0.0, 0.0, 0.0};
+   auto dphiMixed = DeltaPhi(v1d, v2);
+   EXPECT_TRUE((std::is_same_v<decltype(dphiMixed), RVec<double>>)) << "DeltaPhi should return double if one of the arguments is double";
+   const RVec<double> r1d = {2.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0};
+   for (size_t i = 0; i < dphiMixed.size(); ++i) {
+      // We use the full double result here as reference and allow for some
+      // jitter introduced by the floating point promotion that happens along
+      // the way (in deterministic but different places depending on the types
+      // of the arguments)
+       EXPECT_NEAR(dphiMixed[i], r1d[i], 1e-6);
+   }
 }
 
 TEST(VecOps, InvariantMass)
@@ -1228,6 +1276,24 @@ TEST(VecOps, InvariantMass)
    }
 
    EXPECT_NEAR(p5.M(), invMass3, 1e-4);
+
+   // Check that calling with different argument types works and yields the
+   // expected return types and values
+   RVec<float> pt1f =   {0.f, 5.f, 5.f, 10.f, 10.f};
+   RVec<float> eta2f =  {0.f, 0.f, 0.5f, 0.4f, 1.2f};
+   const auto invMassF = InvariantMasses(pt1f, eta1, phi1, mass1, pt2, eta2f, phi2, mass2);
+   EXPECT_TRUE((std::is_same_v<decltype(invMassF), const RVec<double>>)) << "InvariantMasses should return double if one of the arguments is double";
+   for (size_t i = 0; i < invMass.size(); ++i) {
+      // We use the full double result here as reference and allow for some
+      // jitter introduced by the floating point promotion that happens along
+      // the way (in deterministic but different places depending on the types
+      // of the arguments)
+      EXPECT_NEAR(invMassF[i], invMass[i], 1e-7);
+   }
+
+   const auto invMass2F = InvariantMass(pt1f, eta1, phi1, mass1);
+   EXPECT_TRUE((std::is_same_v<decltype(invMass2F), const double>)) << "InvariantMass should return double if one of the arguments is double";
+   EXPECT_EQ(invMass2F, invMass2);
 }
 
 TEST(VecOps, DeltaR)
@@ -1252,6 +1318,19 @@ TEST(VecOps, DeltaR)
       // Check scalar implementation
       auto dr4 = DeltaR(eta1[i], eta2[i], phi1[i], phi2[i]);
       EXPECT_NEAR(dr3, dr4, 1e-6);
+   }
+
+   // Check that calling with different argument types works and yields the
+   // expected return types and values
+   RVec<float> etaf = {0.1f, -1.f, -1.f, 0.5f, -2.5f};
+   auto drf = DeltaR(etaf, eta2, phi1, phi2);
+   EXPECT_TRUE((std::is_same_v<decltype(drf), RVec<double>>)) << "DeltaR should return double if one of the arguments is double";
+   for (std::size_t i = 0; i < etaf.size(); ++i) {
+      // We use the full double result here as reference and allow for some
+      // jitter introduced by the floating point promotion that happens along
+      // the way (in deterministic but different places depending on the types
+      // of the arguments)
+      EXPECT_NEAR(dr[i], drf[i], 1e-7);
    }
 }
 
@@ -1504,7 +1583,7 @@ TEST_P(VecOpsSwap, BothRegularVectors)
    vmocksmall.erase(vmocksmall.begin() + 2, vmocksmall.end());
    // vmocksmall is a regular vector of size 2
 
-   // verify that initally vectors are not small
+   // verify that initially vectors are not small
    EXPECT_FALSE(IsSmall(vreg1));
    EXPECT_FALSE(IsSmall(vreg2));
    EXPECT_FALSE(IsSmall(vreg3));
@@ -1650,7 +1729,7 @@ TEST_P(VecOpsSwap, SmallRegularVectors)
    RVec<int> vreg4{15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30};
    // vreg4 is a regular vector that cannot "fit" to small vector
 
-   // verify that initally vectors are not small
+   // verify that initially vectors are not small
    EXPECT_FALSE(IsSmall(vreg1));
    EXPECT_FALSE(IsSmall(vreg2));
    EXPECT_FALSE(IsSmall(vreg3));

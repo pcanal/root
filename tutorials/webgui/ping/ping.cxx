@@ -13,7 +13,7 @@
 #include <iostream>
 #include <chrono>
 
-std::shared_ptr<ROOT::Experimental::RWebWindow> window;
+std::shared_ptr<ROOT::RWebWindow> window;
 
 int num_clients = 1;
 bool window_terminated = false;
@@ -115,19 +115,22 @@ void ping(int nclients = 1, int test_mode = 0)
    // gEnv->SetValue("WebGui.SenderThrds", "yes");
 
    // create window
-   window = ROOT::Experimental::RWebWindow::Create();
+   window = ROOT::RWebWindow::Create();
 
    // configure maximal number of clients which allowed to connect
    window->SetConnLimit(num_clients);
 
    // configure default html page
    // either HTML code can be specified or just name of file after 'file:' prefix
-   // Detect file location to specify full path to the
+   // Detect file location to specify full path to the HTML file
    std::string fname = __FILE__;
    auto pos = fname.find("ping.cxx");
-   if (pos > 0) { fname.resize(pos); fname.append("ping.html"); }
-           else fname = "ping.html";
-   window->SetDefaultPage(std::string("file:") + fname);
+   if (pos > 0)
+      fname.resize(pos);
+   else
+      fname.clear();
+   fname.append("ping.html");
+   window->SetDefaultPage("file:" + fname);
 
    // configure window geometry
    window->SetGeometry(300, 500);

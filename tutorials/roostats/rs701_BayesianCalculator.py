@@ -1,7 +1,7 @@
 ## \file
 ## \ingroup tutorial_roostats
 ## \notebook
-## Bayesian calculator: basic exmple
+## Bayesian calculator: basic example
 ##
 ## \macro_image
 ## \macro_output
@@ -27,7 +27,7 @@ priorPOI2 = w.factory("GenericPdf::priorPOI2('1/sqrt(@0)',s)")
 
 w.factory("n[3]")  # observed number of events
 # create a data set with n observed events
-data = ROOT.RooDataSet("data", "", {w["x"], w["n"]}, "n")
+data = ROOT.RooDataSet("data", "", {w["x"], w["n"]}, WeightVar="n")
 data.add({w["x"]}, w["n"].getVal())
 
 # to suppress messages when pdf goes to zero

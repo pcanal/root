@@ -13,7 +13,6 @@
   \ingroup proof
 
   Set of utilities to benchmark a PROOF facility.
-  See also https://root.cern.ch/proof-benchmark-framework-tproofbench .
 
 */
 
@@ -745,7 +744,7 @@ public:
    TString fDesc; // Test description string, if any
    fileDesc(const char *n, const char *o,
             Long_t t, const char *d) : TNamed(n, o), fMtime(t), fDesc(d) { }
-   Int_t   Compare(const TObject *o) const {
+   Int_t   Compare(const TObject *o) const override {
       const fileDesc *fd = static_cast<const fileDesc *>(o);
       if (!fd || (fd && fd->fMtime == fMtime)) return 0;
       if (fMtime < fd->fMtime) return -1;

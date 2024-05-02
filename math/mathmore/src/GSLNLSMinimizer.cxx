@@ -58,7 +58,7 @@ public:
    virtual double DataElement(const double *  x, unsigned i, double * g = nullptr, double * = nullptr, bool = false) const  {
       // transform from x internal to x external
       const double * xExt = fTransform->Transformation(x);
-      if ( g == 0) return fFunc.DataElement( xExt, i );
+      if ( g == nullptr) return fFunc.DataElement( xExt, i );
       // use gradient
       double val =  fFunc.DataElement( xExt, i, &fGrad[0]);
       // transform gradient
@@ -99,8 +99,8 @@ public:
 private:
 
    // objects of this class are not meant for copying or assignment
-   FitTransformFunction(const FitTransformFunction& rhs);
-   FitTransformFunction& operator=(const FitTransformFunction& rhs);
+   FitTransformFunction(const FitTransformFunction& rhs) = delete;
+   FitTransformFunction& operator=(const FitTransformFunction& rhs) = delete;
 
    virtual double DoEval(const double * x) const  {
       return fFunc( fTransform->Transformation(x) );
@@ -206,7 +206,7 @@ private:
 GSLNLSMinimizer::GSLNLSMinimizer( int type )
 {
    // Constructor implementation : create GSLMultiFit wrapper object
-   const gsl_multifit_fdfsolver_type * gsl_type = 0; // use default type defined in GSLMultiFit
+   const gsl_multifit_fdfsolver_type * gsl_type = nullptr; // use default type defined in GSLMultiFit
    if (type == 1) gsl_type =   gsl_multifit_fdfsolver_lmsder; // scaled lmder version
    if (type == 2) gsl_type =   gsl_multifit_fdfsolver_lmder; // unscaled version
 
@@ -226,7 +226,7 @@ GSLNLSMinimizer::GSLNLSMinimizer( int type )
 }
 
 GSLNLSMinimizer::~GSLNLSMinimizer () {
-   assert(fGSLMultiFit != 0);
+   assert(fGSLMultiFit != nullptr);
    delete fGSLMultiFit;
 }
 
@@ -385,7 +385,7 @@ bool GSLNLSMinimizer::DoMinimize(const Func & fitFunc) {
 
    // save state with values and function value
    const double * x = fGSLMultiFit->X();
-   if (x == 0) return false;
+   if (x == nullptr) return false;
    // apply transformation outside SetFinalValues(..)
    // because trFunc is not a MinimTransformFunction but a FitTransFormFunction
    if (trFunc)  x = trFunc->Transformation(x);
@@ -456,7 +456,7 @@ const double * GSLNLSMinimizer::MinGradient() const {
 double GSLNLSMinimizer::CovMatrix(unsigned int i , unsigned int j ) const {
    // return covariance matrix element
    unsigned int ndim = NDim();
-   if ( fCovMatrix.size() == 0) return 0;
+   if ( fCovMatrix.empty()) return 0;
    if (i > ndim || j > ndim) return 0;
    return fCovMatrix[i*ndim + j];
 }
@@ -464,7 +464,7 @@ double GSLNLSMinimizer::CovMatrix(unsigned int i , unsigned int j ) const {
 int GSLNLSMinimizer::CovMatrixStatus( ) const {
    // return covariance  matrix status = 0 not computed,
    // 1 computed but is approximate because minimum is not valid, 3 is fine
-   if ( fCovMatrix.size() == 0) return 0;
+   if ( fCovMatrix.empty()) return 0;
    // case minimization did not finished correctly
    if (fStatus != GSL_SUCCESS) return 1;
    return 3;

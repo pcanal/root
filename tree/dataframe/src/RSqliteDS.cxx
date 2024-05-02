@@ -153,7 +153,7 @@ int VfsRdOnlyDeviceCharacteristics(sqlite3_file * /*pFile*/)
 ////////////////////////////////////////////////////////////////////////////
 /// Set the function pointers of the custom VFS I/O operations in a
 /// forward-compatible way
-static sqlite3_io_methods GetSqlite3IoMethods()
+sqlite3_io_methods GetSqlite3IoMethods()
 {
    // The C style initialization is compatible with version 1 and later versions of the struct.
    // Version 1 was introduced with sqlite 3.6, version 2 with sqlite 3.7.8, version 3 with sqlite 3.7.17
@@ -193,11 +193,6 @@ int VfsRdOnlyOpen(sqlite3_vfs * /*vfs*/, const char *zName, sqlite3_file *pFile,
    p->fRawFile = ROOT::Internal::RRawFile::Create(zName);
    if (!p->fRawFile) {
       ::Error("VfsRdOnlyOpen", "Cannot open %s\n", zName);
-      return SQLITE_IOERR;
-   }
-
-   if (!(p->fRawFile->GetFeatures() & ROOT::Internal::RRawFile::kFeatureHasSize)) {
-      ::Error("VfsRdOnlyOpen", "cannot determine file size of %s\n", zName);
       return SQLITE_IOERR;
    }
 
@@ -286,7 +281,7 @@ int VfsRdOnlyCurrentTime(sqlite3_vfs *vfs, double *prNow)
 ////////////////////////////////////////////////////////////////////////////
 /// Set the function pointers of the VFS implementation in a
 /// forward-compatible way
-static sqlite3_vfs GetSqlite3Vfs()
+sqlite3_vfs GetSqlite3Vfs()
 {
    // The C style initialization is compatible with version 1 and later versions of the struct.
    // Version 1 was introduced with sqlite 3.5, version 2 with sqlite 3.7, version 3 with sqlite 3.7.6
@@ -309,9 +304,9 @@ static sqlite3_vfs GetSqlite3Vfs()
 
 ////////////////////////////////////////////////////////////////////////////
 /// A global struct of function pointers and details on the VfsRootFile class that together constitue a VFS module
-static struct sqlite3_vfs kSqlite3Vfs = GetSqlite3Vfs();
+struct sqlite3_vfs kSqlite3Vfs = GetSqlite3Vfs();
 
-static bool RegisterSqliteVfs()
+bool RegisterSqliteVfs()
 {
    int retval;
    retval = sqlite3_vfs_register(&kSqlite3Vfs, false);

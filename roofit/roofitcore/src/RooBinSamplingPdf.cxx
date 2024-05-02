@@ -91,9 +91,8 @@
 
 #include "RooBinSamplingPdf.h"
 
-#include "RooHelpers.h"
+#include "RooFitImplHelpers.h"
 #include "RooRealBinding.h"
-#include "RunContext.h"
 #include "RooRealVar.h"
 #include "RooGlobalFunc.h"
 #include "RooDataHist.h"
@@ -147,7 +146,7 @@ double RooBinSamplingPdf::evaluate() const {
   double result;
   {
     // Important: When the integrator samples x, caching of sub-tree values needs to be off.
-    RooHelpers::DisableCachingRAII disableCaching(inhibitDirty());
+    DisableCachingRAII disableCaching(inhibitDirty());
     result = integrate(_normSet, low, high) / (high-low);
   }
 
@@ -161,31 +160,33 @@ double RooBinSamplingPdf::evaluate() const {
 /// Integrate the PDF over all its bins, and return a batch with those values.
 /// \param[in,out] evalData Struct with evaluation data.
 /// \param[in] normSet Normalisation set that's used to evaluate the PDF.
-void RooBinSamplingPdf::computeBatch(cudaStream_t*, double* output, size_t /*size*/, RooFit::Detail::DataMap const& dataMap) const
+void RooBinSamplingPdf::doEval(RooFit::EvalContext &ctx) const
 {
-  // Retrieve binning, which we need to compute the probabilities
-  auto boundaries = binBoundaries();
-  auto xValues = dataMap.at(_observable);
+   std::span<double> output = ctx.output();
 
-  // Important: When the integrator samples x, caching of sub-tree values needs to be off.
-  RooHelpers::DisableCachingRAII disableCaching(inhibitDirty());
+   // Retrieve binning, which we need to compute the probabilities
+   auto boundaries = binBoundaries();
+   auto xValues = ctx.at(_observable);
 
-  // Now integrate PDF in each bin:
-  for (unsigned int i=0; i < xValues.size(); ++i) {
-    const double x = xValues[i];
-    const auto upperIt = std::upper_bound(boundaries.begin(), boundaries.end(), x);
-    const unsigned int bin = std::distance(boundaries.begin(), upperIt) - 1;
-    assert(bin < boundaries.size());
+   // Important: When the integrator samples x, caching of sub-tree values needs to be off.
+   DisableCachingRAII disableCaching(inhibitDirty());
 
-    output[i] = integrate(nullptr, boundaries[bin], boundaries[bin+1]) / (boundaries[bin+1]-boundaries[bin]);
-  }
+   // Now integrate PDF in each bin:
+   for (unsigned int i = 0; i < xValues.size(); ++i) {
+      const double x = xValues[i];
+      const auto upperIt = std::upper_bound(boundaries.begin(), boundaries.end(), x);
+      const unsigned int bin = std::distance(boundaries.begin(), upperIt) - 1;
+      assert(bin < boundaries.size());
+
+      output[i] = integrate(nullptr, boundaries[bin], boundaries[bin + 1]) / (boundaries[bin + 1] - boundaries[bin]);
+   }
 }
 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Get the bin boundaries for the observable.
 /// These will be recomputed whenever the shape of this object is dirty.
-RooSpan<const double> RooBinSamplingPdf::binBoundaries() const {
+std::span<const double> RooBinSamplingPdf::binBoundaries() const {
   if (isShapeDirty() || _binBoundaries.empty()) {
     _binBoundaries.clear();
     const RooAbsBinning& binning = _observable->getBinning(nullptr);

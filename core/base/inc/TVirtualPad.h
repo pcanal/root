@@ -67,6 +67,7 @@ public:
        ~TContext();
        auto IsInteractive() const { return fInteractive; }
        auto GetSaved() const { return fSaved; }
+       void PadDeleted(TVirtualPad *pad);
    };
 
 
@@ -160,8 +161,10 @@ public:
    virtual Bool_t   IsModified() const = 0;
    virtual Bool_t   IsRetained() const = 0;
    virtual Bool_t   IsVertical() const = 0;
+   virtual Bool_t   IsWeb() const { return kFALSE; }
            void     ls(Option_t *option="") const override = 0;
    virtual void     Modified(Bool_t flag=1) = 0;
+   virtual void     ModifiedUpdate() = 0;
    virtual Bool_t   OpaqueMoving() const = 0;
    virtual Bool_t   OpaqueResizing() const = 0;
    virtual Double_t PadtoX(Double_t x) const = 0;
@@ -241,6 +244,7 @@ public:
    virtual void     ShowGuidelines(TObject *object, const Int_t event, const char mode = 'i', const bool cling = true) = 0;
    virtual TObject *WaitPrimitive(const char *pname="", const char *emode="") = 0;
    virtual void     Update() = 0;
+   virtual void     UpdateAsync() = 0;
    virtual Int_t    UtoAbsPixel(Double_t u) const = 0;
    virtual Int_t    VtoAbsPixel(Double_t v) const = 0;
    virtual Int_t    UtoPixel(Double_t u) const = 0;
@@ -298,9 +302,7 @@ private:
 };
 
 
-#ifndef __CINT__
 #define gPad (TVirtualPad::Pad())
-#endif
 R__EXTERN Int_t (*gThreadXAR)(const char *xact, Int_t nb, void **ar, Int_t *iret);
 
 #endif

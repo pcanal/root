@@ -356,7 +356,7 @@ namespace TStreamerInfoActions
           && config->fInfo->GetStreamMemberWise()
           && cl->CanSplit()
           && !(strspn(config->fCompInfo->fElem->GetTitle(),"||") == 2)
-          && !(vClass->TestBit(TClass::kHasCustomStreamerMember)) ) {
+          && !(vClass->HasCustomStreamerMember()) ) {
          // Let's save the collection member-wise.
 
          UInt_t pos = buf.WriteVersionMemberWise(config->fInfo->IsA(),kTRUE);
@@ -1030,7 +1030,7 @@ namespace TStreamerInfoActions
    public:
       TVectorLoopConfig(TVirtualCollectionProxy *proxy, Long_t increment, Bool_t /* read */) : TLoopConfiguration(proxy), fIncrement(increment) {};
       //virtual void PrintDebug(TBuffer &buffer, void *);
-      virtual ~TVectorLoopConfig() {};
+      ~TVectorLoopConfig() override {};
       void Print() const override
       {
          printf("TVectorLoopConfig: increment=%ld\n",fIncrement);
@@ -1051,7 +1051,7 @@ namespace TStreamerInfoActions
    public:
       TAssocLoopConfig(TVirtualCollectionProxy *proxy, Bool_t /* read */) : TLoopConfiguration(proxy) {};
       //virtual void PrintDebug(TBuffer &buffer, void *);
-      virtual ~TAssocLoopConfig() {};
+      ~TAssocLoopConfig() override {};
       void Print() const override
       {
          printf("TAssocLoopConfig: proxy=%s\n",fProxy->GetCollectionClass()->GetName());
@@ -1098,7 +1098,7 @@ namespace TStreamerInfoActions
       {
          Init(read);
       }
-      virtual ~TGenericLoopConfig() {};
+      ~TGenericLoopConfig() override {};
       void Print() const override
       {
          printf("TGenericLoopConfig: proxy=%s\n",fProxy->GetCollectionClass()->GetName());
@@ -1570,7 +1570,7 @@ namespace TStreamerInfoActions
          }
 
       }
-      virtual ~TConfigurationUseCache() {}
+      ~TConfigurationUseCache() override {}
       TConfiguration *Copy() override
       {
          TConfigurationUseCache *copy = new TConfigurationUseCache(*this);
@@ -3063,7 +3063,7 @@ void TStreamerInfo::Compile()
    if (!ndata) {
       // This may be the case for empty classes (e.g., TAtt3D).
       // We still need to properly set the size of emulated classes (i.e. add the virtual table)
-      if (fClass->TestBit(TClass::kIsEmulation) && fNVirtualInfoLoc!=0) {
+      if (fClass->GetState() == TClass::kEmulated && fNVirtualInfoLoc!=0) {
          fSize = sizeof(TStreamerInfo*);
       }
       fComp = new TCompInfo[1];

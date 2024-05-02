@@ -39,6 +39,7 @@ endif()
 ROOT_STANDARD_LIBRARY_PACKAGE(ROOTDataFrame
   HEADERS
     ROOT/RCsvDS.hxx
+    ROOT/RVecDS.hxx
     ROOT/RDataFrame.hxx
     ROOT/RDataSource.hxx
     ROOT/RDFHelpers.hxx
@@ -62,6 +63,7 @@ ROOT_STANDARD_LIBRARY_PACKAGE(ROOTDataFrame
     ROOT/RDF/RSampleInfo.hxx
     ROOT/RDF/RDefineBase.hxx
     ROOT/RDF/RDefine.hxx
+    ROOT/RDF/RDefinePerSample.hxx
     ROOT/RDF/RDefineReader.hxx
     ROOT/RDF/RDSColumnReader.hxx
     ROOT/RDF/RColumnReaderBase.hxx
@@ -99,6 +101,7 @@ ROOT_STANDARD_LIBRARY_PACKAGE(ROOTDataFrame
     src/RActionBase.cxx
     src/RCsvDS.cxx
     src/RDefineBase.cxx
+    src/RDefineReader.cxx
     src/RCutFlowReport.cxx
     src/RDataFrame.cxx
     src/RDatasetSpec.cxx
@@ -121,7 +124,9 @@ ROOT_STANDARD_LIBRARY_PACKAGE(ROOTDataFrame
     src/RMetaData.cxx
     src/RRangeBase.cxx
     src/RSample.cxx
+    src/RResultPtr.cxx
     src/RVariationBase.cxx
+    src/RVariationReader.cxx
     src/RVariationsDescription.cxx
     src/RRootDS.cxx
     src/RTrivialDS.cxx
@@ -162,7 +167,7 @@ endif()
 if(builtin_nlohmannjson)
   target_include_directories(ROOTDataFrame PRIVATE ${CMAKE_SOURCE_DIR}/builtins)
 else()
-  target_link_libraries(ROOTDataFrame PUBLIC nlohmann_json::nlohmann_json)
+  target_link_libraries(ROOTDataFrame PRIVATE nlohmann_json::nlohmann_json)
 endif()
 
 ROOT_ADD_TEST_SUBDIRECTORY(test)

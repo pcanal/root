@@ -14,7 +14,7 @@
 \class RooCachedReal
 \ingroup Roofitcore
 
-RooCachedReal is an implementation of RooAbsCachedReal that can cache
+Implementation of RooAbsCachedReal that can cache
 any external RooAbsReal input function provided in the constructor.
 **/
 
@@ -29,10 +29,9 @@ any external RooAbsReal input function provided in the constructor.
 #include "RooHistPdf.h"
 #include "RooChangeTracker.h"
 
-using namespace std;
+using std::endl;
 
 ClassImp(RooCachedReal);
-  ;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -94,16 +93,6 @@ RooCachedReal::RooCachedReal(const RooCachedReal& other, const char* name) :
  {
  }
 
-
-
-////////////////////////////////////////////////////////////////////////////////
-/// Destructor
-
-RooCachedReal::~RooCachedReal()
-{
-}
-
-
 ////////////////////////////////////////////////////////////////////////////////
 /// Interface function to create an internal cache object that represent
 /// each cached function configuration. This interface allows to create and
@@ -127,7 +116,7 @@ RooAbsCachedReal::FuncCacheElem* RooCachedReal::createCache(const RooArgSet* nse
 
 void RooCachedReal::fillCacheObject(RooAbsCachedReal::FuncCacheElem& cache) const
 {
-  unsigned nDim = cache.hist()->get()->getSize();
+  unsigned nDim = cache.hist()->get()->size();
   if (nDim>1) {
     unsigned nCat(0);
     for(RooAbsArg * arg : *cache.hist()->get()) {
@@ -142,7 +131,7 @@ void RooCachedReal::fillCacheObject(RooAbsCachedReal::FuncCacheElem& cache) cons
   // Make deep clone of self and attach to dataset observables
   if (!cache.sourceClone()) {
     RooAbsArg* sourceClone = func.arg().cloneTree() ;
-    cache.setSourceClone((RooAbsReal*)sourceClone) ;
+    cache.setSourceClone(static_cast<RooAbsReal*>(sourceClone)) ;
     cache.sourceClone()->recursiveRedirectServers(*cache.hist()->get()) ;
     cache.sourceClone()->recursiveRedirectServers(cache.paramTracker()->parameters());
   }
@@ -156,7 +145,7 @@ void RooCachedReal::fillCacheObject(RooAbsCachedReal::FuncCacheElem& cache) cons
 
   // Delete source clone if we don't cache it
   if (!cache.cacheSource()) {
-    cache.setSourceClone(0) ;
+    cache.setSourceClone(nullptr) ;
   }
 
   cache.func()->setCdfBoundaries(_useCdfBoundaries) ;
@@ -173,13 +162,9 @@ void RooCachedReal::fillCacheObject(RooAbsCachedReal::FuncCacheElem& cache) cons
 /// of the external input p.d.f given the choice of observables defined
 /// in nset
 
-RooArgSet* RooCachedReal::actualObservables(const RooArgSet& nset) const
+RooFit::OwningPtr<RooArgSet> RooCachedReal::actualObservables(const RooArgSet& nset) const
 {
-  if (_cacheObs.getSize()>0) {
-    return func.arg().getObservables(_cacheObs) ;
-  }
-
-  return func.arg().getObservables(nset) ;
+  return func->getObservables(_cacheObs.empty() ? nset : _cacheObs);
 }
 
 
@@ -202,7 +187,3 @@ void RooCachedReal::operModeHook()
     ((RooAbsArg*)func.absArg())->setOperMode(ADirty) ;
   }
 }
-
-
-
-

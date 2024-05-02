@@ -6,7 +6,7 @@
     \brief Advanced 3-dimensional spectra processing functions
     \author Miroslav Morhac
 
- \legacy{TSpectrum3}
+ \legacy{TSpectrum3, For modeling a spectrum fitting and estimating the background one can use RooFit while for deconvolution and unfolding one can use TUnfold.}
 
   This class contains advanced spectra processing functions.
 
@@ -38,13 +38,13 @@
 
   These NIM papers are also available as Postscript files from:
 
- - [SpectrumDec.ps.gz](ftp://root.cern.ch/root/SpectrumDec.ps.gz)
- - [SpectrumSrc.ps.gz](ftp://root.cern.ch/root/SpectrumSrc.ps.gz)
- - [SpectrumBck.ps.gz](ftp://root.cern.ch/root/SpectrumBck.ps.gz)
+ - [SpectrumDec.ps.gz](ftp://root.cern/root/SpectrumDec.ps.gz)
+ - [SpectrumSrc.ps.gz](ftp://root.cern/root/SpectrumSrc.ps.gz)
+ - [SpectrumBck.ps.gz](ftp://root.cern/root/SpectrumBck.ps.gz)
 
  See also the
- [online documentation](https://root.cern.ch/guides/tspectrum-manual) and
- [tutorials](https://root.cern.ch/doc/master/group__tutorial__spectrum.html).
+ [online documentation](https://root.cern/guides/tspectrum-manual) and
+ [tutorials](https://root.cern/doc/master/group__tutorial__spectrum.html).
 */
 
 #include "TSpectrum3.h"
@@ -119,7 +119,7 @@ const char *TSpectrum3::Background(const TH1 * h, Int_t number_of_iterations,
 {
    Error("Background","function not yet implemented: h=%s, iter=%d, option=%sn"
         , h->GetName(), number_of_iterations, option);
-   return 0;
+   return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -162,7 +162,7 @@ void TSpectrum3::Print(Option_t *) const
 Int_t TSpectrum3::Search(const TH1 * hin, Double_t sigma,
                              Option_t * option, Double_t threshold)
 {
-   if (hin == 0)
+   if (hin == nullptr)
       return 0;
    Int_t dimension = hin->GetDimension();
    if (dimension != 3) {
@@ -764,7 +764,7 @@ const char *TSpectrum3::Background(Double_t***spectrum,
       delete[] working_space[i];
    }
    delete[] working_space;
-   return 0;
+   return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -894,7 +894,7 @@ const char* TSpectrum3::SmoothMarkov(Double_t***source, Int_t ssizex, Int_t ssiz
          delete[] working_space[i];
       }
       delete [] working_space;
-      return 0;
+      return nullptr;
    }
 
    nom = 0;
@@ -1407,7 +1407,7 @@ const char* TSpectrum3::SmoothMarkov(Double_t***source, Int_t ssizex, Int_t ssiz
       delete[] working_space[i];
    }
    delete[] working_space;
-   return 0;
+   return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1802,7 +1802,7 @@ const char *TSpectrum3::Deconvolution(Double_t***source, const Double_t***resp,
       delete[] working_space[i];
    }
    delete [] working_space;
-   return 0;
+   return nullptr;
 }
 
 ////////////////////////////////////////////////////////////////////////////////

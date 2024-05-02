@@ -22,6 +22,7 @@
 #include "TList.h"
 #include "TBaseClass.h"
 
+#include <memory>
 #include <sstream>
 #include <regex>
 
@@ -207,7 +208,7 @@ std::string REveDataItemList::GetHighlightTooltip(const std::set<int>& secondary
 //______________________________________________________________________________
 void REveDataItemList::AddTooltipExpression(const std::string &title, const std::string &expr, bool init)
 {
-   fTooltipExpressions.push_back(std::unique_ptr<TTip>(new TTip()));
+   fTooltipExpressions.push_back(std::make_unique<TTip>());
    TTip *tt = fTooltipExpressions.back().get();
 
    tt->fTooltipTitle = title;
@@ -259,7 +260,7 @@ REveDataCollection::REveDataCollection(const std::string& n, const std::string& 
    REveElement(n, t)
 {
    std::string lname = n + "Items";
-   fItemList = new REveDataItemList(lname.c_str());
+   fItemList = new REveDataItemList(lname);
    AddElement(fItemList);
 
    SetupDefaultColorAndTransparency(fgDefaultColor, true, true);
@@ -355,68 +356,50 @@ void REveDataCollection::ApplyFilter()
 
 void  REveDataCollection::StreamPublicMethods(nlohmann::json &j) const
 {
-   struct PubMethods
-   {
-      void FillJSON(TClass* c, nlohmann::json & arr)
-      {
-         TString  ctor = c->GetName(), dtor = "~";
-         {
-            int i = ctor.Last(':');
-            if (i != kNPOS)
-            {
-               ctor.Replace(0, i + 1, "");
-            }
-            dtor += ctor;
-         }
+   j["fPublicFunctions"] = nlohmann::json::array();
+   TMethod *meth;
+   TIter next(fItemClass->GetListOfAllPublicMethods());
+   while ((meth = (TMethod *)next())) {
+      // Filter out ctor, dtor, some ROOT stuff.
 
-         TMethod *meth;
-         TIter    next(c->GetListOfMethods());
-         while ((meth = (TMethod*) next()))
-         {
-            // Filter out ctor, dtor, some ROOT stuff.
-            {
-               TString m(meth->GetName());
-               if (m == ctor || m == dtor ||
-                   m == "Class" || m == "Class_Name" || m == "Class_Version" || m == "Dictionary" || m == "IsA" ||
-                   m == "DeclFileName" || m == "ImplFileName" || m == "DeclFileLine" || m == "ImplFileLine" ||
-                   m == "Streamer" || m == "StreamerNVirtual" || m == "ShowMembers" ||
-                   m == "CheckTObjectHashConsistency")
-               {
-                  continue;
-               }
-            }
+      TString m(meth->GetName());
 
-            TString     ms;
-            TMethodArg *ma;
-            TIter       next_ma(meth->GetListOfMethodArgs());
-            while ((ma = (TMethodArg*) next_ma()))
-            {
-               if ( ! ms.IsNull()) ms += ", ";
-
-               ms += ma->GetTypeName();
-               ms += " ";
-               ms += ma->GetName();
-            }
-            std::string entry(TString::Format("i.%s(%s)",meth->GetName(),ms.Data()).Data());
-            nlohmann::json jm ;
-            jm["f"] = entry;
-            jm["r"] = meth->GetReturnTypeName();
-            jm["c"] = c->GetName();
-            arr.push_back(jm);
-         }
-         {
-            TBaseClass *base;
-            TIter       blnext(c->GetListOfBases());
-            while ((base = (TBaseClass*) blnext()))
-            {
-               FillJSON(base->GetClassPointer(), arr);
-            }
-         }
+      if (m == "Class" || m == "Class_Name" || m == "Class_Version" || m == "Dictionary" || m == "IsA" ||
+          m == "DeclFileName" || m == "ImplFileName" || m == "DeclFileLine" || m == "ImplFileLine" || m == "Streamer" ||
+          m == "StreamerNVirtual" || m == "ShowMembers" || m == "CheckTObjectHashConsistency") {
+         continue;
       }
-   };
-   j["fPublicFunctions"]  = nlohmann::json::array();
-   PubMethods pm;
-   pm.FillJSON(fItemClass, j["fPublicFunctions"]);
+
+      if (m.BeginsWith('~'))
+         continue;
+
+      if (m.Contains("operator"))
+         continue;
+
+      if (meth->GetListOfMethodArgs()->GetLast() > 1)
+         continue;
+
+      if (strcmp(meth->GetReturnTypeName(),"void") == 0)
+         continue;
+
+      TString ms;
+      TMethodArg *ma;
+      TIter next_ma(meth->GetListOfMethodArgs());
+      while ((ma = (TMethodArg *)next_ma())) {
+         if (!ms.IsNull())
+            ms += ", ";
+
+         ms += ma->GetTypeName();
+         ms += " ";
+         ms += ma->GetName();
+      }
+      std::string entry(TString::Format("i.%s(%s)", meth->GetName(), ms.Data()).Data());
+      nlohmann::json jm;
+      jm["f"] = entry;
+      jm["r"] = meth->GetReturnTypeName();
+      jm["c"] = meth->GetClass()->GetName();
+      j["fPublicFunctions"].push_back(jm);
+   }
 }
 
 //______________________________________________________________________________

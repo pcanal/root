@@ -26,23 +26,27 @@ in the GNU scientific library (v0.99).
 
 #include "RooBrentRootFinder.h"
 #include "RooAbsFunc.h"
-#include <math.h>
+#include <cmath>
 #include "Riostream.h"
 #include "RooMsgService.h"
 
-using namespace std;
+using std::endl;
 
 ClassImp(RooBrentRootFinder);
-;
 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Constructor taking function binding as input
 
 RooBrentRootFinder::RooBrentRootFinder(const RooAbsFunc& function) :
-  RooAbsRootFinder(function),
+  _function(&function), _valid(function.isValid()),
   _tol(2.2204460492503131e-16)
 {
+  if(_function->getDimension() != 1) {
+    oocoutE(nullptr,Eval) << "RooBrentRootFinder:: cannot find roots for function of dimension "
+               << _function->getDimension() << endl;
+    _valid= false;
+  }
 }
 
 
@@ -57,18 +61,21 @@ bool RooBrentRootFinder::findRoot(double &result, double xlo, double xhi, double
 {
   _function->saveXVec() ;
 
-  double a(xlo),b(xhi);
+  double a(xlo);
+  double b(xhi);
   double fa= (*_function)(&a) - value;
   double fb= (*_function)(&b) - value;
   if(fb*fa > 0) {
-    oocxcoutD((TObject*)0,Eval) << "RooBrentRootFinder::findRoot(" << _function->getName() << "): initial interval does not bracket a root: ("
+    oocxcoutD((TObject*)nullptr,Eval) << "RooBrentRootFinder::findRoot(" << _function->getName() << "): initial interval does not bracket a root: ("
             << a << "," << b << "), value = " << value << " f[xlo] = " << fa << " f[xhi] = " << fb << endl;
     return false;
   }
 
   bool ac_equal(false);
   double fc= fb;
-  double c(0),d(0),e(0);
+  double c(0);
+  double d(0);
+  double e(0);
   for(Int_t iter= 0; iter <= MaxIterations; iter++) {
 
     if ((fb < 0 && fc < 0) || (fb > 0 && fc > 0)) {
@@ -108,7 +115,9 @@ bool RooBrentRootFinder::findRoot(double &result, double xlo, double xhi, double
     }
     else {
       // Attempt inverse cubic interpolation
-      double p, q, r;
+      double p;
+      double q;
+      double r;
       double s = fb / fa;
 
       if (ac_equal) {

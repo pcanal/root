@@ -31,13 +31,14 @@
 using namespace RooStats;
 using namespace HistFactory;
 
-using namespace std;
+using std::string, std::cerr, std::cout, std::endl, std::vector;
 
 namespace {
 
     void AddSubStrings( vector<std::string> & vs, std::string s){
       const std::string delims("\\ ");
-      std::string::size_type begIdx, endIdx;
+      std::string::size_type begIdx;
+      std::string::size_type endIdx;
       begIdx=s.find_first_not_of(delims);
       while(begIdx!=string::npos){
    endIdx=s.find_first_of(delims, begIdx);
@@ -54,7 +55,8 @@ namespace {
       std::vector<std::string> child_vec;
 
       const std::string delims("\\ ");
-      std::string::size_type begIdx, endIdx;
+      std::string::size_type begIdx;
+      std::string::size_type endIdx;
       begIdx=str.find_first_not_of(delims);
       while(begIdx!=string::npos){
    endIdx=str.find_first_of(delims, begIdx);
@@ -84,7 +86,7 @@ namespace {
 
    std::string param = string_list.at(i);
    // Split the string
-   size_t eql_location = param.find("=");
+   size_t eql_location = param.find('=');
 
    // If there is no '=' deliminator, we only
    // set the variable constant
@@ -122,8 +124,6 @@ std::vector< RooStats::HistFactory::Measurement > ConfigParser::GetMeasurementsF
   // (This is what will be returned)
   std::vector< HistFactory::Measurement > measurement_list;
 
-  try {
-
     // Open the Driver XML File
     TDOMParser xmlparser;
     Int_t parseError = xmlparser.ParseFile( input.c_str() );
@@ -150,8 +150,8 @@ std::vector< RooStats::HistFactory::Measurement > ConfigParser::GetMeasurementsF
     std::string OutputFilePrefix;
 
     TListIter attribIt = rootNode->GetAttributes();
-    TXMLAttr* curAttr = 0;
-    while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != 0 ) {
+    TXMLAttr* curAttr = nullptr;
+    while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != nullptr ) {
 
       // Get the Name, Val of this node
       TString attrName    = curAttr->GetName();
@@ -190,7 +190,7 @@ std::vector< RooStats::HistFactory::Measurement > ConfigParser::GetMeasurementsF
     // if no channels are found
     std::vector< std::string > xml_channel_files;
     node = rootNode->GetChildren();
-    while( node != 0 ) {
+    while( node != nullptr ) {
       if( node->GetNodeName() == TString( "Input" ) ) {
    if( node->GetText() == nullptr ) {
      cxcoutEHF << "Error: node: " << node->GetName()
@@ -222,16 +222,16 @@ std::vector< RooStats::HistFactory::Measurement > ConfigParser::GetMeasurementsF
     // and then we add them to all measurements
 
     // For now, we create this list twice
-    // simply for compatability
+    // simply for compatibility
     // std::vector< std::string > preprocessFunctions;
     std::vector< RooStats::HistFactory::PreprocessFunction > functionObjects;
 
     node = rootNode->GetChildren();
-    while( node != 0 ) {
+    while( node != nullptr ) {
       if( node->GetNodeName() == TString( "Function" ) ) {
 
    // For now, add both the objects itself and
-   // it's command string (for easy compatability)
+   // it's command string (for easy compatibility)
    RooStats::HistFactory::PreprocessFunction Func = ParseFunctionConfig( node );
    // preprocessFunctions.push_back( Func.GetCommand() );
    functionObjects.push_back( Func );
@@ -244,7 +244,7 @@ std::vector< RooStats::HistFactory::Measurement > ConfigParser::GetMeasurementsF
 
     // Fill the list of measurements
     node = rootNode->GetChildren();
-    while( node != 0 ) {
+    while( node != nullptr ) {
 
       if( node->GetNodeName() == TString( "" ) ) {
    cxcoutEHF << "Error: Node found in Measurement Driver XML with no name" << std::endl;
@@ -332,15 +332,8 @@ std::vector< RooStats::HistFactory::Measurement > ConfigParser::GetMeasurementsF
    measurement.GetChannels().push_back( channel_list.at(j) );
       }
     }
-  }
-  catch(std::exception& e)
-    {
-      std::cout << e.what() << std::endl;
-      throw hf_exc();
-    }
 
   return measurement_list;
-
 }
 
 
@@ -369,9 +362,9 @@ HistFactory::Measurement ConfigParser::CreateMeasurementFromDriverNode(TXMLNode 
    TXMLAttr *curAttr = nullptr;
    while ((/**/ curAttr = dynamic_cast<TXMLAttr *>(attribIt()) /**/) != nullptr) {
       // curAttr is guaranteed non-null above
-      const std::string curAttrName(curAttr->GetName() ? curAttr->GetName() : ""),
-         curAttrValue(curAttr->GetValue() ? curAttr->GetValue() : "");
-      if (curAttrName == "") {
+      const std::string curAttrName(curAttr->GetName() ? curAttr->GetName() : "");
+      const std::string curAttrValue(curAttr->GetValue() ? curAttr->GetValue() : "");
+      if (curAttrName.empty()) {
          cxcoutEHF << "Found XML attribute in Measurement with no name.\n";
          // ADD Output Here
          throw hf_exc();
@@ -398,14 +391,14 @@ HistFactory::Measurement ConfigParser::CreateMeasurementFromDriverNode(TXMLNode 
    // Then, get the properties of the children nodes
    TXMLNode *child = node->GetChildren();
    while (child != nullptr) {
-      const std::string childName(child->GetName() ? child->GetName() : ""),
-         childNodeName(child->GetNodeName() ? child->GetNodeName() : ""),
-         childText(child->GetText() ? child->GetText() : "");
+      const std::string childName(child->GetName() ? child->GetName() : "");
+      const std::string childNodeName(child->GetNodeName() ? child->GetNodeName() : "");
+      const std::string childText(child->GetText() ? child->GetText() : "");
       if (childNodeName.empty()) {
          cxcoutEHF << "Found XML child node of Measurement with no name\n";
          throw hf_exc();
       } else if (childNodeName == "POI") {
-         if (childText == "") {
+         if (childText.empty()) {
             cxcoutEHF << "Error: node: " << childName << " has no text.\n";
             throw hf_exc();
          }
@@ -454,8 +447,8 @@ HistFactory::Measurement ConfigParser::CreateMeasurementFromDriverNode(TXMLNode 
          attribIt = child->GetAttributes();
          curAttr = nullptr;
          while ((/**/ curAttr = dynamic_cast<TXMLAttr *>(attribIt()) /**/) != nullptr) {
-            const std::string curAttrName(curAttr->GetName() ? curAttr->GetName() : ""),
-               curAttrValue(curAttr->GetValue() ? curAttr->GetValue() : "");
+            const std::string curAttrName(curAttr->GetName() ? curAttr->GetName() : "");
+            const std::string curAttrValue(curAttr->GetValue() ? curAttr->GetValue() : "");
             if (curAttrName.empty()) {
                cxcoutEHF << "Error: Found tag attribute with no name in ConstraintTerm\n";
                throw hf_exc();
@@ -480,7 +473,7 @@ HistFactory::Measurement ConfigParser::CreateMeasurementFromDriverNode(TXMLNode 
          measurement.AddAsimovDataset(asimov);
       } else if (childNodeName == "ConstraintTerm") {
          std::vector<string> syst;
-         std::string type = "";
+         std::string type;
          double rel = 0;
 
          // Get the list of parameters in this tag:
@@ -494,8 +487,8 @@ HistFactory::Measurement ConfigParser::CreateMeasurementFromDriverNode(TXMLNode 
          attribIt = child->GetAttributes();
          curAttr = nullptr;
          while ((/**/ curAttr = dynamic_cast<TXMLAttr *>(attribIt()) /**/) != nullptr) {
-            const std::string curAttrName(curAttr->GetName() ? curAttr->GetName() : ""),
-               curAttrValue(curAttr->GetValue() ? curAttr->GetValue() : "");
+            const std::string curAttrName(curAttr->GetName() ? curAttr->GetName() : "");
+            const std::string curAttrValue(curAttr->GetValue() ? curAttr->GetValue() : "");
             if (curAttrName.empty()) {
                cxcoutEHF << "Error: Found tag attribute with no name in ConstraintTerm\n";
                throw hf_exc();
@@ -579,7 +572,7 @@ HistFactory::Channel ConfigParser::ParseChannelXMLFile( string filen ) {
 
   if( rootNode->GetNodeName() != TString( "Channel" ) ){
     cxcoutEHF << "Error: In parsing a Channel XML, "
-         << "Encounterd XML with DOCTYPE: " << rootNode->GetNodeName()
+         << "Encountered XML with DOCTYPE: " << rootNode->GetNodeName()
          << std::endl;
     cxcoutEHF << " DOCTYPE for channels must be 'Channel' "
          << " Check that your XML is properly written" << std::endl;
@@ -599,8 +592,8 @@ HistFactory::Channel ConfigParser::ParseChannelXMLFile( string filen ) {
   // Walk through the root node and
   // get its attributes
   TListIter attribIt = rootNode->GetAttributes();
-  TXMLAttr* curAttr = 0;
-  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != 0 ) {
+  TXMLAttr* curAttr = nullptr;
+  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != nullptr ) {
 
     // Get the Name, Val of this node
     TString attrName    = curAttr->GetName();
@@ -646,7 +639,7 @@ HistFactory::Channel ConfigParser::ParseChannelXMLFile( string filen ) {
 
   // Check that the channel was properly initiated:
 
-  if( channel.GetName() == "" ) {
+  if( channel.GetName().empty() ) {
     cxcoutEHF << "Error: Channel created with no name" << std::endl;
     throw hf_exc();
   }
@@ -660,7 +653,7 @@ HistFactory::Channel ConfigParser::ParseChannelXMLFile( string filen ) {
 
   bool firstData=true;
 
-  while( node != 0 ) {
+  while( node != nullptr ) {
 
     // Restore the Channel-Wide Defaults
     m_currentInputFile = channel.GetInputFile();
@@ -674,7 +667,7 @@ HistFactory::Channel ConfigParser::ParseChannelXMLFile( string filen ) {
     else if( node->GetNodeName() == TString( "Data" ) ) {
       if( firstData ) {
    RooStats::HistFactory::Data data = CreateDataElement(node);
-   if( data.GetName() != "" ) {
+   if( !data.GetName().empty() ) {
      cxcoutEHF << "Error: You can only rename the datasets of additional data sets.  "
           << "  Remove the 'Name=" << data.GetName() << "' tag"
           << " from channel: " << channel.GetName() << std::endl;
@@ -729,8 +722,8 @@ HistFactory::Data ConfigParser::CreateDataElement( TXMLNode* node ) {
 
     // Now, set the attributes
     TListIter attribIt = node->GetAttributes();
-    TXMLAttr* curAttr = 0;
-    while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != 0 ) {
+    TXMLAttr* curAttr = nullptr;
+    while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != nullptr ) {
 
       // Get the Name, Val of this node
       TString attrName    = curAttr->GetName();
@@ -767,11 +760,11 @@ HistFactory::Data ConfigParser::CreateDataElement( TXMLNode* node ) {
     }
 
     // Check the properties of the data node:
-    if( data.GetInputFile() == "" ) {
+    if( data.GetInputFile().empty() ) {
       cxcoutEHF << "Error: Data Node has no InputFile" << std::endl;
       throw hf_exc();
     }
-    if( data.GetHistoName() == "" ) {
+    if( data.GetHistoName().empty() ) {
       cxcoutEHF << "Error: Data Node has no HistoName" << std::endl;
       throw hf_exc();
     }
@@ -780,7 +773,7 @@ HistFactory::Data ConfigParser::CreateDataElement( TXMLNode* node ) {
          << " InputFile: " << data.GetInputFile()
          << " HistoName: " << data.GetHistoName()
          << " HistoPath: " << data.GetHistoPath()
-        << (data.GetName() != "" ? " Name: " : "") << data.GetName() << std::endl;
+        << (!data.GetName().empty() ? " Name: " : "") << data.GetName() << std::endl;
 
     // data.hist = GetHisto(data.FileName, data.HistoPath, data.HistoName);
 
@@ -801,8 +794,8 @@ HistFactory::StatErrorConfig ConfigParser::CreateStatErrorConfigElement( TXMLNod
 
   // Loop over the node's attributes
   TListIter attribIt = node->GetAttributes();
-  TXMLAttr* curAttr = 0;
-  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != 0 ) {
+  TXMLAttr* curAttr = nullptr;
+  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != nullptr ) {
 
     // Get the Name, Val of this node
     TString attrName    = curAttr->GetName();
@@ -815,7 +808,7 @@ HistFactory::StatErrorConfig ConfigParser::CreateStatErrorConfigElement( TXMLNod
     if( attrName == TString( "ConstraintType" ) ) {
       // Allowable Values:  Gaussian
 
-      if( attrVal == "" ) {
+      if( attrVal.empty() ) {
    cxcoutEHF << "Error: Bad Value for StatErrorConfig Constraint Type Found" << std::endl;
    throw hf_exc();
       }
@@ -863,8 +856,8 @@ HistFactory::Sample ConfigParser::CreateSampleElement( TXMLNode* node ) {
   // Now, set the attributes
 
   TListIter attribIt = node->GetAttributes();
-  TXMLAttr* curAttr = 0;
-  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != 0 ) {
+  TXMLAttr* curAttr = nullptr;
+  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != nullptr ) {
 
     // Get the Name, Val of this node
     TString attrName    = curAttr->GetName();
@@ -917,15 +910,15 @@ HistFactory::Sample ConfigParser::CreateSampleElement( TXMLNode* node ) {
   }
 
   // Quickly check the properties of the Sample Node
-  if( sample.GetName() == "" ) {
+  if( sample.GetName().empty() ) {
     cxcoutEHF << "Error: Sample Node has no Name" << std::endl;
     throw hf_exc();
   }
-  if( sample.GetInputFile() == "" ) {
+  if( sample.GetInputFile().empty() ) {
     cxcoutEHF << "Error: Sample Node has no InputFile" << std::endl;
     throw hf_exc();
   }
-  if( sample.GetHistoName() == "" ) {
+  if( sample.GetHistoName().empty() ) {
     cxcoutEHF << "Error: Sample Node has no HistoName" << std::endl;
     throw hf_exc();
   }
@@ -935,7 +928,7 @@ HistFactory::Sample ConfigParser::CreateSampleElement( TXMLNode* node ) {
 
   TXMLNode* child = node->GetChildren();
 
-  while( child != 0 ) {
+  while( child != nullptr ) {
 
     if( child->GetNodeName() == TString( "" ) ) {
       cxcoutEHF << "Error: Encountered node in Sample with no name" << std::endl;
@@ -1001,8 +994,8 @@ HistFactory::NormFactor ConfigParser::MakeNormFactor( TXMLNode* node ) {
   HistFactory::NormFactor norm;
 
   TListIter attribIt = node->GetAttributes();
-  TXMLAttr* curAttr = 0;
-  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != 0 ) {
+  TXMLAttr* curAttr = nullptr;
+  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != nullptr ) {
 
     // Get the Name, Val of this node
     TString attrName    = curAttr->GetName();
@@ -1034,7 +1027,7 @@ HistFactory::NormFactor ConfigParser::MakeNormFactor( TXMLNode* node ) {
 
   } // End loop over properties
 
-  if( norm.GetName() == "" ) {
+  if( norm.GetName().empty() ) {
     cxcoutEHF << "Error: NormFactor Node has no Name" << std::endl;
     throw hf_exc();
   }
@@ -1096,7 +1089,7 @@ HistFactory::HistoSys ConfigParser::MakeHistoSys( TXMLNode* node ) {
   histoSys.SetHistoPathHigh( m_currentHistoPath );
 
   TListIter attribIt = node->GetAttributes();
-  TXMLAttr* curAttr = 0;
+  TXMLAttr* curAttr = nullptr;
   /*
   string Name, histoPathHigh, histoPathLow,
     histoNameLow, histoNameHigh, inputFileHigh, inputFileLow;
@@ -1105,7 +1098,7 @@ HistFactory::HistoSys ConfigParser::MakeHistoSys( TXMLNode* node ) {
   histoNameLow=histoName; histoNameHigh=histoName;
   */
 
-  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != 0 ) {
+  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != nullptr ) {
 
     // Get the Name, Val of this node
     TString attrName    = curAttr->GetName();
@@ -1149,23 +1142,23 @@ HistFactory::HistoSys ConfigParser::MakeHistoSys( TXMLNode* node ) {
   } // End loop over properties
 
 
-  if( histoSys.GetName() == "" ) {
+  if( histoSys.GetName().empty() ) {
     cxcoutEHF << "Error: HistoSys Node has no Name" << std::endl;
     throw hf_exc();
   }
-  if( histoSys.GetInputFileHigh() == "" ) {
+  if( histoSys.GetInputFileHigh().empty() ) {
     cxcoutEHF << "Error: HistoSysSample Node has no InputFileHigh" << std::endl;
     throw hf_exc();
   }
-  if( histoSys.GetInputFileLow() == "" ) {
+  if( histoSys.GetInputFileLow().empty() ) {
     cxcoutEHF << "Error: HistoSysSample Node has no InputFileLow" << std::endl;
     throw hf_exc();
   }
-  if( histoSys.GetHistoNameHigh() == "" ) {
+  if( histoSys.GetHistoNameHigh().empty() ) {
     cxcoutEHF << "Error: HistoSysSample Node has no HistoNameHigh" << std::endl;
     throw hf_exc();
   }
-  if( histoSys.GetHistoNameLow() == "" ) {
+  if( histoSys.GetHistoNameLow().empty() ) {
     cxcoutEHF << "Error: HistoSysSample Node has no HistoNameLow" << std::endl;
     throw hf_exc();
   }
@@ -1185,8 +1178,8 @@ HistFactory::OverallSys ConfigParser::MakeOverallSys( TXMLNode* node ) {
   HistFactory::OverallSys overallSys;
 
   TListIter attribIt = node->GetAttributes();
-  TXMLAttr* curAttr = 0;
-  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != 0 ) {
+  TXMLAttr* curAttr = nullptr;
+  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != nullptr ) {
 
     // Get the Name, Val of this node
     TString attrName    = curAttr->GetName();
@@ -1215,7 +1208,7 @@ HistFactory::OverallSys ConfigParser::MakeOverallSys( TXMLNode* node ) {
 
   }
 
-  if( overallSys.GetName() == "" ) {
+  if( overallSys.GetName().empty() ) {
     cxcoutEHF << "Error: Encountered OverallSys with no name" << std::endl;
     throw hf_exc();
   }
@@ -1235,7 +1228,7 @@ HistFactory::ShapeFactor ConfigParser::MakeShapeFactor( TXMLNode* node ) {
   HistFactory::ShapeFactor shapeFactor;
 
   TListIter attribIt = node->GetAttributes();
-  TXMLAttr* curAttr = 0;
+  TXMLAttr* curAttr = nullptr;
 
   // A Shape Factor may or may not include an initial shape
   // This will be set by strings pointing to a histogram
@@ -1244,7 +1237,7 @@ HistFactory::ShapeFactor ConfigParser::MakeShapeFactor( TXMLNode* node ) {
   std::string ShapeInputFile = m_currentInputFile;
   std::string ShapeInputPath = m_currentHistoPath;
 
-  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != 0 ) {
+  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != nullptr ) {
 
     // Get the Name, Val of this node
     TString attrName    = curAttr->GetName();
@@ -1282,7 +1275,7 @@ HistFactory::ShapeFactor ConfigParser::MakeShapeFactor( TXMLNode* node ) {
 
   }
 
-  if( shapeFactor.GetName() == "" ) {
+  if( shapeFactor.GetName().empty() ) {
     cxcoutEHF << "Error: Encountered ShapeFactor with no name" << std::endl;
     throw hf_exc();
   }
@@ -1290,7 +1283,7 @@ HistFactory::ShapeFactor ConfigParser::MakeShapeFactor( TXMLNode* node ) {
   // Set the Histogram name, path, and file
   // if an InitialHist is set
   if( shapeFactor.HasInitialShape() ) {
-    if( shapeFactor.GetHistoName() == "" ) {
+    if( shapeFactor.GetHistoName().empty() ) {
       cxcoutEHF << "Error: ShapeFactor: " << shapeFactor.GetName()
       << " is configured to have an initial shape, but "
       << "its histogram doesn't have a name"
@@ -1321,10 +1314,10 @@ HistFactory::ShapeSys ConfigParser::MakeShapeSys( TXMLNode* node ) {
 
 
   TListIter attribIt = node->GetAttributes();
-  TXMLAttr* curAttr = 0;
+  TXMLAttr* curAttr = nullptr;
   //EstimateSummary::ConstraintType ConstraintType = EstimateSummary::Gaussian; //"Gaussian";
 
-  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != 0 ) {
+  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != nullptr ) {
 
 
     // Get the Name, Val of this node
@@ -1353,7 +1346,7 @@ HistFactory::ShapeSys ConfigParser::MakeShapeSys( TXMLNode* node ) {
     }
 
     else if( attrName == TString( "ConstraintType" ) ) {
-      if( attrVal=="" ) {
+      if( attrVal.empty() ) {
    cxcoutEHF << "Error: ShapeSys Constraint type is empty" << std::endl;
    throw hf_exc();
       }
@@ -1378,15 +1371,15 @@ HistFactory::ShapeSys ConfigParser::MakeShapeSys( TXMLNode* node ) {
   } // End loop over attributes
 
 
-  if( shapeSys.GetName() == "" ) {
+  if( shapeSys.GetName().empty() ) {
     cxcoutEHF << "Error: Encountered ShapeSys with no Name" << std::endl;
     throw hf_exc();
   }
-  if( shapeSys.GetInputFile() == "" ) {
+  if( shapeSys.GetInputFile().empty() ) {
     cxcoutEHF << "Error: Encountered ShapeSys with no InputFile" << std::endl;
     throw hf_exc();
   }
-  if( shapeSys.GetHistoName() == "" ) {
+  if( shapeSys.GetHistoName().empty() ) {
     cxcoutEHF << "Error: Encountered ShapeSys with no HistoName" << std::endl;
     throw hf_exc();
   }
@@ -1410,8 +1403,8 @@ HistFactory::StatError ConfigParser::ActivateStatError( TXMLNode* node ) {
 
   // Loop over the node's attributes
   TListIter attribIt = node->GetAttributes();
-  TXMLAttr* curAttr = 0;
-  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != 0 ) {
+  TXMLAttr* curAttr = nullptr;
+  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != nullptr ) {
 
     // Get the Name, Val of this node
     TString attrName    = curAttr->GetName();
@@ -1453,15 +1446,15 @@ HistFactory::StatError ConfigParser::ActivateStatError( TXMLNode* node ) {
   // If this is set AND the InputFile or
   // HistoPath aren't set, we set those
   // to the current default values
-  if( statError.GetHistoName() != "" ) {
+  if( !statError.GetHistoName().empty() ) {
     statError.SetUseHisto( true );
 
     // Check that a file has been set
     // (Possibly using the default)
-    if( statError.GetInputFile() == "" ) {
+    if( statError.GetInputFile().empty() ) {
       statError.SetInputFile( m_currentInputFile );
     }
-    if( statError.GetHistoPath() == "" ) {
+    if( statError.GetHistoPath().empty() ) {
       statError.SetHistoPath( m_currentHistoPath );
     }
 
@@ -1492,14 +1485,14 @@ RooStats::HistFactory::PreprocessFunction ConfigParser::ParseFunctionConfig( TXM
 
   //std::string name, expression, dependents;
   TListIter attribIt = functionNode->GetAttributes();
-  TXMLAttr* curAttr = 0;
+  TXMLAttr* curAttr = nullptr;
 
-  std::string Name = "";
-  std::string Expression = "";
-  std::string Dependents = "";
+  std::string Name;
+  std::string Expression;
+  std::string Dependents;
 
   // Add protection to ensure that all parts are there
-  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != 0 ) {
+  while( ( curAttr = dynamic_cast< TXMLAttr* >( attribIt() ) ) != nullptr ) {
     if( curAttr->GetName() == TString( "Name" ) ) {
       Name = curAttr->GetValue();
       //func.SetName( curAttr->GetValue() );
@@ -1515,15 +1508,15 @@ RooStats::HistFactory::PreprocessFunction ConfigParser::ParseFunctionConfig( TXM
     }
   }
 
-  if( Name=="" ){
+  if( Name.empty() ){
     cxcoutEHF << "Error processing PreprocessFunction: Name attribute is empty" << std::endl;
     throw hf_exc();
   }
-  if( Expression=="" ){
+  if( Expression.empty() ){
     cxcoutEHF << "Error processing PreprocessFunction: Expression attribute is empty" << std::endl;
     throw hf_exc();
   }
-  if( Dependents=="" ){
+  if( Dependents.empty() ){
     cxcoutEHF << "Error processing PreprocessFunction: Dependents attribute is empty" << std::endl;
     throw hf_exc();
   }
@@ -1557,7 +1550,7 @@ bool ConfigParser::IsAcceptableNode( TXMLNode* node ) {
 
 bool ConfigParser::CheckTrueFalse( std::string attrVal, std::string NodeTitle ) {
 
-  if( attrVal == "" ) {
+  if( attrVal.empty() ) {
     cxcoutEHF << "Error: In " << NodeTitle
          << " Expected either 'True' or 'False' but found empty" << std::endl;
     throw hf_exc();

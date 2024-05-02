@@ -20,7 +20,6 @@ class TGeoManager;
 class TGeoVolume;
 
 namespace ROOT {
-namespace Experimental {
 
 class RWebWindow;
 class RGeomHierarchy;
@@ -60,6 +59,8 @@ public:
    const std::string &GetTitle() const { return fTitle; }
 
    std::string GetWindowAddr() const;
+
+   std::string GetWindowUrl(bool remote);
 
    void SetGeometry(TGeoManager *mgr, const std::string &volname = "");
 
@@ -111,7 +112,6 @@ public:
 
 };
 
-} // namespace Experimental
 } // namespace ROOT
 
 #endif

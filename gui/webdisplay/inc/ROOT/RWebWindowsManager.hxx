@@ -28,7 +28,6 @@ class THttpWSHandler;
 class TExec;
 
 namespace ROOT {
-namespace Experimental {
 
 /// function signature for catching show calls of arbitrary RWebWindow
 /// if returns true, normal show procedure will not be invoked
@@ -41,6 +40,8 @@ class RWebWindowsManager {
 private:
    std::unique_ptr<THttpServer> fServer;  ///<! central communication with the all used displays
    std::string fAddr;                     ///<! HTTP address of the server
+   std::string fSessionKey;               ///<! secret session key used on client to code connections keys
+   bool fUseSessionKey{false};            ///<! is session key has to be used for data signing
    std::recursive_mutex fMutex;           ///<! main mutex, used for window creations
    unsigned fIdCnt{0};                    ///<! counter for identifiers
    bool fUseHttpThrd{false};              ///<! use special thread for THttpServer
@@ -66,13 +67,13 @@ private:
 
    int WaitFor(RWebWindow &win, WebWindowWaitFunc_t check, bool timed = false, double tm = -1);
 
-   std::string GetUrl(const RWebWindow &win, bool remote = false);
+   std::string GetUrl(RWebWindow &win, bool remote = false, std::string *produced_key = nullptr);
 
    bool CreateServer(bool with_http = false);
 
-   void AssignWindowThreadId(RWebWindow &win);
-
    bool InformListener(const std::string &msg);
+
+   static std::string GenerateKey(int keylen = 32);
 
 public:
    RWebWindowsManager();
@@ -96,9 +97,13 @@ public:
 
    static bool IsMainThrd();
    static void AssignMainThrd();
+
+   static void SetLoopbackMode(bool on = true);
+   static bool IsLoopbackMode();
+
+   static void SetUseSessionKey(bool on = false);
 };
 
-} // namespace Experimental
 } // namespace ROOT
 
 #endif

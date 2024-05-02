@@ -22,7 +22,7 @@
 
 #include <map>
 
-using namespace ROOT::Experimental;
+using namespace ROOT;
 
 using namespace std::string_literals;
 
@@ -97,6 +97,9 @@ public:
       // create implementation
       fWebCanvas = new TWebCanvas(fCanvas.get(), "title", 0, 0, 800, 600, readonly);
 
+      // use async mode to prevent blocking inside qt5/qt6/cef
+      fWebCanvas->SetAsyncMode(kTRUE);
+
       // assign implementation
       fCanvas->SetCanvasImp(fWebCanvas);
       SetPrivateCanvasFields(true);
@@ -115,6 +118,9 @@ public:
 
       // create implementation
       fWebCanvas = new TWebCanvas(fCanvas.get(), "title", 0, 0, 800, 600, readonly);
+
+      // use async mode to prevent blocking inside qt5/qt6/cef
+      fWebCanvas->SetAsyncMode(kTRUE);
 
       // assign implementation
       fCanvas->SetCanvasImp(fWebCanvas);
@@ -136,6 +142,11 @@ public:
 
       gROOT->GetListOfCanvases()->Remove(fCanvas.get());
 
+      if ((fCanvas->GetCanvasID() == -1) && (fCanvas->GetCanvasImp() == fWebCanvas)) {
+         fCanvas->SetCanvasImp(nullptr);
+         delete fWebCanvas;
+      }
+
       fCanvas->Close();
    }
 
@@ -153,7 +164,7 @@ public:
 
    std::string GetUrl() override
    {
-      return "../"s + fWebCanvas->GetWebWindow()->GetAddr() + "/"s;
+      return fWebCanvas->GetWebWindow()->GetUrl(false);
    }
 
    std::string GetTitle() override
@@ -169,6 +180,8 @@ public:
       std::unique_ptr<Browsable::RHolder> obj = elem->GetObject();
       if (!obj)
          return false;
+
+      Browsable::RProvider::ExtendProgressHandle(elem.get(), obj.get());
 
       std::string drawopt = opt;
 
@@ -205,7 +218,7 @@ public:
       if (Browsable::RProvider::Draw6(pad, obj, drawopt)) {
          fObjects.emplace(pad, std::move(obj));
          pad->Modified();
-         fCanvas->Update();
+         fCanvas->UpdateAsync();
          return true;
       }
 
@@ -215,7 +228,7 @@ public:
    void CheckModified() override
    {
       if (fCanvas->IsModified())
-         fCanvas->Update();
+         fCanvas->UpdateAsync();
    }
 
 };

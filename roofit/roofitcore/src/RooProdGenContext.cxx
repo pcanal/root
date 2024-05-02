@@ -19,7 +19,7 @@
 \class RooProdGenContext
 \ingroup Roofitcore
 
-RooProdGenContext is an efficient implementation of the generator context
+Efficient implementation of the generator context
 specific for RooProdPdf PDFs. The sim-context owns a list of
 component generator contexts that are used to generate the dependents
 for each component PDF sequentially.
@@ -36,10 +36,9 @@ for each component PDF sequentially.
 
 
 
-using namespace std;
+using std::endl, std::ostream;
 
 ClassImp(RooProdGenContext);
-;
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -64,7 +63,11 @@ RooProdGenContext::RooProdGenContext(const RooProdPdf &model, const RooArgSet &v
   }
 
   // Factorize product in irreducible terms
-  RooLinkedList termList,depsList,impDepList,crossDepList,intList ;
+  RooLinkedList termList;
+  RooLinkedList depsList;
+  RooLinkedList impDepList;
+  RooLinkedList crossDepList;
+  RooLinkedList intList;
   model.factorizeProduct(deps,RooArgSet(),termList,depsList,impDepList,crossDepList,intList) ;
 
   if (dologD(Generation)) {
@@ -164,7 +167,7 @@ RooProdGenContext::RooProdGenContext(const RooProdPdf &model, const RooArgSet &v
 
    // Composite term
    if (!termDeps->empty()) {
-     const std::string name = model.makeRGPPName("PRODGEN_",*term,RooArgSet(),RooArgSet(),0) ;
+     const std::string name = model.makeRGPPName("PRODGEN_",*term,RooArgSet(),RooArgSet(),nullptr) ;
 
      // Construct auxiliary PDF expressing product of composite terms,
      // following Conditional component specification of input model
@@ -235,7 +238,7 @@ RooProdGenContext::RooProdGenContext(const RooProdPdf &model, const RooArgSet &v
       ++normIter;
     }
 
-    const std::string name = model.makeRGPPName("PRODGEN_",trailerTerm,RooArgSet(),RooArgSet(),0) ;
+    const std::string name = model.makeRGPPName("PRODGEN_",trailerTerm,RooArgSet(),RooArgSet(),nullptr) ;
 
     // Construct auxiliary PDF expressing product of composite terms,
     // following Partial/Full component specification of input model

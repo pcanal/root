@@ -20,11 +20,13 @@
 #include <memory>
 
 namespace ROOT {
-namespace Experimental {
 
 class RBrowserWidget;
+class RBrowserTimer;
 
 class RBrowser {
+
+   friend class RBrowserTimer;
 
 protected:
 
@@ -37,20 +39,24 @@ protected:
    std::vector<std::shared_ptr<RBrowserWidget>> fWidgets; ///<!  all browser widgets
    int fWidgetCnt{0};                                     ///<! counter for created widgets
    std::string fPromptFileOutput;        ///<! file name for prompt output
+   float fLastProgressSend{0};           ///<! last value of send progress
+   long long fLastProgressSendTm{0};      ///<! time when last progress message was send
 
    std::shared_ptr<RWebWindow> fWebWindow;   ///<! web window to browser
 
-   RBrowserData  fBrowsable;                   ///<! central browsing element
+   RBrowserData  fBrowsable;                 ///<! central browsing element
+   std::unique_ptr<RBrowserTimer>    fTimer; ///<!  timer to handle postponed requests
+   std::vector<std::vector<std::string>> fPostponed; ///<! postponed messages, handled in timer
 
    std::shared_ptr<RBrowserWidget> AddWidget(const std::string &kind);
-   std::shared_ptr<RBrowserWidget> AddCatchedWidget(const std::string &url, const std::string &kind);
+   std::shared_ptr<RBrowserWidget> AddCatchedWidget(RWebWindow *win, const std::string &kind);
    std::shared_ptr<RBrowserWidget> FindWidget(const std::string &name, const std::string &kind = "") const;
    std::shared_ptr<RBrowserWidget> GetActiveWidget() const { return FindWidget(fActiveWidgetName); }
 
    void CloseTab(const std::string &name);
 
    std::string ProcessBrowserRequest(const std::string &msg);
-   std::string ProcessDblClick(std::vector<std::string> &args);
+   std::string ProcessDblClick(unsigned connid, std::vector<std::string> &args);
    std::string NewWidgetMsg(std::shared_ptr<RBrowserWidget> &widget);
    void ProcessRunMacro(const std::string &file_path);
    void ProcessSaveFile(const std::string &fname, const std::string &content);
@@ -61,10 +67,13 @@ protected:
 
    void SendInitMsg(unsigned connid);
    void ProcessMsg(unsigned connid, const std::string &arg);
+   void SendProgress(unsigned connid, float progr);
 
    void AddInitWidget(const std::string &kind);
 
    void CheckWidgtesModified();
+
+   void ProcessPostponedRequests();
 
 public:
    RBrowser(bool use_rcanvas = false);
@@ -82,6 +91,8 @@ public:
    /// hide Browser
    void Hide();
 
+   std::string GetWindowUrl(bool remote);
+
    void SetWorkingPath(const std::string &path);
 
    /// Enable/disable catch of RWebWindow::Show calls to embed created widgets, default on
@@ -96,7 +107,6 @@ public:
 
 };
 
-} // namespace Experimental
 } // namespace ROOT
 
 #endif

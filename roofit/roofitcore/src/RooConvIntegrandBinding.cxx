@@ -31,21 +31,21 @@ RooNumConvPdf
 #include "RooAbsRealLValue.h"
 #include "RooMsgService.h"
 
-#include <assert.h>
-
-using namespace std;
-
-ClassImp(RooConvIntegrandBinding);
-;
+#include <cassert>
 
 
 ////////////////////////////////////////////////////////////////////////////////
 
-RooConvIntegrandBinding::RooConvIntegrandBinding(const RooAbsReal& func, const RooAbsReal& model,
-                   RooAbsReal& xprime, RooAbsReal& x,
-                   const RooArgSet* nset, bool clipInvalid) :
+RooConvIntegrandBinding::RooConvIntegrandBinding(const RooAbsReal &func, const RooAbsReal &model, RooAbsReal &xprime,
+                                                 RooAbsReal &x, const RooArgSet *nset, bool clipInvalid)
+   :
 
-  RooAbsFunc(2), _func(&func), _model(&model), _vars(0), _nset(nset), _clipInvalid(clipInvalid)
+     RooAbsFunc(2),
+     _func(&func),
+     _model(&model),
+     _vars(new RooAbsRealLValue *[2]),
+     _nset(nset),
+     _clipInvalid(clipInvalid)
 {
   // Constructor where func and model
   //
@@ -66,22 +66,22 @@ RooConvIntegrandBinding::RooConvIntegrandBinding(const RooAbsReal& func, const R
   //
 
   // allocate memory
-  _vars= new RooAbsRealLValue*[2];
-  if(0 == _vars) {
+
+  if(nullptr == _vars) {
     _valid= false;
     return;
   }
 
   // check that all of the arguments are real valued and store them
   _vars[0]= dynamic_cast<RooAbsRealLValue*>(&xprime);
-  if(0 == _vars[0]) {
+  if(nullptr == _vars[0]) {
     oocoutE(&func,InputArguments) << "RooConvIntegrandBinding: cannot bind to ";
     xprime.Print("1");
     _valid= false;
   }
 
   _vars[1]= dynamic_cast<RooAbsRealLValue*>(&x);
-  if(0 == _vars[1]) {
+  if(nullptr == _vars[1]) {
     oocoutE(&func,InputArguments) << "RooConvIntegrandBinding: cannot bind to ";
     x.Print("1");
     _valid= false;
@@ -97,7 +97,7 @@ RooConvIntegrandBinding::RooConvIntegrandBinding(const RooAbsReal& func, const R
 
 RooConvIntegrandBinding::~RooConvIntegrandBinding()
 {
-  if(0 != _vars) delete[] _vars;
+  if(nullptr != _vars) delete[] _vars;
 }
 
 

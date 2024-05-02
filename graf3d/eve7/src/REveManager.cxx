@@ -18,9 +18,9 @@
 #include <ROOT/REveSceneInfo.hxx>
 #include <ROOT/REveClient.hxx>
 #include <ROOT/RWebWindow.hxx>
-#include <ROOT/RFileDialog.hxx>
 #include <ROOT/RLogger.hxx>
 #include <ROOT/REveSystem.hxx>
+#include <ROOT/RWebWindowsManager.hxx>
 
 #include "TGeoManager.h"
 #include "TGeoMatrix.h"
@@ -41,6 +41,7 @@
 #include "TApplication.h"
 
 #include <fstream>
+#include <memory>
 #include <sstream>
 #include <iostream>
 #include <regex>
@@ -154,7 +155,7 @@ REveManager::REveManager()
    // !!! AMT increase threshold to enable color pick on client
    TColor::SetColorThreshold(0.1);
 
-   fWebWindow = RWebWindow::Create();
+   fWebWindow = ROOT::RWebWindow::Create();
    fWebWindow->UseServerThreads();
    fWebWindow->SetDefaultPage("file:rootui5sys/eve7/index.html");
 
@@ -544,14 +545,14 @@ TGeoManager *REveManager::GetGeometry(const TString &filename)
          Warning("REveManager::GetGeometry", "TGeoManager is locked ... unlocking it.");
          TGeoManager::UnlockGeometry();
       }
-      if (TGeoManager::Import(filename) == 0) {
+      if (TGeoManager::Import(filename) == nullptr) {
          throw eh + "TGeoManager::Import() failed for '" + exp_filename + "'.";
       }
       if (locked) {
          TGeoManager::LockGeometry();
       }
 
-      gGeoManager->GetTopVolume()->VisibleDaughters(1);
+      gGeoManager->GetTopVolume()->VisibleDaughters(true);
 
       // Import colors exported by Gled, if they exist.
       {
@@ -601,6 +602,27 @@ TGeoManager *REveManager::GetDefaultGeometry()
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// Get the default viewer.
+///
+
+REveViewer *REveManager::GetDefaultViewer() const
+{
+   return dynamic_cast<REveViewer*>(fViewers->FirstChild());
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Utility function to allow remote RWebWindow connections.
+/// Disable loopback when use remote client.
+/// Authentification key has to be disabled in the case of multiple connections.
+/// The default arguments prevent remote connections for the security reasons.
+//
+void REveManager::AllowMultipleRemoteConnections(bool loopBack, bool requireAuthKey)
+{
+   ROOT::RWebWindowsManager::SetLoopbackMode(loopBack);
+   fWebWindow->SetRequireAuthKey(requireAuthKey);
+}
+
+////////////////////////////////////////////////////////////////////////////////
 /// Register 'name' as an alias for geometry file 'filename'.
 /// The old aliases are silently overwritten.
 /// After that the geometry can be retrieved also by calling:
@@ -616,11 +638,7 @@ void REveManager::RegisterGeometryAlias(const TString &alias, const TString &fil
 
 void REveManager::ClearROOTClassSaved()
 {
-   TIter nextcl(gROOT->GetListOfClasses());
-   TClass *cls;
-   while ((cls = (TClass *)nextcl())) {
-      cls->ResetBit(TClass::kClassSaved);
-   }
+   gROOT->ResetClassSaved();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -638,7 +656,7 @@ void REveManager::AddLocation(const std::string &locationName, const std::string
 //
 void REveManager::SetDefaultHtmlPage(const std::string &path)
 {
-   fWebWindow->SetDefaultPage(path.c_str());
+   fWebWindow->SetDefaultPage(path);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -849,11 +867,11 @@ void REveManager::WindowData(unsigned connid, const std::string &arg)
 
       return;
    }
-   else if (arg.compare( 0, 10, "FILEDIALOG") == 0)
+   else if (ROOT::RWebWindow::IsFileDialogMessage(arg))
    {
       // file dialog
-       RFileDialog::Embedded(fWebWindow, arg);
-       return;
+      ROOT::RWebWindow::EmbedFileDialog(fWebWindow, connid, arg);
+      return;
    }
 
    nlohmann::json cj = nlohmann::json::parse(arg);
@@ -873,7 +891,7 @@ void REveManager::ScheduleMIR(const std::string &cmd, ElementId_t id, const std:
 {
    std::unique_lock<std::mutex> lock(fServerState.fMutex);
    fServerStatus.fTLastMir = std::time(nullptr);
-   fMIRqueue.push(std::shared_ptr<MIR>(new MIR(cmd, id, ctype, connid)));
+   fMIRqueue.push(std::make_shared<MIR>(cmd, id, ctype, connid));
 
    if (fMIRqueue.size() > 5)
       std::cout  << "Warning, REveManager::ScheduleMIR(). queue size " << fMIRqueue.size() << std::endl;
@@ -986,7 +1004,7 @@ void REveManager::SendSceneChanges()
       std::stringstream strm;
       for (auto entry : gEveLogEntries) {
          nlohmann::json item = {};
-         item["lvl"] = entry.fLevel; 
+         item["lvl"] = entry.fLevel;
          int cappedLevel = std::min(static_cast<int>(entry.fLevel), numLevels - 1);
          strm <<  "Server " << sTag[cappedLevel] << ":";
 

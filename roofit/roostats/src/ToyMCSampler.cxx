@@ -52,7 +52,7 @@ ToyMCStudy with the RooStudyManager.
 
 
 using namespace RooFit;
-using namespace std;
+using std::endl;
 
 
 ClassImp(RooStats::ToyMCSampler);
@@ -106,12 +106,12 @@ void NuisanceParametersSampler::Refresh() {
       }
 
 
-      fPoints.reset( fPrior->generate(
+      fPoints = std::unique_ptr<RooDataSet>{fPrior->generate(
          *fParams,
          AllBinned(),
          ExpectedData(),
          NumEvents(1) // for Asimov set, this is only a scale factor
-      ));
+      )};
       if(fPoints->numEntries() != fNToys) {
          fNToys = fPoints->numEntries();
          oocoutI(nullptr,InputArguments) <<
@@ -133,7 +133,7 @@ void NuisanceParametersSampler::Refresh() {
    }else{
       oocoutI(nullptr,InputArguments) << "Using randomized nuisance parameters." << endl;
 
-      fPoints.reset(fPrior->generate(*fParams, fNToys));
+      fPoints = std::unique_ptr<RooDataSet>{fPrior->generate(*fParams, fNToys)};
    }
 }
 
@@ -146,69 +146,29 @@ void ToyMCSampler::SetAlwaysUseMultiGen(bool flag) { fgAlwaysUseMultiGen = flag 
 ////////////////////////////////////////////////////////////////////////////////
 /// Proof constructor. Do not use.
 
-ToyMCSampler::ToyMCSampler() : fSamplingDistName("SD"), fNToys(1)
+ToyMCSampler::ToyMCSampler()
+   : fSamplingDistName("SD"),
+     fNToys(1),
+     fMaxToys(RooNumber::infinity()),
+     fAdaptiveLowLimit(-RooNumber::infinity()),
+     fAdaptiveHighLimit(RooNumber::infinity())
 {
-
-   fPdf = nullptr;
-   fPriorNuisance = nullptr;
-   fNuisancePars = nullptr;
-   fObservables = nullptr;
-   fGlobalObservables = nullptr;
-
-   fSize = 0.05;
-   fNEvents = 0;
-   fGenerateBinned = false;
-   fGenerateBinnedTag = "";
-   fGenerateAutoBinned = true;
-   fExpectedNuisancePar = false;
-
-   fToysInTails = 0.0;
-   fMaxToys = RooNumber::infinity();
-   fAdaptiveLowLimit = -RooNumber::infinity();
-   fAdaptiveHighLimit = RooNumber::infinity();
-
-   fProtoData = nullptr;
-
-   fProofConfig = nullptr;
-   fNuisanceParametersSampler = nullptr;
-
    //suppress messages for num integration of Roofit
    RooMsgService::instance().getStream(1).removeTopic(RooFit::NumIntegration);
-
-   fUseMultiGen = false ;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 
-ToyMCSampler::ToyMCSampler(TestStatistic &ts, Int_t ntoys) : fSamplingDistName(ts.GetVarName().Data()), fNToys(ntoys)
+ToyMCSampler::ToyMCSampler(TestStatistic &ts, Int_t ntoys)
+   : fSamplingDistName(ts.GetVarName().Data()),
+     fNToys(ntoys),
+     fMaxToys(RooNumber::infinity()),
+     fAdaptiveLowLimit(-RooNumber::infinity()),
+     fAdaptiveHighLimit(RooNumber::infinity())
 {
-   fPdf = nullptr;
-   fPriorNuisance = nullptr;
-   fNuisancePars = nullptr;
-   fObservables = nullptr;
-   fGlobalObservables = nullptr;
-
-   fSize = 0.05;
-   fNEvents = 0;
-   fGenerateBinned = false;
-   fGenerateBinnedTag = "";
-   fGenerateAutoBinned = true;
-   fExpectedNuisancePar = false;
-
-   fToysInTails = 0.0;
-   fMaxToys = RooNumber::infinity();
-   fAdaptiveLowLimit = -RooNumber::infinity();
-   fAdaptiveHighLimit = RooNumber::infinity();
-
-   fProtoData = nullptr;
-
-   fProofConfig = nullptr;
-   fNuisanceParametersSampler = nullptr;
 
    //suppress messages for num integration of Roofit
    RooMsgService::instance().getStream(1).removeTopic(RooFit::NumIntegration);
-
-   fUseMultiGen = false ;
 
    AddTestStatistic(&ts);
 }
@@ -244,7 +204,7 @@ bool ToyMCSampler::CheckConfig(void) {
 RooArgList* ToyMCSampler::EvaluateAllTestStatistics(RooAbsData& data, const RooArgSet& poi) {
    DetailedOutputAggregator detOutAgg;
    const RooArgList* allTS = EvaluateAllTestStatistics(data, poi, detOutAgg);
-   if (!allTS) return 0;
+   if (!allTS) return nullptr;
    // no need to delete allTS, it is deleted in destructor of detOutAgg
    return  dynamic_cast<RooArgList*>(allTS->snapshot());
 }
@@ -291,15 +251,13 @@ SamplingDistribution* ToyMCSampler::GetSamplingDistribution(RooArgSet& paramPoin
       }
    }
 
-   RooDataSet* r = GetSamplingDistributions(paramPointIn);
+   std::unique_ptr<RooDataSet> r{GetSamplingDistributions(paramPointIn)};
    if(r == nullptr || r->numEntries() == 0) {
       oocoutW(nullptr, Generation) << "no sampling distribution generated" << endl;
       return nullptr;
    }
 
-   SamplingDistribution* samp = new SamplingDistribution( r->GetName(), r->GetTitle(), *r );
-   delete r;
-   return samp;
+   return new SamplingDistribution( r->GetName(), r->GetTitle(), *r );
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -402,7 +360,8 @@ RooDataSet* ToyMCSampler::GetSamplingDistributionsSingleWorker(RooArgSet& paramP
       // TODO: change this treatment to keep track of all values so that the threshold
       // for adaptive sampling is counted for all distributions and not just the
       // first one.
-      double valueFirst = -999.0, weight = 1.0;
+      double valueFirst = -999.0;
+      double weight = 1.0;
 
       // set variables to requested parameter point
       allVars->assign(*saveAll); // important for example for SimpleLikelihoodRatioTestStat
@@ -410,18 +369,20 @@ RooDataSet* ToyMCSampler::GetSamplingDistributionsSingleWorker(RooArgSet& paramP
       RooAbsData* toydata = GenerateToyData(*paramPoint, weight);
       if (i == 0 && !fPdf->canBeExtended() && dynamic_cast<RooSimultaneous*>(fPdf)) {
         const RooArgSet* toySet = toydata->get();
-        if (std::none_of(toySet->begin(), toySet->end(), [](const RooAbsArg* arg){
-          return dynamic_cast<const RooAbsCategory*>(arg) != nullptr;
-        }))
-          oocoutE(nullptr, Generation) << "ToyMCSampler: Generated toy data didn't contain a category variable, although"
-            " a simultaneous PDF is in use. To generate events for a simultaneous PDF, all components need to be"
-            " extended. Otherwise, the number of events to generate per component cannot be determined." << std::endl;
+        if (std::none_of(toySet->begin(), toySet->end(),
+                         [](const RooAbsArg *arg) { return dynamic_cast<const RooAbsCategory *>(arg) != nullptr; })) {
+           oocoutE(nullptr, Generation)
+              << "ToyMCSampler: Generated toy data didn't contain a category variable, although"
+                 " a simultaneous PDF is in use. To generate events for a simultaneous PDF, all components need to be"
+                 " extended. Otherwise, the number of events to generate per component cannot be determined."
+              << std::endl;
+        }
       }
 
       allVars->assign(*fParametersForTestStat);
 
       const RooArgList* allTS = EvaluateAllTestStatistics(*toydata, *fParametersForTestStat, detOutAgg);
-      if (allTS->getSize() > Int_t(fTestStatistics.size()))
+      if (allTS->size() > fTestStatistics.size())
         detOutAgg.AppendArgSet( fGlobalObservables, "globObs_" );
       if (RooRealVar* firstTS = dynamic_cast<RooRealVar*>(allTS->first()))
          valueFirst = firstTS->getVal();
@@ -466,7 +427,7 @@ void ToyMCSampler::GenerateGlobalObservables(RooAbsPdf& pdf) const {
 
       // generate one set of global observables and assign it
       // has problem for sim pdfs
-      RooSimultaneous* simPdf = dynamic_cast<RooSimultaneous*>( &pdf );
+      RooSimultaneous* simPdf = dynamic_cast<RooSimultaneous*>(&pdf );
       if (!simPdf) {
          std::unique_ptr<RooDataSet> one{pdf.generate(*fGlobalObservables, 1)};
 
@@ -479,16 +440,16 @@ void ToyMCSampler::GenerateGlobalObservables(RooAbsPdf& pdf) const {
       } else {
 
          if (_pdfList.empty()) {
-            RooCategory& channelCat = (RooCategory&)simPdf->indexCat();
+            auto& channelCat = const_cast<RooCategory&>(static_cast<RooCategory const&>(simPdf->indexCat()));
             int nCat = channelCat.numTypes();
             for (int i=0; i < nCat; ++i){
                channelCat.setIndex(i);
                RooAbsPdf* pdftmp = simPdf->getPdf(channelCat.getCurrentLabel());
                assert(pdftmp);
-               RooArgSet* globtmp = pdftmp->getObservables(*fGlobalObservables);
+               std::unique_ptr<RooArgSet> globtmp{pdftmp->getObservables(*fGlobalObservables)};
                RooAbsPdf::GenSpec* gs = pdftmp->prepareMultiGen(*globtmp, NumEvents(1));
                _pdfList.push_back(pdftmp);
-               _obsList.emplace_back(globtmp);
+               _obsList.emplace_back(std::move(globtmp));
                _gsList.emplace_back(gs);
             }
          }
@@ -540,7 +501,7 @@ RooAbsData* ToyMCSampler::GenerateToyData(RooArgSet& paramPoint, double& weight,
 
    // generate global observables
    RooArgSet observables(*fObservables);
-   if(fGlobalObservables  &&  fGlobalObservables->getSize()) {
+   if(fGlobalObservables  &&  !fGlobalObservables->empty()) {
       observables.remove(*fGlobalObservables);
       GenerateGlobalObservables(pdf);
    }
@@ -569,7 +530,7 @@ RooAbsData* ToyMCSampler::GenerateToyData(RooArgSet& paramPoint, double& weight,
       weight = 1.0;
    }
 
-   RooAbsData *data = Generate(pdf, observables);
+   RooAbsData *data = Generate(pdf, observables).release();
 
    // We generated the data with the randomized nuisance parameter (if hybrid)
    // but now we are setting the nuisance parameters back to where they were.
@@ -586,14 +547,14 @@ RooAbsData* ToyMCSampler::GenerateToyData(RooArgSet& paramPoint, double& weight,
 /// or whether it should use the expected number of events. It also takes
 /// into account the option to generate a binned data set (*i.e.* RooDataHist).
 
-RooAbsData* ToyMCSampler::Generate(RooAbsPdf &pdf, RooArgSet &observables, const RooDataSet* protoData, int forceEvents) const {
+std::unique_ptr<RooAbsData> ToyMCSampler::Generate(RooAbsPdf &pdf, RooArgSet &observables, const RooDataSet* protoData, int forceEvents) const {
 
   if(fProtoData) {
     protoData = fProtoData;
     forceEvents = protoData->numEntries();
   }
 
-  RooAbsData *data = nullptr;
+  std::unique_ptr<RooAbsData> data;
   int events = forceEvents;
   if(events == 0) events = fNEvents;
 
@@ -603,22 +564,22 @@ RooAbsData* ToyMCSampler::Generate(RooAbsPdf &pdf, RooArgSet &observables, const
   if (events == 0) {
     if (pdf.canBeExtended() && pdf.expectedEvents(observables) > 0) {
       if(fGenerateBinned) {
-        if(protoData) data = pdf.generate(observables, AllBinned(), Extended(), ProtoData(*protoData, true, true));
-        else          data = pdf.generate(observables, AllBinned(), Extended());
+        if(protoData) data = std::unique_ptr<RooDataSet>{pdf.generate(observables, AllBinned(), Extended(), ProtoData(*protoData, true, true))};
+        else          data = std::unique_ptr<RooDataSet>{pdf.generate(observables, AllBinned(), Extended())};
       } else {
         if (protoData) {
           if (useMultiGen) {
             if (!_gs2) _gs2.reset( pdf.prepareMultiGen(observables, Extended(), AutoBinned(fGenerateAutoBinned), GenBinned(fGenerateBinnedTag), ProtoData(*protoData, true, true)) );
-            data = pdf.generate(*_gs2) ;
+            data = std::unique_ptr<RooDataSet>{pdf.generate(*_gs2)};
           } else {
-            data = pdf.generate                    (observables, Extended(), AutoBinned(fGenerateAutoBinned), GenBinned(fGenerateBinnedTag), ProtoData(*protoData, true, true));
+            data = std::unique_ptr<RooDataSet>{pdf.generate(observables, Extended(), AutoBinned(fGenerateAutoBinned), GenBinned(fGenerateBinnedTag), ProtoData(*protoData, true, true))};
           }
         } else {
           if (useMultiGen) {
             if (!_gs1) _gs1.reset( pdf.prepareMultiGen(observables, Extended(), AutoBinned(fGenerateAutoBinned), GenBinned(fGenerateBinnedTag)) );
-            data = pdf.generate(*_gs1) ;
+            data = std::unique_ptr<RooDataSet>{pdf.generate(*_gs1)};
           } else {
-            data = pdf.generate                    (observables, Extended(), AutoBinned(fGenerateAutoBinned), GenBinned(fGenerateBinnedTag) );
+            data = std::unique_ptr<RooDataSet>{pdf.generate(observables, Extended(), AutoBinned(fGenerateAutoBinned), GenBinned(fGenerateBinnedTag) )};
           }
 
         }
@@ -630,22 +591,22 @@ RooAbsData* ToyMCSampler::Generate(RooAbsPdf &pdf, RooArgSet &observables, const
     }
   } else {
     if (fGenerateBinned) {
-      if(protoData) data = pdf.generate(observables, events, AllBinned(), ProtoData(*protoData, true, true));
-      else          data = pdf.generate(observables, events, AllBinned());
+      if(protoData) data = std::unique_ptr<RooDataSet>{pdf.generate(observables, events, AllBinned(), ProtoData(*protoData, true, true))};
+      else          data = std::unique_ptr<RooDataSet>{pdf.generate(observables, events, AllBinned())};
     } else {
       if (protoData) {
         if (useMultiGen) {
           if (!_gs3) _gs3.reset( pdf.prepareMultiGen(observables, NumEvents(events), AutoBinned(fGenerateAutoBinned), GenBinned(fGenerateBinnedTag), ProtoData(*protoData, true, true)) );
-          data = pdf.generate(*_gs3) ;
+          data = std::unique_ptr<RooDataSet>{pdf.generate(*_gs3)};
         } else {
-          data = pdf.generate                    (observables, NumEvents(events), AutoBinned(fGenerateAutoBinned), GenBinned(fGenerateBinnedTag), ProtoData(*protoData, true, true));
+          data = std::unique_ptr<RooDataSet>{pdf.generate(observables, NumEvents(events), AutoBinned(fGenerateAutoBinned), GenBinned(fGenerateBinnedTag), ProtoData(*protoData, true, true))};
         }
       } else {
         if (useMultiGen) {
           if (!_gs4) _gs4.reset( pdf.prepareMultiGen(observables, NumEvents(events), AutoBinned(fGenerateAutoBinned), GenBinned(fGenerateBinnedTag)) );
-          data = pdf.generate(*_gs4) ;
+          data = std::unique_ptr<RooDataSet>{pdf.generate(*_gs4)};
         } else {
-          data = pdf.generate                    (observables, NumEvents(events), AutoBinned(fGenerateAutoBinned), GenBinned(fGenerateBinnedTag));
+          data = std::unique_ptr<RooDataSet>{pdf.generate(observables, NumEvents(events), AutoBinned(fGenerateAutoBinned), GenBinned(fGenerateBinnedTag))};
         }
       }
     }
@@ -688,7 +649,7 @@ void ToyMCSampler::ClearCache() {
   _allVars = nullptr;
 
   // no need to delete the _pdfList since it is managed by the RooSimultaneous object
-  if (_pdfList.size() > 0) {
+  if (!_pdfList.empty()) {
     _pdfList.clear();
     _obsList.clear();
     _gsList.clear();

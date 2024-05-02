@@ -25,16 +25,18 @@
 #include "TApplication.h"
 #include "TTimer.h"
 #include "TRandom.h"
+#include "TError.h"
 #include "TROOT.h"
 #include "TEnv.h"
 #include "TExec.h"
 #include "TSocket.h"
+#include "TThread.h"
 
 #include <thread>
 #include <chrono>
 #include <iostream>
 
-using namespace ROOT::Experimental;
+using namespace ROOT;
 
 ///////////////////////////////////////////////////////////////
 /// Parse boolean gEnv variable which should be "yes" or "no"
@@ -58,7 +60,7 @@ int RWebWindowWSHandler::GetBoolEnv(const std::string &name, int dflt)
 }
 
 
-/** \class ROOT::Experimental::RWebWindowsManager
+/** \class ROOT::RWebWindowsManager
 \ingroup webdisplay
 
 Central instance to create and show web-based windows like Canvas or FitPanel.
@@ -89,6 +91,8 @@ std::shared_ptr<RWebWindowsManager> &RWebWindowsManager::Instance()
 
 static std::thread::id gWebWinMainThrd = std::this_thread::get_id();
 static bool gWebWinMainThrdSet = true;
+static bool gWebWinLoopbackMode = true;
+static bool gWebWinUseSessionKey = true;
 
 //////////////////////////////////////////////////////////////////////////////////////////
 /// Returns true when called from main process
@@ -115,18 +119,82 @@ void RWebWindowsManager::AssignMainThrd()
    gWebWinMainThrd = std::this_thread::get_id();
 }
 
+
+//////////////////////////////////////////////////////////////////////////////////////////
+/// Set loopback mode for THttpServer used for web widgets
+/// By default is on. Only local communication via localhost address is possible
+/// Disable it only if really necessary - it may open unauthorized access to your application from external nodes!!
+
+void RWebWindowsManager::SetLoopbackMode(bool on)
+{
+   gWebWinLoopbackMode = on;
+   if (!on) {
+      printf("\nWARNING!\n");
+      printf("Disabling loopback mode may leads to security problem.\n");
+      printf("See https://root.cern/about/security/ for more information.\n\n");
+      if (!gWebWinUseSessionKey) {
+         printf("Enforce session key to safely work on public network.\n");
+         printf("One may call RWebWindowsManager::SetUseSessionKey(false); to disable it.\n");
+         gWebWinUseSessionKey = true;
+      }
+   }
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+/// Returns true if loopback mode used by THttpServer for web widgets
+
+bool RWebWindowsManager::IsLoopbackMode()
+{
+   return gWebWinLoopbackMode;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+/// Enable or disable usage of session key
+/// If enabled, each packet send to or from server is signed with special hashsum
+/// This protects http server from different attacks to get access to server functionality
+
+void RWebWindowsManager::SetUseSessionKey(bool on)
+{
+   gWebWinUseSessionKey = on;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////
+/// Static method to generate cryptographic key
+/// Parameter keylen defines length of cryptographic key in bytes
+/// Output string will be hex formatted and includes "-" separator after every 4 bytes
+/// Example for 16 bytes: "fca45856-41bee066-ff74cc96-9154d405"
+
+std::string RWebWindowsManager::GenerateKey(int keylen)
+{
+   std::vector<unsigned char> buf(keylen, 0);
+   auto res = gSystem->GetCryptoRandom(buf.data(), keylen);
+
+   R__ASSERT(res == keylen && "Error in gSystem->GetCryptoRandom");
+
+   std::string key;
+   for (int n = 0; n < keylen; n++) {
+      if ((n > 0) && (n % 4 == 0))
+         key.append("-");
+      auto t = TString::Itoa(buf[n], 16);
+      if (t.Length() == 1)
+         key.append("0");
+      key.append(t.Data());
+   }
+   return key;
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////
 /// window manager constructor
 /// Required here for correct usage of unique_ptr<THttpServer>
 
 RWebWindowsManager::RWebWindowsManager()
 {
+   fSessionKey = GenerateKey(32);
+   fUseSessionKey = gWebWinUseSessionKey;
+
    fExternalProcessEvents = RWebWindowWSHandler::GetBoolEnv("WebGui.ExternalProcessEvents") == 1;
-   if (fExternalProcessEvents) {
-      gWebWinMainThrdSet = false;
-      fAssgnExec = std::make_unique<TExec>("init_threadid", "ROOT::Experimental::RWebWindowsManager::AssignMainThrd();");
-      TTimer::SingleShot(0, "TExec",  fAssgnExec.get(), "Exec()");
-   }
+   if (fExternalProcessEvents)
+      RWebWindowsManager::AssignMainThrd();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -138,20 +206,6 @@ RWebWindowsManager::~RWebWindowsManager()
    if (gApplication && fServer && !fServer->IsTerminated()) {
       gApplication->Disconnect("Terminate(Int_t)", fServer.get(), "SetTerminate()");
       fServer->SetTerminate();
-   }
-}
-
-//////////////////////////////////////////////////////////////////////////////////////////
-/// Assign thread id for window
-/// Required in case of external process events
-
-void RWebWindowsManager::AssignWindowThreadId(RWebWindow &win)
-{
-   if (fExternalProcessEvents && gWebWinMainThrdSet) {
-      win.fUseServerThreads = false;
-      win.fProcessMT = false;
-      win.fCallbacksThrdIdSet = true;
-      win.fCallbacksThrdId = gWebWinMainThrd;
    }
 }
 
@@ -347,7 +401,7 @@ bool RWebWindowsManager::CreateServer(bool with_http)
    int fcgi_thrds = gEnv->GetValue("WebGui.FastCgiThreads", 10);
    const char *fcgi_serv = gEnv->GetValue("WebGui.FastCgiServer", "");
    fLaunchTmout = gEnv->GetValue("WebGui.LaunchTmout", 30.);
-   bool assign_loopback = RWebWindowWSHandler::GetBoolEnv("WebGui.HttpLoopback", 1) == 1;
+   bool assign_loopback = gWebWinLoopbackMode;
    const char *http_bind = gEnv->GetValue("WebGui.HttpBind", "");
    bool use_secure = RWebWindowWSHandler::GetBoolEnv("WebGui.UseHttps", 0) == 1;
    const char *ssl_cert = gEnv->GetValue("WebGui.ServerCert", "rootserver.pem");
@@ -360,6 +414,9 @@ bool RWebWindowsManager::CreateServer(bool with_http)
 
    if (use_unix_socket)
       fcgi_port = http_port = -1;
+
+   if (assign_loopback)
+      fcgi_port = -1;
 
    int ntry = 100;
 
@@ -425,17 +482,17 @@ bool RWebWindowsManager::CreateServer(bool with_http)
             }
          }
 
-         engine.Append(TString::Format("thrds=%d&websocket_timeout=%d", http_thrds, http_wstmout));
+         engine.Append(TString::Format("webgui&top=remote&thrds=%d&websocket_timeout=%d", http_thrds, http_wstmout));
 
          if (http_maxage >= 0)
             engine.Append(TString::Format("&max_age=%d", http_maxage));
 
-         if (use_secure) {
+         if (use_secure && !strchr(ssl_cert,'&')) {
             engine.Append("&ssl_cert=");
             engine.Append(ssl_cert);
          }
 
-         if (extra_args && strlen(extra_args) > 0) {
+         if (!use_unix_socket && !assign_loopback && extra_args && strlen(extra_args) > 0) {
             engine.Append("&");
             engine.Append(extra_args);
          }
@@ -498,10 +555,12 @@ std::shared_ptr<RWebWindow> RWebWindowsManager::CreateWindow()
    }
 
    if (fExternalProcessEvents) {
-      if (gWebWinMainThrdSet)
-         AssignWindowThreadId(*win.get());
-      else
-         win->UseServerThreads(); // let run window until thread is obtained
+      // special mode when window communication performed in THttpServer::ProcessRequests
+      // used only with python which create special thread - but is has to be ignored!!!
+      // therefore use main thread id to detect callbacks which are invoked only from that main thread
+      win->fUseProcessEvents = true;
+      win->fCallbacksThrdIdSet = gWebWinMainThrdSet;
+      win->fCallbacksThrdId = gWebWinMainThrd;
    } else if (IsUseHttpThread())
       win->UseServerThreads();
 
@@ -527,7 +586,7 @@ void RWebWindowsManager::Unregister(RWebWindow &win)
 //////////////////////////////////////////////////////////////////////////
 /// Provide URL address to access specified window from inside or from remote
 
-std::string RWebWindowsManager::GetUrl(const RWebWindow &win, bool remote)
+std::string RWebWindowsManager::GetUrl(RWebWindow &win, bool remote, std::string *produced_key)
 {
    if (!fServer) {
       R__LOG_ERROR(WebGUILog()) << "Server instance not exists when requesting window URL";
@@ -535,19 +594,46 @@ std::string RWebWindowsManager::GetUrl(const RWebWindow &win, bool remote)
    }
 
    std::string addr = "/";
-
    addr.append(win.fWSHandler->GetName());
-
    addr.append("/");
 
+   bool qmark = false;
+
+   std::string key;
+
+   if (win.IsRequireAuthKey() || produced_key) {
+      key = win.GenerateKey();
+      R__ASSERT(!key.empty());
+      addr.append("?key=");
+      addr.append(key);
+      qmark = true;
+      std::unique_ptr<ROOT::RWebDisplayHandle> dummy;
+      win.AddDisplayHandle(false, key, dummy);
+   }
+
+   auto token = win.GetConnToken();
+   if (!token.empty()) {
+      if (!qmark) addr.append("?");
+      addr.append("token=");
+      addr.append(token);
+   }
+
    if (remote) {
-      if (!CreateServer(true)) {
+      if (!CreateServer(true) || fAddr.empty()) {
          R__LOG_ERROR(WebGUILog()) << "Fail to start real HTTP server when requesting URL";
+         if (!key.empty())
+            win.RemoveKey(key);
          return "";
       }
 
       addr = fAddr + addr;
+
+      if (!key.empty() && !fSessionKey.empty() && fUseSessionKey && win.IsRequireAuthKey())
+         addr += "#"s + fSessionKey;
    }
+
+   if (produced_key)
+      *produced_key = key;
 
    return addr;
 }
@@ -605,23 +691,15 @@ unsigned RWebWindowsManager::ShowWindow(RWebWindow &win, const RWebDisplayArgs &
 
    // catch window showing, used by the RBrowser to embed some of ROOT widgets
    if (fShowCallback)
-      if (fShowCallback(win, user_args))
+      if (fShowCallback(win, user_args)) {
+         // add dummy handle to pending connections, widget (like TWebCanvas) may wait until connection established
+         auto handle = std::make_unique<RWebDisplayHandle>("");
+         win.AddDisplayHandle(false, "", handle);
          return 0;
-
-   // place here while involves conn mutex
-   auto token = win.GetConnToken();
-
-   // we book manager mutex for a longer operation,
-   std::lock_guard<std::recursive_mutex> grd(fMutex);
+      }
 
    if (!fServer) {
       R__LOG_ERROR(WebGUILog()) << "Server instance not exists to show window";
-      return 0;
-   }
-
-   std::string key = win.GenerateKey();
-   if (key.empty()) {
-      R__LOG_ERROR(WebGUILog()) << "Fail to create unique key for the window";
       return 0;
    }
 
@@ -632,6 +710,22 @@ unsigned RWebWindowsManager::ShowWindow(RWebWindow &win, const RWebDisplayArgs &
       return 0;
    }
 
+   bool normal_http = RWebDisplayHandle::NeedHttpServer(args);
+   if (!normal_http && (gEnv->GetValue("WebGui.ForceHttp", 0) == 1))
+      normal_http = true;
+
+   std::string key;
+
+   std::string url = GetUrl(win, normal_http, &key);
+   // empty url indicates failure, which already pinted by GetUrl method
+   if (url.empty())
+      return 0;
+
+   // we book manager mutex for a longer operation,
+   std::lock_guard<std::recursive_mutex> grd(fMutex);
+
+   args.SetUrl(url);
+
    if (args.GetWidth() <= 0)
       args.SetWidth(win.GetWidth());
    if (args.GetHeight() <= 0)
@@ -641,27 +735,8 @@ unsigned RWebWindowsManager::ShowWindow(RWebWindow &win, const RWebDisplayArgs &
    if (args.GetY() < 0)
       args.SetY(win.GetY());
 
-   bool normal_http = !args.IsLocalDisplay();
-   if (!normal_http && (gEnv->GetValue("WebGui.ForceHttp", 0) == 1))
-      normal_http = true;
-
-   std::string url = GetUrl(win, normal_http);
-   if (url.empty()) {
-      R__LOG_ERROR(WebGUILog()) << "Cannot create URL for the window";
-      return 0;
-   }
-   if (normal_http && fAddr.empty()) {
-      R__LOG_WARNING(WebGUILog()) << "Full URL cannot be produced for window " << url << " to start web browser";
-      return 0;
-   }
-
-   args.SetUrl(url);
-
-   args.AppendUrlOpt(std::string("key=") + key);
    if (args.IsHeadless())
       args.AppendUrlOpt("headless"); // used to create holder request
-   if (!token.empty())
-      args.AppendUrlOpt(std::string("token=") + token);
 
    if (!args.IsHeadless() && normal_http) {
       auto winurl = args.GetUrl();
@@ -703,6 +778,8 @@ unsigned RWebWindowsManager::ShowWindow(RWebWindow &win, const RWebDisplayArgs &
 
    if (!handle) {
       R__LOG_ERROR(WebGUILog()) << "Cannot display window in " << args.GetBrowserName();
+      if (!key.empty())
+         win.RemoveKey(key);
       return 0;
    }
 

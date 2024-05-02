@@ -37,17 +37,51 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <thread>
 
 class THttpTimer : public TTimer {
+   Long_t fNormalTmout{0};
+   Bool_t fSlow{kFALSE};
+   Int_t fSlowCnt{0};
+
 public:
    THttpServer &fServer; ///!< server processing requests
 
    /// constructor
-   THttpTimer(Long_t milliSec, Bool_t mode, THttpServer &serv) : TTimer(milliSec, mode), fServer(serv) {}
+   THttpTimer(Long_t milliSec, Bool_t mode, THttpServer &serv) : TTimer(milliSec, mode), fNormalTmout(milliSec), fServer(serv) {}
+
+   void SetSlow(Bool_t flag)
+   {
+      fSlow = flag;
+      fSlowCnt = 0;
+      Long_t ms = fNormalTmout;
+      if (fSlow) {
+         if (ms < 100)
+            ms = 500;
+         else if (ms < 500)
+            ms = 3000;
+         else
+            ms = 10000;
+      }
+
+      SetTime(ms);
+   }
+   Bool_t IsSlow() const { return fSlow; }
 
    /// timeout handler
    /// used to process http requests in main ROOT thread
-   void Timeout() override { fServer.ProcessRequests(); }
+   void Timeout() override
+   {
+      Int_t nprocess = fServer.ProcessRequests();
+
+      if (nprocess > 0) {
+         fSlowCnt = 0;
+         if (IsSlow())
+            SetSlow(kFALSE);
+      } else if (!IsSlow() && (fSlowCnt++ > 10)) {
+           SetSlow(kTRUE);
+      }
+   }
 };
 
 
@@ -147,20 +181,26 @@ THttpServer::THttpServer(const char *engine) : TNamed("http", "ROOT http server"
       }
    }
 
-   AddLocation("currentdir/", ".");
+   Bool_t basic_sniffer = strstr(engine, "basic_sniffer") != nullptr;
+
    AddLocation("jsrootsys/", fJSROOTSYS.Data());
-   AddLocation("rootsys/", TROOT::GetRootSys());
+
+   if (!basic_sniffer) {
+      AddLocation("currentdir/", ".");
+      AddLocation("rootsys/", TROOT::GetRootSys());
+   }
 
    fDefaultPage = fJSROOTSYS + "/files/online.htm";
    fDrawPage = fJSROOTSYS + "/files/draw.htm";
 
    TRootSniffer *sniff = nullptr;
-   if (strstr(engine, "basic_sniffer")) {
-      sniff = new TRootSniffer("sniff");
+   if (basic_sniffer) {
+      sniff = new TRootSniffer();
       sniff->SetScanGlobalDir(kFALSE);
       sniff->CreateOwnTopFolder(); // use dedicated folder
    } else {
-      sniff = (TRootSniffer *)gROOT->ProcessLineSync("new TRootSnifferFull(\"sniff\");");
+      static const TClass *snifferClass = TClass::GetClass("TRootSnifferFull");
+      sniff = (TRootSniffer *)snifferClass->New();
    }
 
    SetSniffer(sniff);
@@ -283,7 +323,7 @@ void THttpServer::SetWSOnly(Bool_t on)
 ///
 /// One could map some system folder to the server like
 ///
-///     serv->AddLocation("mydir/","/home/user/specials");
+///     serv->AddLocation("mydir/", "/home/user/specials");
 ///
 /// Than files from this directory could be addressed via server like `http://localhost:8080/mydir/myfile.root`
 
@@ -303,8 +343,8 @@ void THttpServer::AddLocation(const char *prefix, const char *path)
 ///
 /// One could specify address like:
 ///
-/// * https://root.cern.ch/js/7.1.0/
-/// * http://jsroot.gsi.de/7.1.0/
+/// * https://root.cern/js/7.6.0/
+/// * https://jsroot.gsi.de/7.6.0/
 ///
 /// This allows to get new JSROOT features with old server,
 /// reduce load on THttpServer instance, also startup time can be improved
@@ -524,7 +564,7 @@ Bool_t THttpServer::VerifyFilePath(const char *fname)
 
    Int_t level = 0;
 
-   while (*fname != 0) {
+   while (*fname) {
 
       // find next slash or backslash
       const char *next = strpbrk(fname, "/\\");
@@ -610,6 +650,9 @@ Bool_t THttpServer::ExecuteHttp(std::shared_ptr<THttpCallArg> arg)
       return kTRUE;
    }
 
+   if (fTimer && fTimer->IsSlow())
+      fTimer->SetSlow(kFALSE);
+
    // add call arg to the list
    std::unique_lock<std::mutex> lk(fMutex);
    fArgs.push(arg);
@@ -644,6 +687,8 @@ Bool_t THttpServer::SubmitHttp(std::shared_ptr<THttpCallArg> arg, Bool_t can_run
       return kTRUE;
    }
 
+   printf("Calling SubmitHttp\n");
+
    // add call arg to the list
    std::unique_lock<std::mutex> lk(fMutex);
    fArgs.push(arg);
@@ -662,13 +707,27 @@ Bool_t THttpServer::SubmitHttp(std::shared_ptr<THttpCallArg> arg, Bool_t can_run
 
 Int_t THttpServer::ProcessRequests()
 {
-   if (fMainThrdId == 0)
-      fMainThrdId = TThread::SelfId();
+   auto id = TThread::SelfId();
 
-   if (fMainThrdId != TThread::SelfId()) {
-      Error("ProcessRequests", "Should be called only from main ROOT thread");
-      return 0;
+   if (fMainThrdId != id) {
+      if (gDebug > 0 && fMainThrdId)
+         Warning("ProcessRequests", "Changing main thread to %ld", (long)id);
+      fMainThrdId = id;
    }
+
+   Bool_t recursion = kFALSE;
+
+   if (fProcessingThrdId) {
+      if (fProcessingThrdId == id) {
+         recursion = kTRUE;
+      } else {
+         Error("ProcessRequests", "Processing already running from %ld thread", (long) fProcessingThrdId);
+         return 0;
+      }
+   }
+
+   if (!recursion)
+      fProcessingThrdId = id;
 
    Int_t cnt = 0;
 
@@ -693,14 +752,14 @@ Int_t THttpServer::ProcessRequests()
          continue;
       }
 
-      fSniffer->SetCurrentCallArg(arg.get());
+      auto prev = fSniffer->SetCurrentCallArg(arg.get());
 
       try {
          cnt++;
          ProcessRequest(arg);
-         fSniffer->SetCurrentCallArg(nullptr);
+         fSniffer->SetCurrentCallArg(prev);
       } catch (...) {
-         fSniffer->SetCurrentCallArg(nullptr);
+         fSniffer->SetCurrentCallArg(prev);
       }
 
       arg->NotifyCondition();
@@ -708,12 +767,14 @@ Int_t THttpServer::ProcessRequests()
 
    // regularly call Process() method of engine to let perform actions in ROOT context
    TIter iter(&fEngines);
-   THttpEngine *engine = nullptr;
-   while ((engine = (THttpEngine *)iter()) != nullptr) {
+   while (auto engine = static_cast<THttpEngine *>(iter())) {
       if (fTerminated)
          engine->Terminate();
       engine->Process();
    }
+
+   if (!recursion)
+      fProcessingThrdId = 0;
 
    return cnt;
 }
@@ -759,7 +820,7 @@ std::string THttpServer::BuildWSEntryPage()
          if (arr.length() > 1)
             arr.append(", ");
 
-         arr.append(Form("{ name: \"%s\", title: \"%s\" }", ws->GetName(), ws->GetTitle()));
+         arr.append(TString::Format("{ name: \"%s\", title: \"%s\" }", ws->GetName(), ws->GetTitle()).Data());
       }
    }
 
@@ -811,8 +872,10 @@ void THttpServer::ReplaceJSROOTLinks(std::shared_ptr<THttpCallArg> &arg)
       }
    }
 
-   if (!repl.empty())
+   if (!repl.empty()) {
       arg->ReplaceAllinContent("=\"jsrootsys/", repl);
+      arg->ReplaceAllinContent("from './jsrootsys/", TString::Format("from '%s", repl.substr(2).c_str()).Data());
+   }
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -864,7 +927,12 @@ void THttpServer::ProcessRequest(std::shared_ptr<THttpCallArg> arg)
       }
 
       if (arg->fContent.empty() && arg->fFileName.IsNull() && arg->fPathName.IsNull() && IsWSOnly()) {
-         arg->fContent = BuildWSEntryPage();
+         // Creating page with list of available widgets is disabled now for security reasons
+         // Later one can provide functionality back only if explicitely desired by the user
+         //  BuildWSEntryPage();
+
+         arg->SetContent("refused");
+         arg->Set404();
       }
 
       if (arg->fContent.empty() && !IsWSOnly()) {
@@ -1059,15 +1127,17 @@ void THttpServer::ProcessRequest(std::shared_ptr<THttpCallArg> arg)
       // only for binary data master version is important
       // it allows to detect if streamer info was modified
       const char *parname = fSniffer->IsStreamerInfoItem(arg->fPathName.Data()) ? "BVersion" : "MVersion";
-      arg->AddHeader(parname, Form("%u", (unsigned)fSniffer->GetStreamerInfoHash()));
+      arg->AddHeader(parname, TString::Format("%u", (unsigned)fSniffer->GetStreamerInfoHash()).Data());
    }
 
    // try to avoid caching on the browser
    arg->AddNoCacheHeader();
 
-   // potentially add cors header
+   // potentially add cors headers
    if (IsCors())
       arg->AddHeader("Access-Control-Allow-Origin", GetCors());
+   if (IsCorsCredentials())
+      arg->AddHeader("Access-Control-Allow-Credentials", GetCorsCredentials());
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1146,6 +1216,10 @@ Bool_t THttpServer::ExecuteWS(std::shared_ptr<THttpCallArg> &arg, Bool_t externa
       handler = dynamic_cast<THttpWSHandler *>(fSniffer->FindTObjectInHierarchy(arg->fPathName.Data()));
 
    if (external_thrd && (!handler || !handler->AllowMTProcess())) {
+
+      if (fTimer && fTimer->IsSlow())
+         fTimer->SetSlow(kFALSE);
+
       std::unique_lock<std::mutex> lk(fMutex);
       fArgs.push(arg);
       // and now wait until request is processed

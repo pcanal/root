@@ -24,7 +24,6 @@
 using namespace std::string_literals;
 
 namespace ROOT {
-namespace Experimental {
 
 /// just wrapper to deliver websockets call-backs to the RWebWindow class
 
@@ -45,6 +44,18 @@ protected:
          // refuse connection which does not provide proper token
          if (!url.HasOption("token") || (token != url.GetValueFromOptions("token"))) {
             // refuce loading of default web page without token
+            arg->SetContent("refused");
+            arg->Set404();
+            return;
+         }
+      }
+
+      if (fWindow.IsRequireAuthKey()) {
+         TUrl url;
+         url.SetOptions(arg->GetQuery());
+         TString key = url.GetValueFromOptions("key");
+         if (key.IsNull() || !fWindow.HasKey(key.Data())) {
+            // refuce loading of default web page without valid key
             arg->SetContent("refused");
             arg->Set404();
             return;
@@ -114,7 +125,7 @@ public:
    {
    }
 
-   virtual ~RWebWindowWSHandler() = default;
+   ~RWebWindowWSHandler() override = default;
 
    /// returns content of default web-page
    /// THttpWSHandler interface
@@ -128,9 +139,7 @@ public:
    Bool_t ProcessWS(THttpCallArg *arg) override
    {
       if (!arg || IsDisabled()) return kFALSE;
-      auto res = fWindow.ProcessWS(*arg);
-      fWindow.CheckThreadAssign();
-      return res;
+      return fWindow.ProcessWS(*arg);
    }
 
    /// Allow processing of WS actions in arbitrary thread
@@ -145,7 +154,6 @@ public:
    static int GetBoolEnv(const std::string &name, int dfl = -1);
 };
 
-} // namespace Experimental
 } // namespace ROOT
 
 #endif

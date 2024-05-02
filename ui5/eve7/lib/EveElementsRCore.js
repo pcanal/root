@@ -414,9 +414,8 @@ sap.ui.define(['rootui5/eve7/lib/EveManager'], function (EveManager)
          let idxBuff = eve_el.render_data.idxBuff;
          // let bin =  idxBuff[idx*2 + 1];
          let val = eve_el.render_data.nrmBuff[idx];
-         let caloData =  this.top_obj.scene.mgr.GetElement(eve_el.dataId);
          let slice = idxBuff[idx*2];
-         let sname = caloData.sliceInfos[slice].name;
+         let sname = "Slice " + slice;
 
          let vbuff =  eve_el.render_data.vtxBuff;
          let p = idx*12;
@@ -723,7 +722,12 @@ sap.ui.define(['rootui5/eve7/lib/EveManager'], function (EveManager)
 
       TestRnr(name, obj, rnr_data)
       {
-         if (obj && rnr_data && rnr_data.vtxBuff) return false;
+         if (obj && rnr_data && rnr_data.vtxBuff) {
+            return false;
+         }
+         console.log("test rnr failed for obj =  ", obj);
+         console.log("test rnr failed for rnr_data =  ", rnr_data);
+         console.log("test rnr failed for rnr_data vtcBuff =  ", rnr_data.vtxBuff);
 
          let cnt = this[name] || 0;
          if (cnt++ < 5) console.log(name, obj, rnr_data);
@@ -786,9 +790,17 @@ sap.ui.define(['rootui5/eve7/lib/EveManager'], function (EveManager)
       {
          if (this.TestRnr("hit", hit, rnr_data)) return null;
 
+         let txName;
+         if (hit.fMarkerStyle == 3)
+            txName = "star5-32a.png";
+         else if (hit.fMarkerStyle == 2)
+            txName = "square-32a.png";
+         else
+            txName = "dot-32a.png"
+
          let s = this.RcMakeZSprite(hit.fMarkerColor, hit.fMarkerSize, hit.fSize,
             rnr_data.vtxBuff, hit.fTexX, hit.fTexY,
-            "star5-32a.png");
+            txName);
 
          this.RcPickable(hit, s);
 
@@ -961,14 +973,173 @@ sap.ui.define(['rootui5/eve7/lib/EveManager'], function (EveManager)
          return mesh;
       }
 
+      makeFlatBox(ebox, rnrData, idxBegin, idxEnd)
+      {
+         let fcol = RcCol(ebox.fMainColor);
+         let boxMaterial = this.RcFancyMaterial(fcol, 0.5, { side: RC.FRONT_AND_BACK_SIDE });
+
+         // console.log("EveElements.prototype.makeFlatBox triangulate", idxBegin, idxEnd);
+         let nTriang = (idxEnd - idxBegin) - 2;
+         let idxBuff = new Uint32Array(nTriang * 3);
+         let nt = 0;
+         for (let i = idxBegin; i < (idxEnd - 2); ++i) {
+            idxBuff[nt * 3] = idxBegin;
+            idxBuff[nt * 3 + 1] = i + 1;
+            idxBuff[nt * 3 + 2] = i + 2;
+            // console.log("set index ", nt,":", idxBuff[nt*3], idxBuff[nt*3+1],idxBuff[nt*3+2]);
+            nt++;
+         }
+
+         let body = new RC.Geometry();
+         body.vertices = new RC.BufferAttribute(rnrData.vtxBuff, 3);
+         body.indices = new RC.BufferAttribute(idxBuff, 1);
+         //body.computeVertexNormals();
+         let mesh = new RC.Mesh(body, boxMaterial);
+         return mesh;
+      }
+
+      makeBoxProjected(ebox, rnrData)
+      {
+         let nPnts = parseInt(rnrData.vtxBuff.length / 3);
+         let breakIdx = parseInt(ebox.fBreakIdx);
+         if (ebox.fBreakIdx == 0)
+            breakIdx = nPnts;
+
+         let mesh1 = this.makeFlatBox(ebox, rnrData, 0, breakIdx);
+         let testBreak = breakIdx + 2;
+         if (testBreak < nPnts) {
+            let mesh2 = this.makeFlatBox(ebox, rnrData, breakIdx, nPnts);
+            mesh2.get_ctrl = function () { return new EveElemControl(this); }
+            mesh1.add(mesh2);
+         }
+
+         mesh1.get_ctrl = function () { return new EveElemControl(this); };
+         mesh1.dispose = function () {
+            this.children.forEach(c => { c.geometry.dispose(); c.material.dispose(); });
+            this.geometry.dispose(); this.material.dispose();
+         };
+
+         return mesh1;
+      }
+
+      makeBox(ebox, rnr_data)
+      {
+         let idxBuff = [0, 4, 5, 0, 5, 1, 1, 5, 6, 1, 6, 2, 2, 6, 7, 2, 7, 3, 3, 7, 4, 3, 4, 0, 1, 2, 3, 1, 3, 0, 4, 7, 6, 4, 6, 5];
+         let vBuff = rnr_data.vtxBuff;
+
+         let body = new RC.Geometry();
+         body.indices = new RC.BufferAttribute(new Uint32Array(idxBuff), 1);
+         body.vertices = new RC.BufferAttribute(vBuff, 3);
+
+         let boxMaterial = this.RcFancyMaterial(this.ColorBlack, 1.0, { side: RC.FRONT_SIDE });
+         boxMaterial.normalFlat = true;
+         boxMaterial.color = RcCol(ebox.fMainColor);
+         if (ebox.fMainTransparency) {
+            boxMaterial.transparent = true;
+            boxMaterial.opacity = (100 - ebox.fMainTransparency) / 100.0;
+            boxMaterial.depthWrite = false;
+         }
+
+         let mesh = new RC.Mesh(body, boxMaterial);
+
+         let geo_rim = new RC.Geometry();
+         geo_rim.vertices = new RC.BufferAttribute(vBuff, 3);
+
+         let nTrigs = 6 * 2;
+         let nIdcsTrings = 6 * 2 * 3 * 2;
+         let idcs = new Uint16Array(nIdcsTrings);
+         for (let i = 0; i < nTrigs; ++i) {
+            let ibo = i * 3;
+            let sbo = i * 6;
+            idcs[sbo] = idxBuff[ibo];
+            idcs[sbo + 1] = idxBuff[ibo + 1];
+            idcs[sbo + 2] = idxBuff[ibo + 1];
+            idcs[sbo + 3] = idxBuff[ibo + 2];
+            idcs[sbo + 4] = idxBuff[ibo + 2];
+            idcs[sbo + 5] = idxBuff[ibo];
+         }
+         geo_rim.indices = new RC.BufferAttribute(idcs, 1);//
+         let lcol = RcCol(ebox.fLineColor);
+         let line = new RC.Line(geo_rim, this.RcLineMaterial(lcol, 0.8, 1));
+         mesh.add(line);
+
+         mesh.get_ctrl = function () { return new EveElemControl(this); }
+         mesh.dispose = function () {
+            this.children.forEach(c => { c.geometry.dispose(); c.material.dispose(); });
+            this.geometry.dispose(); this.material.dispose();
+         };
+
+         return mesh;
+      }
       //==============================================================================
       // make Digits
       //==============================================================================
+      makeBoxSetInstanced(boxset, rnr_data)
+      {
+         // axis aligned box
+         let SN = boxset.N;
+         // console.log("SN", SN, "texture dim =", boxset.texX, boxset.texY);
+
+         let tex_insta_pos_shape = new RC.Texture(rnr_data.vtxBuff,
+            RC.Texture.WRAPPING.ClampToEdgeWrapping,
+            RC.Texture.WRAPPING.ClampToEdgeWrapping,
+            RC.Texture.FILTER.NearestFilter,
+            RC.Texture.FILTER.NearestFilter,
+            RC.Texture.FORMAT.RGBA32F, RC.Texture.FORMAT.RGBA, RC.Texture.TYPE.FLOAT,
+            boxset.texX, boxset.texY);
+
+         let shm = new RC.ZShapeBasicMaterial({
+            ShapeSize: [boxset.defWidth, boxset.defHeight, boxset.defDepth],
+            color: RcCol(boxset.fMainColor),
+            emissive: new RC.Color(0.07, 0.07, 0.06),
+            diffuse: new RC.Color(0, 0.6, 0.7),
+            alpha: 0.5 // AMT, what is this used for ?
+         });
+         if (boxset.instanceFlag == "ScalePerDigit")
+            shm.addSBFlag("SCALE_PER_INSTANCE");
+         else if(boxset.instanceFlag == "Mat4Trans")
+            shm.addSBFlag("MAT4_PER_INSTANCE");
+
+         if (boxset.fMainTransparency) {
+            shm.transparent = true;
+            shm.opacity = (100 - boxset.fMainTransparency) / 100.0;
+            shm.depthWrite = false; //? AMT what does that mean
+         }
+         shm.addInstanceData(tex_insta_pos_shape);
+         shm.instanceData[0].flipy = false;
+         let geo;
+         if (boxset.shapeType == 1) {
+            geo = RC.ZShape.makeHexagonGeometry();
+         }
+         else if (boxset.shapeType == 2) {
+            geo = RC.ZShape.makeConeGeometry(boxset.coneCap);
+         }
+         else {
+            geo = RC.ZShape.makeCubeGeometry();
+         }
+         let zshape = new RC.ZShape(geo, shm);
+         zshape.instanceCount = SN;
+         zshape.frustumCulled = false;
+         zshape.instanced = true;
+         zshape.material.normalFlat = true;
+
+         this.RcPickable(boxset, zshape);
+
+         return zshape;
+      }
 
       makeBoxSet(boxset, rnr_data)
       {
          if (this.TestRnr("boxset", boxset, rnr_data)) return null;
+         // use instancing if texture coordinates
+         if (boxset.instanced === true)
+            return this.makeBoxSetInstanced(boxset, rnr_data);
+         else
+            return this.makeFreeBoxSet(boxset, rnr_data);
+      }
 
+      makeFreeBoxSet(boxset, rnr_data)
+      {
          let vBuff;
          let idxBuff;
          let nVerticesPerDigit = 0;
@@ -1012,8 +1183,8 @@ sap.ui.define(['rootui5/eve7/lib/EveManager'], function (EveManager)
                let ro = i* 3 * 7 * 2;
                for (let j = 0; j < 7; ++j)
                {
-                  vBuff[ro + 21] = vBuff[ro];
-                  vBuff[ro + 22] = vBuff[ro+1];
+                  vBuff[ro + 21] = vBuff[ro]+ hexHeight;
+                  vBuff[ro + 22] = vBuff[ro+1]+ hexHeight;
                   vBuff[ro + 23] = vBuff[ro+2] + hexHeight;
                   ro += 3;
                }
@@ -1128,6 +1299,11 @@ sap.ui.define(['rootui5/eve7/lib/EveManager'], function (EveManager)
             mat.color = RcCol(boxset.fMainColor);
          }
 
+         if (boxset.fMainTransparency) {
+            mat.transparent = true;
+            mat.opacity = (100 - boxset.fMainTransparency) / 100.0;
+            mat.depthWrite = false;
+         }
          let mesh = new RC.Mesh(body, mat);
          this.RcPickable(boxset, mesh, false, boxset.fSecondarySelect ? BoxSetControl : EveElemControl);
 
@@ -1278,8 +1454,9 @@ sap.ui.define(['rootui5/eve7/lib/EveManager'], function (EveManager)
          let geom = this.makeEveGeometry(rnr_data, false);
 
          let fcol = RcCol(egs.fFillColor);
+         let mop = 1 - egs.fMainTransparency/100;
 
-         let mat = this.RcFancyMaterial(fcol, 0.2);
+         let mat = this.RcFancyMaterial(fcol, mop);
          mat.side = RC.FRONT_AND_BACK_SIDE;
          mat.shininess = 50;
          mat.normalFlat = true;
@@ -1303,11 +1480,12 @@ sap.ui.define(['rootui5/eve7/lib/EveManager'], function (EveManager)
          let ib_len = rnr_data.idxBuff.length;
 
          let fcol = RcCol(psp.fMainColor);
+         let mop = Math.min( 1, 1 - psp.fMainTransparency/100);
 
-         let material = this.RcFlatMaterial(fcol, 0.4);
+         let material = this.RcFlatMaterial(fcol, mop);
          material.side = RC.FRONT_AND_BACK_SIDE;
 
-         let line_mat = this.RcLineMaterial(fcol);
+         let line_mat = this.RcLineMaterial(fcol, mop);
 
          let meshes = [];
          for (let ib_pos = 0; ib_pos < ib_len;)

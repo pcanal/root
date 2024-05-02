@@ -163,17 +163,17 @@ static const char *gOpenTypes[] = { "ROOT files",   "*.root",
                                     0,              0 };
 
 static const char *gSaveAsTypes[] = { "PDF",          "*.pdf",
-                                      "PostScript",   "*.ps",
-                                      "Encapsulated PostScript", "*.eps",
                                       "SVG",          "*.svg",
                                       "TeX",          "*.tex",
+                                      "PostScript",   "*.ps",
+                                      "Encapsulated PostScript", "*.eps",
+                                      "PNG",          "*.png",
+                                      "JPEG",         "*.jpg",
                                       "GIF",          "*.gif",
                                       "ROOT macros",  "*.C",
                                       "ROOT files",   "*.root",
                                       "XML",          "*.xml",
-                                      "PNG",          "*.png",
                                       "XPM",          "*.xpm",
-                                      "JPEG",         "*.jpg",
                                       "TIFF",         "*.tiff",
                                       "XCF",          "*.xcf",
                                       "All files",    "*",
@@ -503,7 +503,7 @@ void TRootCanvas::CreateCanvas(const char *name)
    fToolDock->EnableHide(kFALSE);
    AddFrame(fToolDock, fDockLayout = new TGLayoutHints(kLHintsExpandX));
 
-   // will alocate it later
+   // will allocate it later
    fToolBar = 0;
    fVertical1 = 0;
    fVertical2 = 0;
@@ -1260,14 +1260,21 @@ Int_t TRootCanvas::InitWindow()
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Set size of canvas container. Units in pixels.
+/// If w==0 and h==0, set autofit mode
 
 void TRootCanvas::SetCanvasSize(UInt_t w, UInt_t h)
 {
    // turn off autofit, we want to stay at the given size
-   fAutoFit = kFALSE;
-   fOptionMenu->UnCheckEntry(kOptionAutoResize);
    int opt = fCanvasContainer->GetOptions();
-   opt |= kFixedSize;    // turn on fixed size mode
+   if (!w && !h) {
+      fAutoFit = kTRUE;
+      fOptionMenu->CheckEntry(kOptionAutoResize);
+      opt &= ~kFixedSize;    // turn off fixed size mode
+   } else {
+      fAutoFit = kFALSE;
+      fOptionMenu->UnCheckEntry(kOptionAutoResize);
+      opt |= kFixedSize;    // turn on fixed size mode
+   }
    fCanvasContainer->ChangeOptions(opt);
    fCanvasContainer->SetWidth(w);
    fCanvasContainer->SetHeight(h);
@@ -1543,6 +1550,7 @@ void TRootCanvas::ShowEditor(Bool_t show)
    }
    else {
       lambda_show();
+      Resize(w, h);
    }
 }
 

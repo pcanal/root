@@ -1,4 +1,4 @@
-# Copyright (C) 1995-2021, Rene Brun and Fons Rademakers.
+# Copyright (C) 1995-2023, Rene Brun and Fons Rademakers.
 # All rights reserved.
 #
 # For the licensing terms see $ROOTSYS/LICENSE.
@@ -7,10 +7,6 @@
 ############################################################################
 # CMakeLists.txt file for building ROOT gui/qt5webdisplay package
 ############################################################################
-
-if(POLICY CMP0071)
-  cmake_policy(SET CMP0071 NEW)
-endif()
 
 find_package(Qt6 COMPONENTS Core WebEngineCore WebEngineWidgets CONFIG)
 

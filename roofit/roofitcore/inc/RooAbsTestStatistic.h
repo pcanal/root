@@ -16,6 +16,31 @@
 #ifndef ROO_ABS_TEST_STATISTIC
 #define ROO_ABS_TEST_STATISTIC
 
+// We can't print deprecation warnings when including headers in cling, because
+// this will be done automatically anyway.
+#ifdef __CLING__
+#ifndef ROOFIT_BUILDS_ITSELF
+// These warnings should only be suppressed when building ROOT itself!
+#warning "Including RooAbsTestStatistic.h is deprecated, and this header will be removed in ROOT v6.34: it is an implementation detail that should not be part of the public user interface"
+#else
+// If we are builting RooFit itself, this will serve as a reminder to actually
+// remove this deprecate public header. Here is now this needs to be done:
+//    1. Move this header file from inc/ to src/
+//    2. Remove the LinkDef entry, ClassDefOverride, and ClassImpl macros for
+//       this class
+//    3. If there are are tests using this class in the test/ directory, change
+//       the include to use a relative path the moved header file in the src/
+//       directory, e.g. #include <RemovedInterface.h> becomes #include
+//       "../src/RemovedInterface.h"
+//    4. Remove this ifndef-else-endif block from the header
+//    5. Remove the deprecation warning at the end of the class declaration
+#include <RVersion.h>
+#if ROOT_VERSION_CODE >= ROOT_VERSION(6, 34, 00)
+#error "Please remove this deprecated public interface."
+#endif
+#endif
+#endif
+
 #include "RooAbsReal.h"
 #include "RooSetProxy.h"
 #include "RooRealProxy.h"
@@ -41,8 +66,8 @@ public:
 
   struct Configuration {
     /// Stores the configuration parameters for RooAbsTestStatistic.
-    std::string rangeName = "";
-    std::string addCoefRangeName = "";
+    std::string rangeName;
+    std::string addCoefRangeName;
     int nCPU = 1;
     RooFit::MPSplit interleave = RooFit::BulkPartition;
     bool verbose = true;
@@ -54,7 +79,6 @@ public:
   };
 
   // Constructors, assignment etc
-  RooAbsTestStatistic() {}
   RooAbsTestStatistic(const char *name, const char *title, RooAbsReal& real, RooAbsData& data,
                       const RooArgSet& projDeps, Configuration const& cfg);
   RooAbsTestStatistic(const RooAbsTestStatistic& other, const char* name=nullptr);
@@ -92,6 +116,9 @@ protected:
 
   virtual double evaluatePartition(std::size_t firstEvent, std::size_t lastEvent, std::size_t stepSize) const = 0 ;
   virtual double getCarry() const;
+
+  // Overridden in cache-optimized test statistic
+  virtual void runRecalculateCache(std::size_t /*firstEvent*/, std::size_t /*lastEvent*/, std::size_t /*stepSize*/) const {}
 
   void setMPSet(Int_t setNum, Int_t numSets) ;
   void setSimCount(Int_t simCount) {
@@ -152,7 +179,7 @@ protected:
   Int_t          _nCPU = 1;            ///<  Number of processors to use in parallel calculation mode
   pRooRealMPFE*  _mpfeArray = nullptr; ///<! Array of parallel execution frond ends
 
-  RooFit::MPSplit _mpinterl = RooFit::BulkPartition;  ///< Use interleaving strategy rather than N-wise split for partioning of dataset for multiprocessor-split
+  RooFit::MPSplit _mpinterl = RooFit::BulkPartition;  ///< Use interleaving strategy rather than N-wise split for partitioning of dataset for multiprocessor-split
   bool         _doOffset = false;                   ///< Apply interval value offset to control numeric precision?
   const bool  _takeGlobalObservablesFromData = false; ///< If the global observable values are taken from data
   mutable ROOT::Math::KahanSum<double> _offset {0.0}; ///<! Offset as KahanSum to avoid loss of precision
@@ -160,6 +187,10 @@ protected:
 
   ClassDefOverride(RooAbsTestStatistic,0) // Abstract base class for real-valued test statistics
 
+#ifndef ROOFIT_BUILDS_ITSELF
+} R__DEPRECATED(6,34, "RooAbsTestStatistic is a RooFit implementation detail that should not be instantiated in user code.");
+#else
 };
+#endif
 
 #endif

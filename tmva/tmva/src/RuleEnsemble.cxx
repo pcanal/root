@@ -5,7 +5,7 @@
  * Project: TMVA - a Root-integrated toolkit for multivariate data analysis       *
  * Package: TMVA                                                                  *
  * Class  : RuleEnsemble                                                          *
- * Web    : http://tmva.sourceforge.net                                           *
+ *                                             *
  *                                                                                *
  * Description:                                                                   *
  *      A class generating an ensemble of rules                                   *
@@ -23,7 +23,7 @@
  *                                                                                *
  * Redistribution and use in source and binary forms, with or without             *
  * modification, are permitted according to the terms listed in LICENSE           *
- * (http://tmva.sourceforge.net/LICENSE)                                          *
+ * (see tmva/doc/LICENSE)                                          *
  **********************************************************************************/
 
 /*! \class TMVA::RuleEnsemble
@@ -674,8 +674,8 @@ void TMVA::RuleEnsemble::MakeLinearTerms()
       {
             if (fLinPDFB[v]) delete fLinPDFB[v];
             if (fLinPDFS[v]) delete fLinPDFS[v];
-            fLinPDFB[v] = new TH1F(Form("bkgvar%d",v),"bkg temphist",40,fLinDM[v],fLinDP[v]);
-            fLinPDFS[v] = new TH1F(Form("sigvar%d",v),"sig temphist",40,fLinDM[v],fLinDP[v]);
+            fLinPDFB[v] = new TH1F(TString::Format("bkgvar%d",v),"bkg temphist",40,fLinDM[v],fLinDP[v]);
+            fLinPDFS[v] = new TH1F(TString::Format("sigvar%d",v),"sig temphist",40,fLinDM[v],fLinDP[v]);
             fLinPDFB[v]->Sumw2();
             fLinPDFS[v]->Sumw2();
       }
@@ -1025,7 +1025,7 @@ void TMVA::RuleEnsemble::Print() const
          //    if (pind==0) impref =
          //         Log() << kmtype << "Rule #" <<
          //         Log() << kmtype << *fRules[ind] << Endl;
-         fRules[ind]->PrintLogger(Form("Rule %4d : ",pind+1));
+         fRules[ind]->PrintLogger(TString::Format("Rule %4d : ",pind+1));
          pind++;
          if (pind==printN) {
             if (nrules==printN) {

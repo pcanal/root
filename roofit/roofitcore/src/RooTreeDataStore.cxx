@@ -19,7 +19,7 @@
 \class RooTreeDataStore
 \ingroup Roofitcore
 
-RooTreeDataStore is a TTree-backed data storage. When a file is opened before
+TTree-backed data storage. When a file is opened before
 creating the data storage, the storage will be file-backed. This reduces memory
 pressure because it allows storing the data in the file and reading it on demand.
 For a completely memory-backed storage, which is faster than the file-backed storage,
@@ -60,7 +60,7 @@ RooAbsData::convertToVectorStore().
 #include "TROOT.h"
 
 #include <iomanip>
-using namespace std ;
+using std::endl, std::list, std::string;
 
 ClassImp(RooTreeDataStore);
 
@@ -143,18 +143,17 @@ RooTreeDataStore::RooTreeDataStore(RooStringView name, RooStringView title, cons
 
 ////////////////////////////////////////////////////////////////////////////////
 
-RooTreeDataStore::RooTreeDataStore(RooStringView name, RooStringView title, RooAbsDataStore& tds,
-          const RooArgSet& vars, const RooFormulaVar* cutVar, const char* cutRange,
-          Int_t nStart, Int_t nStop, const char* wgtVarName) :
-  RooAbsDataStore(name,title,varsNoWeight(vars,wgtVarName)), _defCtor(false),
-  _varsww(vars),
-  _wgtVar(weightVar(vars,wgtVarName))
+RooTreeDataStore::RooTreeDataStore(RooStringView name, RooStringView title, RooAbsDataStore &tds, const RooArgSet &vars,
+                                   const RooFormulaVar *cutVar, const char *cutRange, Int_t nStart, Int_t nStop,
+                                   const char *wgtVarName)
+   : RooAbsDataStore(name, title, varsNoWeight(vars, wgtVarName)),
+     _varsww(vars),
+     _wgtVar(weightVar(vars, wgtVarName))
 {
   // WVE NEED TO ADJUST THIS FOR WEIGHTS
 
   // Protected constructor for internal use only
-  _tree = 0 ;
-  _cacheTree = 0 ;
+
   createTree(makeTreeName(), title);
 
   // Deep clone cutVar and attach clone to this dataset
@@ -167,11 +166,11 @@ RooTreeDataStore::RooTreeDataStore(RooStringView name, RooStringView title, RooA
   // Constructor from existing data set with list of variables that preserves the cache
   initialize();
 
-  attachCache(0,((RooTreeDataStore&)tds)._cachedVars) ;
+  attachCache(nullptr,(static_cast<RooTreeDataStore&>(tds))._cachedVars) ;
 
   // WVE copy values of cached variables here!!!
-  _cacheTree->CopyEntries(((RooTreeDataStore&)tds)._cacheTree) ;
-  _cacheOwner = 0 ;
+  _cacheTree->CopyEntries((static_cast<RooTreeDataStore&>(tds))._cacheTree) ;
+  _cacheOwner = nullptr ;
 
   loadValues(&tds,cloneVar.get(),cutRange,nStart,nStop);
 }
@@ -217,7 +216,7 @@ RooRealVar* RooTreeDataStore::weightVar(const RooArgSet& allVars, const char* wg
     RooRealVar* wgt = dynamic_cast<RooRealVar*>(allVars.find(wgtName)) ;
     return wgt ;
   }
-  return 0 ;
+  return nullptr ;
 }
 
 
@@ -267,9 +266,9 @@ RooTreeDataStore::RooTreeDataStore(const RooTreeDataStore& other, const char* ne
 ////////////////////////////////////////////////////////////////////////////////
 
 RooTreeDataStore::RooTreeDataStore(const RooTreeDataStore& other, const RooArgSet& vars, const char* newname) :
-  RooAbsDataStore(other,varsNoWeight(vars,other._wgtVar?other._wgtVar->GetName():0),newname),
+  RooAbsDataStore(other,varsNoWeight(vars,other._wgtVar?other._wgtVar->GetName():nullptr),newname),
   _varsww(vars),
-  _wgtVar(other._wgtVar?weightVar(vars,other._wgtVar->GetName()):0),
+  _wgtVar(other._wgtVar?weightVar(vars,other._wgtVar->GetName()):nullptr),
   _extWgtArray(other._extWgtArray),
   _extWgtErrLoArray(other._extWgtErrLoArray),
   _extWgtErrHiArray(other._extWgtErrHiArray),
@@ -327,7 +326,7 @@ void RooTreeDataStore::initialize()
 void RooTreeDataStore::createTree(RooStringView name, RooStringView title)
 {
   if (!_tree) {
-    _tree = new TTree(name,title);
+    _tree = new TTree(name.c_str(),title.c_str());
     _tree->ResetBit(kCanDelete);
     _tree->ResetBit(kMustCleanup);
     _tree->SetDirectory(nullptr);
@@ -345,8 +344,8 @@ void RooTreeDataStore::createTree(RooStringView name, RooStringView title)
   }
 
   if (!_cacheTree) {
-    _cacheTree = new TTree(TString{static_cast<const char*>(name)} + "_cacheTree", TString{static_cast<const char*>(title)});
-    _cacheTree->SetDirectory(0) ;
+    _cacheTree = new TTree(TString{name.c_str()} + "_cacheTree", TString{title.c_str()});
+    _cacheTree->SetDirectory(nullptr) ;
     gDirectory->RecursiveRemove(_cacheTree) ;
   }
 
@@ -524,7 +523,7 @@ void RooTreeDataStore::loadValues(const RooAbsDataStore *ads, const RooFormulaVa
       continue ;
     }
 
-    _cachedVars.assign(((RooTreeDataStore*)ads)->_cachedVars) ;
+    _cachedVars.assign(static_cast<RooTreeDataStore const*>(ads)->_cachedVars) ;
     fill() ;
   }
 
@@ -555,9 +554,9 @@ const RooArgSet* RooTreeDataStore::get(Int_t index) const
 {
   checkInit() ;
 
-  Int_t ret = ((RooTreeDataStore*)this)->GetEntry(index, 1) ;
+  Int_t ret = const_cast<RooTreeDataStore*>(this)->GetEntry(index, 1);
 
-  if(!ret) return 0;
+  if(!ret) return nullptr;
 
   if (_doDirtyProp) {
     // Raise all dirty flags
@@ -620,7 +619,8 @@ double RooTreeDataStore::weightError(RooAbsData::ErrorType etype) const
     // We have a weight array, use that info
 
     // Return symmetric error on current bin calculated either from Poisson statistics or from SumOfWeights
-    double lo = 0, hi =0;
+    double lo = 0;
+    double hi = 0;
     weightError(lo,hi,etype) ;
     return (lo+hi)/2 ;
 
@@ -669,7 +669,8 @@ void RooTreeDataStore::weightError(double& lo, double& hi, RooAbsData::ErrorType
       }
 
       // Otherwise Calculate poisson errors
-      double ym,yp ;
+      double ym;
+      double yp;
       RooHistError::instance().getPoissonInterval(Int_t(weight()+0.5),ym,yp,1) ;
       lo = weight()-ym ;
       hi = yp-weight() ;
@@ -785,12 +786,12 @@ RooAbsArg* RooTreeDataStore::addColumn(RooAbsArg& newVar, bool adjustRange)
   checkInit() ;
 
   // Create a fundamental object of the right type to hold newVar values
-  RooAbsArg* valHolder= newVar.createFundamental();
+  auto valHolder = std::unique_ptr<RooAbsArg>{newVar.createFundamental()}.release();
   // Sanity check that the holder really is fundamental
   if(!valHolder->isFundamental()) {
     coutE(InputArguments) << GetName() << "::addColumn: holder argument is not fundamental: \""
     << valHolder->GetName() << "\"" << endl;
-    return 0;
+    return nullptr;
   }
 
   // WVE need to reset TTRee buffers to original datamembers here
@@ -888,7 +889,8 @@ double RooTreeDataStore::sumEntries() const
 {
   if (_wgtVar) {
 
-    double sum(0), carry(0);
+    double sum(0);
+    double carry(0);
     Int_t nevt = numEntries() ;
     for (int i=0 ; i<nevt ; i++) {
       get(i) ;
@@ -902,7 +904,8 @@ double RooTreeDataStore::sumEntries() const
 
   } else if (_extWgtArray) {
 
-    double sum(0) , carry(0);
+    double sum(0);
+    double carry(0);
     Int_t nevt = numEntries() ;
     for (int i=0 ; i<nevt ; i++) {
       // Kahan's algorithm for summing to avoid loss of precision
@@ -1024,7 +1027,7 @@ void RooTreeDataStore::resetCache()
 
   // Delete & recreate cache tree
   delete _cacheTree ;
-  _cacheTree = 0 ;
+  _cacheTree = nullptr ;
   createTree(makeTreeName().c_str(), GetTitle());
 
   return ;
@@ -1143,7 +1146,8 @@ void RooTreeDataStore::Draw(Option_t* option)
 void RooTreeDataStore::Streamer(TBuffer &R__b)
 {
   if (R__b.IsReading()) {
-    UInt_t R__s, R__c;
+    UInt_t R__s;
+    UInt_t R__c;
     const Version_t R__v = R__b.ReadVersion(&R__s, &R__c);
 
     R__b.ReadClassBuffer(RooTreeDataStore::Class(), this, R__v, R__s, R__c);
@@ -1195,7 +1199,7 @@ std::string RooTreeDataStore::makeTreeName() const {
 /// Get the weights of the events in the range [first, first+len).
 /// This implementation will fill a vector with every event retrieved one by one
 /// (even if the weight is constant). Then, it returns a span.
-RooSpan<const double> RooTreeDataStore::getWeightBatch(std::size_t first, std::size_t len) const {
+std::span<const double> RooTreeDataStore::getWeightBatch(std::size_t first, std::size_t len) const {
 
   if (_extWgtArray) {
     return {_extWgtArray + first, len};

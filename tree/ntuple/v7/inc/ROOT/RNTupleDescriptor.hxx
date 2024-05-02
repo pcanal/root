@@ -1,6 +1,7 @@
 /// \file ROOT/RNTupleDescriptor.hxx
 /// \ingroup NTuple ROOT7
 /// \author Jakob Blomer <jblomer@cern.ch>
+/// \author Javier Lopez-Gomez <javier.lopez.gomez@cern.ch>
 /// \date 2018-07-19
 /// \warning This is part of the ROOT 7 prototype! It will change without notice. It might trigger earthquakes. Feedback
 /// is welcome!
@@ -21,7 +22,7 @@
 #include <ROOT/RNTupleSerialize.hxx>
 #include <ROOT/RNTupleUtil.hxx>
 #include <ROOT/RSpan.hxx>
-#include <ROOT/RStringView.hxx>
+#include <string_view>
 
 #include <algorithm>
 #include <chrono>
@@ -31,6 +32,7 @@
 #include <memory>
 #include <ostream>
 #include <vector>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -38,15 +40,22 @@
 namespace ROOT {
 namespace Experimental {
 
-class RFieldDescriptorBuilder;
+class RFieldBase;
 class RNTupleDescriptor;
-class RNTupleDescriptorBuilder;
 class RNTupleModel;
 
-namespace Detail {
-   class RFieldBase;
-}
+namespace Internal {
+class RColumnElementBase;
+} // namespace Internal
 
+namespace Internal {
+class RColumnDescriptorBuilder;
+class RColumnGroupDescriptorBuilder;
+class RClusterDescriptorBuilder;
+class RClusterGroupDescriptorBuilder;
+class RFieldDescriptorBuilder;
+class RNTupleDescriptorBuilder;
+} // namespace Internal
 
 // clang-format off
 /**
@@ -56,8 +65,8 @@ namespace Detail {
 */
 // clang-format on
 class RFieldDescriptor {
-   friend class RNTupleDescriptorBuilder;
-   friend class RFieldDescriptorBuilder;
+   friend class Internal::RNTupleDescriptorBuilder;
+   friend class Internal::RFieldDescriptorBuilder;
 
 private:
    DescriptorId_t fFieldId = kInvalidDescriptorId;
@@ -71,6 +80,8 @@ private:
    std::string fFieldDescription;
    /// The C++ type that was used when writing the field
    std::string fTypeName;
+   /// A typedef or using directive that resolved to the type name during field creation
+   std::string fTypeAlias;
    /// The number of elements per entry for fixed-size arrays
    std::uint64_t fNRepetitions = 0;
    /// The structural information carried by this field in the data model tree
@@ -93,7 +104,7 @@ public:
    RFieldDescriptor Clone() const;
    /// In general, we create a field simply from the C++ type name. For untyped fields, however, we potentially need
    /// access to sub fields, which is provided by the ntuple descriptor argument.
-   std::unique_ptr<Detail::RFieldBase> CreateField(const RNTupleDescriptor &ntplDesc) const;
+   std::unique_ptr<RFieldBase> CreateField(const RNTupleDescriptor &ntplDesc) const;
 
    DescriptorId_t GetId() const { return fFieldId; }
    std::uint32_t GetFieldVersion() const { return fFieldVersion; }
@@ -101,6 +112,7 @@ public:
    std::string GetFieldName() const { return fFieldName; }
    std::string GetFieldDescription() const { return fFieldDescription; }
    std::string GetTypeName() const { return fTypeName; }
+   std::string GetTypeAlias() const { return fTypeAlias; }
    std::uint64_t GetNRepetitions() const { return fNRepetitions; }
    ENTupleStructure GetStructure() const { return fStructure; }
    DescriptorId_t GetParentId() const { return fParentId; }
@@ -116,8 +128,8 @@ public:
 */
 // clang-format on
 class RColumnDescriptor {
-   friend class RColumnDescriptorBuilder;
-   friend class RNTupleDescriptorBuilder;
+   friend class Internal::RColumnDescriptorBuilder;
+   friend class Internal::RNTupleDescriptorBuilder;
 
 private:
    /// The actual column identifier, which is the link to the corresponding field
@@ -130,6 +142,9 @@ private:
    DescriptorId_t fFieldId = kInvalidDescriptorId;
    /// A field can be serialized into several columns, which are numbered from zero to $n$
    std::uint32_t fIndex;
+   /// Specifies the index for the first stored element for this column. For deferred columns the value is greater
+   /// than 0
+   std::uint64_t fFirstElementIndex = 0U;
 
 public:
    RColumnDescriptor() = default;
@@ -148,6 +163,8 @@ public:
    std::uint32_t GetIndex() const { return fIndex; }
    DescriptorId_t GetFieldId() const { return fFieldId; }
    bool IsAliasColumn() const { return fPhysicalColumnId != fLogicalColumnId; }
+   std::uint64_t GetFirstElementIndex() const { return fFirstElementIndex; }
+   bool IsDeferredColumn() const { return fFirstElementIndex > 0; }
 };
 
 // clang-format off
@@ -161,7 +178,7 @@ is used to denote the column group of all the columns. Every ntuple has at least
 */
 // clang-format on
 class RColumnGroupDescriptor {
-   friend class RColumnGroupDescriptorBuilder;
+   friend class Internal::RColumnGroupDescriptorBuilder;
 
 private:
    DescriptorId_t fColumnGroupId = kInvalidDescriptorId;
@@ -191,15 +208,15 @@ public:
 \ingroup NTuple
 \brief Meta-data for a set of ntuple clusters
 
-The cluster descriptor is built in two phases.  In a first phase, the descriptor has only summary data,
-i.e. the ID and the event range.  In a second phase, page locations and column ranges are added.
+The cluster descriptor is built in two phases.  In a first phase, the descriptor has only an ID.
+In a second phase, the event range, column group, page locations and column ranges are added.
 Both phases are populated by the RClusterDescriptorBuilder.
 Clusters usually span across all available columns but in some cases they can describe only a subset of the columns,
 for instance when describing friend ntuples.
 */
 // clang-format on
 class RClusterDescriptor {
-   friend class RClusterDescriptorBuilder;
+   friend class Internal::RClusterDescriptorBuilder;
 
 public:
    /// The window of element indexes of a particular column in a particular cluster
@@ -227,7 +244,17 @@ public:
    };
 
    /// Records the parition of data into pages for a particular column in a particular cluster
-   struct RPageRange {
+   class RPageRange {
+      friend class Internal::RClusterDescriptorBuilder;
+      /// Extend this RPageRange to fit the given RColumnRange, i.e. prepend as many synthetic RPageInfos as needed to
+      /// cover the range in `columnRange`. `RPageInfo`s are constructed to contain as many elements of type `element`
+      /// given a page size limit of `pageSize` (in bytes); the locator for the referenced pages is `kTypePageZero`.
+      /// This function is used to make up `RPageRange`s for clusters that contain deferred columns.
+      /// \return The number of column elements covered by the synthesized RPageInfos
+      std::size_t ExtendToFitColumnRange(const RColumnRange &columnRange, const Internal::RColumnElementBase &element,
+                                         std::size_t pageSize);
+
+   public:
       /// We do not need to store the element size / uncompressed page size because we know to which column
       /// the page belongs
       struct RPageInfo {
@@ -242,13 +269,15 @@ public:
       };
       struct RPageInfoExtended : RPageInfo {
          /// Index (in cluster) of the first element in page.
-         RClusterSize::ValueType fFirstInPage = 0;
+         ClusterSize_t::ValueType fFirstInPage = 0;
          /// Page number in the corresponding RPageRange.
          NTupleSize_t fPageNo = 0;
 
          RPageInfoExtended() = default;
-         RPageInfoExtended(const RPageInfo &pi, RClusterSize::ValueType i, NTupleSize_t n)
-            : RPageInfo(pi), fFirstInPage(i), fPageNo(n) {}
+         RPageInfoExtended(const RPageInfo &pi, ClusterSize_t::ValueType i, NTupleSize_t n)
+            : RPageInfo(pi), fFirstInPage(i), fPageNo(n)
+         {
+         }
       };
 
       RPageRange() = default;
@@ -265,7 +294,7 @@ public:
       }
 
       /// Find the page in the RPageRange that contains the given element. The element must exist.
-      RPageInfoExtended Find(RClusterSize::ValueType idxInCluster) const;
+      RPageInfoExtended Find(ClusterSize_t::ValueType idxInCluster) const;
 
       DescriptorId_t fPhysicalColumnId = kInvalidDescriptorId;
       std::vector<RPageInfo> fPageInfos;
@@ -281,20 +310,12 @@ private:
    NTupleSize_t fFirstEntryIndex = kInvalidNTupleIndex;
    // TODO(jblomer): change to std::uint64_t
    ClusterSize_t fNEntries = kInvalidClusterIndex;
-   bool fHasPageLocations = false;
 
    std::unordered_map<DescriptorId_t, RColumnRange> fColumnRanges;
    std::unordered_map<DescriptorId_t, RPageRange> fPageRanges;
 
-   void EnsureHasPageLocations() const;
-
 public:
    RClusterDescriptor() = default;
-   // Constructor for a summary-only cluster descriptor without page locations
-   RClusterDescriptor(DescriptorId_t clusterId, std::uint64_t firstEntryIndex, std::uint64_t nEntries)
-      : fClusterId(clusterId), fFirstEntryIndex(firstEntryIndex), fNEntries(ClusterSize_t(nEntries))
-   {
-   }
    RClusterDescriptor(const RClusterDescriptor &other) = delete;
    RClusterDescriptor &operator =(const RClusterDescriptor &other) = delete;
    RClusterDescriptor(RClusterDescriptor &&other) = default;
@@ -307,45 +328,45 @@ public:
    DescriptorId_t GetId() const { return fClusterId; }
    NTupleSize_t GetFirstEntryIndex() const { return fFirstEntryIndex; }
    ClusterSize_t GetNEntries() const { return fNEntries; }
-   const RColumnRange &GetColumnRange(DescriptorId_t physicalId) const
+   const RColumnRange &GetColumnRange(DescriptorId_t physicalId) const { return fColumnRanges.at(physicalId); }
+   const RPageRange &GetPageRange(DescriptorId_t physicalId) const { return fPageRanges.at(physicalId); }
+   bool ContainsColumn(DescriptorId_t physicalId) const
    {
-      EnsureHasPageLocations();
-      return fColumnRanges.at(physicalId);
+      return fColumnRanges.find(physicalId) != fColumnRanges.end();
    }
-   const RPageRange &GetPageRange(DescriptorId_t physicalId) const
-   {
-      EnsureHasPageLocations();
-      return fPageRanges.at(physicalId);
-   }
-   bool ContainsColumn(DescriptorId_t physicalId) const;
    std::unordered_set<DescriptorId_t> GetColumnIds() const;
    std::uint64_t GetBytesOnStorage() const;
-   bool HasPageLocations() const { return fHasPageLocations; }
 };
 
 // clang-format off
 /**
 \class ROOT::Experimental::RClusterGroupDescriptor
 \ingroup NTuple
-\brief Clusters are stored in cluster groups. Cluster groups span all the columns of a certain event range.
+\brief Clusters are bundled in cluster groups.
 
 Very large ntuples or combined ntuples (chains, friends) contain multiple cluster groups. The cluster groups
-may contain sharded clusters. However, a cluster group must contain the clusters spanning all the columns for the
-given event range. Cluster groups must partition the entry range of an ntuple.
+may contain sharded clusters.
 Every ntuple has at least one cluster group.  The clusters in a cluster group are ordered corresponding to
 the order of page locations in the page list envelope that belongs to the cluster group (see format specification)
 */
 // clang-format on
 class RClusterGroupDescriptor {
-   friend class RClusterGroupDescriptorBuilder;
+   friend class Internal::RClusterGroupDescriptorBuilder;
 
 private:
    DescriptorId_t fClusterGroupId = kInvalidDescriptorId;
+   /// The cluster IDs can be empty if the corresponding page list is not loaded.
    std::vector<DescriptorId_t> fClusterIds;
    /// The page list that corresponds to the cluster group
    RNTupleLocator fPageListLocator;
    /// Uncompressed size of the page list
-   std::uint32_t fPageListLength = 0;
+   std::uint64_t fPageListLength = 0;
+   /// The minimum first entry number of the clusters in the cluster group
+   std::uint64_t fMinEntry = 0;
+   /// Number of entries that are (partially for sharded clusters) covered by this cluster group.
+   std::uint64_t fEntrySpan = 0;
+   /// Number of clusters is always known even if the cluster IDs are not (yet) populated
+   std::uint32_t fNClusters = 0;
 
 public:
    RClusterGroupDescriptor() = default;
@@ -355,18 +376,21 @@ public:
    RClusterGroupDescriptor &operator=(RClusterGroupDescriptor &&other) = default;
 
    RClusterGroupDescriptor Clone() const;
+   // Creates a clone without the cluster IDs
+   RClusterGroupDescriptor CloneSummary() const;
 
    bool operator==(const RClusterGroupDescriptor &other) const;
 
    DescriptorId_t GetId() const { return fClusterGroupId; }
-   std::uint64_t GetNClusters() const { return fClusterIds.size(); }
+   std::uint32_t GetNClusters() const { return fNClusters; }
    RNTupleLocator GetPageListLocator() const { return fPageListLocator; }
-   std::uint32_t GetPageListLength() const { return fPageListLength; }
-   bool Contains(DescriptorId_t clusterId) const
-   {
-      return std::find(fClusterIds.begin(), fClusterIds.end(), clusterId) != fClusterIds.end();
-   }
+   std::uint64_t GetPageListLength() const { return fPageListLength; }
    const std::vector<DescriptorId_t> &GetClusterIds() const { return fClusterIds; }
+   std::uint64_t GetMinEntry() const { return fMinEntry; }
+   std::uint64_t GetEntrySpan() const { return fEntrySpan; }
+   /// A cluster group is loaded in two stages. Stage one loads only the summary information.
+   /// Stage two loads the list of cluster IDs.
+   bool HasClusterDetails() const { return !fClusterIds.empty(); }
 };
 
 // clang-format off
@@ -390,7 +414,10 @@ writte struct. This allows for forward and backward compatibility when the meta-
 */
 // clang-format on
 class RNTupleDescriptor {
-   friend class RNTupleDescriptorBuilder;
+   friend class Internal::RNTupleDescriptorBuilder;
+
+public:
+   class RHeaderExtension;
 
 private:
    /// The ntuple name needs to be unique in a given storage location (file)
@@ -398,10 +425,12 @@ private:
    /// Free text from the user
    std::string fDescription;
 
+   std::uint64_t fOnDiskHeaderXxHash3 = 0; ///< Set by the descriptor builder when deserialized
    std::uint64_t fOnDiskHeaderSize = 0; ///< Set by the descriptor builder when deserialized
    std::uint64_t fOnDiskFooterSize = 0; ///< Like fOnDiskHeaderSize, contains both cluster summaries and page locations
 
-   std::uint64_t fNEntries = 0; ///< Updated by the descriptor builder when the cluster summaries are added
+   std::uint64_t fNEntries = 0;         ///< Updated by the descriptor builder when the cluster groups are added
+   std::uint64_t fNClusters = 0;        ///< Updated by the descriptor builder when the cluster groups are added
    std::uint64_t fNPhysicalColumns = 0; ///< Updated by the descriptor builder when columns are added
 
    /**
@@ -413,14 +442,52 @@ private:
     */
    std::uint64_t fGeneration = 0;
 
+   std::set<unsigned int> fFeatureFlags;
    std::unordered_map<DescriptorId_t, RFieldDescriptor> fFieldDescriptors;
    std::unordered_map<DescriptorId_t, RColumnDescriptor> fColumnDescriptors;
    std::unordered_map<DescriptorId_t, RClusterGroupDescriptor> fClusterGroupDescriptors;
    /// May contain only a subset of all the available clusters, e.g. the clusters of the current file
    /// from a chain of files
    std::unordered_map<DescriptorId_t, RClusterDescriptor> fClusterDescriptors;
+   std::unique_ptr<RHeaderExtension> fHeaderExtension;
 
 public:
+   static constexpr unsigned int kFeatureFlagTest = 137; // Bit reserved for forward-compatibility testing
+
+   // clang-format off
+   /**
+   \class ROOT::Experimental::RNTupleDescriptor::RHeaderExtension
+   \ingroup NTuple
+   \brief Summarizes information about fields and the corresponding columns that were added after the header has been serialized
+   */
+   // clang-format on
+   class RHeaderExtension {
+      friend class Internal::RNTupleDescriptorBuilder;
+
+   private:
+      /// Contains the list of field IDs that are part of the header extension; the corresponding columns are
+      /// available via `GetColumnIterable()`.
+      std::vector<DescriptorId_t> fFields;
+      /// Number of logical and physical columns; updated by the descriptor builder when columns are added
+      std::uint64_t fNLogicalColumns = 0;
+      std::uint64_t fNPhysicalColumns = 0;
+
+      void AddFieldId(DescriptorId_t id) { fFields.push_back(id); }
+      void AddColumn(bool isAliasColumn)
+      {
+         fNLogicalColumns++;
+         if (!isAliasColumn)
+            fNPhysicalColumns++;
+      }
+
+   public:
+      std::size_t GetNFields() const { return fFields.size(); }
+      std::size_t GetNLogicalColumns() const { return fNLogicalColumns; }
+      std::size_t GetNPhysicalColumns() const { return fNPhysicalColumns; }
+      /// Return a vector containing the IDs of the top-level fields defined in the extension header
+      std::vector<DescriptorId_t> GetTopLevelFields(const RNTupleDescriptor &desc) const;
+   };
+
    // clang-format off
    /**
    \class ROOT::Experimental::RNTupleDescriptor::RColumnDescriptorIterable
@@ -434,6 +501,8 @@ public:
       const RNTupleDescriptor &fNTuple;
       /// The descriptor ids of the columns ordered by index id
       std::vector<DescriptorId_t> fColumns = {};
+
+      void CollectColumnIds(DescriptorId_t fieldId);
    public:
       class RIterator {
       private:
@@ -458,16 +527,9 @@ public:
          bool operator==(const iterator &rh) const { return fIndex == rh.fIndex; }
       };
 
-      RColumnDescriptorIterable(const RNTupleDescriptor &ntuple, const RFieldDescriptor &field)
-         : fNTuple(ntuple)
-      {
-         for (unsigned int i = 0; true; ++i) {
-            auto logicalId = ntuple.FindLogicalColumnId(field.GetId(), i);
-            if (logicalId == kInvalidDescriptorId)
-               break;
-            fColumns.emplace_back(logicalId);
-         }
-      }
+      RColumnDescriptorIterable(const RNTupleDescriptor &ntuple, const RFieldDescriptor &field);
+      RColumnDescriptorIterable(const RNTupleDescriptor &ntuple);
+
       RIterator begin() { return RIterator(fNTuple, fColumns, 0); }
       RIterator end() { return RIterator(fNTuple, fColumns, fColumns.size()); }
    };
@@ -486,6 +548,7 @@ public:
       /// The descriptor ids of the child fields. These may be sorted using
       /// a comparison function.
       std::vector<DescriptorId_t> fFieldChildren = {};
+
    public:
       class RIterator {
       private:
@@ -622,7 +685,7 @@ public:
 
       RClusterDescriptorIterable(const RNTupleDescriptor &ntuple) : fNTuple(ntuple) { }
       RIterator begin() { return RIterator(fNTuple, 0); }
-      RIterator end() { return RIterator(fNTuple, fNTuple.GetNClusters()); }
+      RIterator end() { return RIterator(fNTuple, fNTuple.GetNActiveClusters()); }
    };
 
    RNTupleDescriptor() = default;
@@ -635,6 +698,7 @@ public:
 
    bool operator ==(const RNTupleDescriptor &other) const;
 
+   std::uint64_t GetOnDiskHeaderXxHash3() const { return fOnDiskHeaderXxHash3; }
    std::uint64_t GetOnDiskHeaderSize() const { return fOnDiskHeaderSize; }
    std::uint64_t GetOnDiskFooterSize() const { return fOnDiskFooterSize; }
 
@@ -677,6 +741,10 @@ public:
       return GetFieldIterable(GetFieldZeroId(), comparator);
    }
 
+   RColumnDescriptorIterable GetColumnIterable() const
+   {
+      return RColumnDescriptorIterable(*this);
+   }
    RColumnDescriptorIterable GetColumnIterable(const RFieldDescriptor &fieldDesc) const
    {
       return RColumnDescriptorIterable(*this, fieldDesc);
@@ -700,7 +768,8 @@ public:
    std::size_t GetNLogicalColumns() const { return fColumnDescriptors.size(); }
    std::size_t GetNPhysicalColumns() const { return fNPhysicalColumns; }
    std::size_t GetNClusterGroups() const { return fClusterGroupDescriptors.size(); }
-   std::size_t GetNClusters() const { return fClusterDescriptors.size(); }
+   std::size_t GetNClusters() const { return fNClusters; }
+   std::size_t GetNActiveClusters() const { return fClusterDescriptors.size(); }
 
    /// We know the number of entries from adding the cluster summaries
    NTupleSize_t GetNEntries() const { return fNEntries; }
@@ -722,22 +791,29 @@ public:
    /// In case of invalid field ID, an empty string is returned.
    std::string GetQualifiedFieldName(DescriptorId_t fieldId) const;
 
-   /// Methods to load and drop cluster details
-   RResult<void> AddClusterDetails(RClusterDescriptor &&clusterDesc);
-   RResult<void> DropClusterDetails(DescriptorId_t clusterId);
+   bool HasFeature(unsigned int flag) const { return fFeatureFlags.count(flag) > 0; }
+   std::vector<std::uint64_t> GetFeatureFlags() const;
+
+   /// Return header extension information; if the descriptor does not have a header extension, return `nullptr`
+   const RHeaderExtension *GetHeaderExtension() const { return fHeaderExtension.get(); }
+
+   /// Methods to load and drop cluster group details (cluster IDs and page locations)
+   RResult<void> AddClusterGroupDetails(DescriptorId_t clusterGroupId, std::vector<RClusterDescriptor> &clusterDescs);
+   RResult<void> DropClusterGroupDetails(DescriptorId_t clusterGroupId);
 
    std::uint64_t GetGeneration() const { return fGeneration; }
    void IncGeneration() { fGeneration++; }
 
    /// Re-create the C++ model from the stored meta-data
-   std::unique_ptr<RNTupleModel> GenerateModel() const;
+   std::unique_ptr<RNTupleModel> CreateModel() const;
    void PrintInfo(std::ostream &output) const;
 };
 
+namespace Internal {
 
 // clang-format off
 /**
-\class ROOT::Experimental::RColumnDescriptorBuilder
+\class ROOT::Experimental::Internal::RColumnDescriptorBuilder
 \ingroup NTuple
 \brief A helper class for piece-wise construction of an RColumnDescriptor
 
@@ -774,6 +850,11 @@ public:
       fColumn.fIndex = index;
       return *this;
    }
+   RColumnDescriptorBuilder &FirstElementIndex(std::uint64_t firstElementIdx)
+   {
+      fColumn.fFirstElementIndex = firstElementIdx;
+      return *this;
+   }
    DescriptorId_t GetFieldId() const { return fColumn.fFieldId; }
    /// Attempt to make a column descriptor. This may fail if the column
    /// was not given enough information to make a proper descriptor.
@@ -783,7 +864,7 @@ public:
 
 // clang-format off
 /**
-\class ROOT::Experimental::RFieldDescriptorBuilder
+\class ROOT::Experimental::Internal::RFieldDescriptorBuilder
 \ingroup NTuple
 \brief A helper class for piece-wise construction of an RFieldDescriptor
 
@@ -811,7 +892,7 @@ public:
    explicit RFieldDescriptorBuilder(const RFieldDescriptor& fieldDesc);
 
    /// Make a new RFieldDescriptorBuilder based off a live NTuple field.
-   static RFieldDescriptorBuilder FromField(const Detail::RFieldBase& field);
+   static RFieldDescriptorBuilder FromField(const RFieldBase &field);
 
    RFieldDescriptorBuilder& FieldId(DescriptorId_t fieldId) {
       fField.fFieldId = fieldId;
@@ -843,6 +924,11 @@ public:
       fField.fTypeName = typeName;
       return *this;
    }
+   RFieldDescriptorBuilder &TypeAlias(const std::string &typeAlias)
+   {
+      fField.fTypeAlias = typeAlias;
+      return *this;
+   }
    RFieldDescriptorBuilder& NRepetitions(std::uint64_t nRepetitions) {
       fField.fNRepetitions = nRepetitions;
       return *this;
@@ -860,7 +946,7 @@ public:
 
 // clang-format off
 /**
-\class ROOT::Experimental::RClusterDescriptorBuilder
+\class ROOT::Experimental::Internal::RClusterDescriptorBuilder
 \ingroup NTuple
 \brief A helper class for piece-wise construction of an RClusterDescriptor
 
@@ -873,14 +959,31 @@ private:
    RClusterDescriptor fCluster;
 
 public:
-   /// Make an empty cluster descriptor builder.
-   RClusterDescriptorBuilder(DescriptorId_t clusterId, std::uint64_t firstEntryIndex, std::uint64_t nEntries)
-      : fCluster(clusterId, firstEntryIndex, nEntries)
+   RClusterDescriptorBuilder &ClusterId(DescriptorId_t clusterId)
    {
+      fCluster.fClusterId = clusterId;
+      return *this;
+   }
+
+   RClusterDescriptorBuilder &FirstEntryIndex(std::uint64_t firstEntryIndex)
+   {
+      fCluster.fFirstEntryIndex = firstEntryIndex;
+      return *this;
+   }
+
+   RClusterDescriptorBuilder &NEntries(std::uint64_t nEntries)
+   {
+      fCluster.fNEntries = nEntries;
+      return *this;
    }
 
    RResult<void> CommitColumnRange(DescriptorId_t physicalId, std::uint64_t firstElementIndex,
                                    std::uint32_t compressionSettings, const RClusterDescriptor::RPageRange &pageRange);
+
+   /// Add column and page ranges for deferred columns missing in this cluster.  The locator type for the synthesized
+   /// page ranges is `kTypePageZero`.  All the page sources must be able to populate the 'zero' page from such locator.
+   /// Any call to `CommitColumnRange()` should happen before calling this function.
+   RClusterDescriptorBuilder &AddDeferredColumnRanges(const RNTupleDescriptor &desc);
 
    /// Move out the full cluster descriptor including page locations
    RResult<RClusterDescriptor> MoveDescriptor();
@@ -888,7 +991,7 @@ public:
 
 // clang-format off
 /**
-\class ROOT::Experimental::RClusterGroupDescriptorBuilder
+\class ROOT::Experimental::Internal::RClusterGroupDescriptorBuilder
 \ingroup NTuple
 \brief A helper class for piece-wise construction of an RClusterGroupDescriptor
 */
@@ -899,6 +1002,7 @@ private:
 
 public:
    RClusterGroupDescriptorBuilder() = default;
+   static RClusterGroupDescriptorBuilder FromSummary(const RClusterGroupDescriptor &clusterGroupDesc);
 
    RClusterGroupDescriptorBuilder &ClusterGroupId(DescriptorId_t clusterGroupId)
    {
@@ -910,25 +1014,39 @@ public:
       fClusterGroup.fPageListLocator = pageListLocator;
       return *this;
    }
-   RClusterGroupDescriptorBuilder &PageListLength(std::uint32_t pageListLength)
+   RClusterGroupDescriptorBuilder &PageListLength(std::uint64_t pageListLength)
    {
       fClusterGroup.fPageListLength = pageListLength;
       return *this;
    }
-   void AddCluster(DescriptorId_t clusterId) { fClusterGroup.fClusterIds.emplace_back(clusterId); }
-
-   DescriptorId_t GetId() const { return fClusterGroup.GetId(); }
-
-   /// Used to prepare the cluster descriptor builders when loading the page locations for a certain cluster group
-   static std::vector<RClusterDescriptorBuilder>
-   GetClusterSummaries(const RNTupleDescriptor &ntplDesc, DescriptorId_t clusterGroupId);
+   RClusterGroupDescriptorBuilder &MinEntry(std::uint64_t minEntry)
+   {
+      fClusterGroup.fMinEntry = minEntry;
+      return *this;
+   }
+   RClusterGroupDescriptorBuilder &EntrySpan(std::uint64_t entrySpan)
+   {
+      fClusterGroup.fEntrySpan = entrySpan;
+      return *this;
+   }
+   RClusterGroupDescriptorBuilder &NClusters(std::uint32_t nClusters)
+   {
+      fClusterGroup.fNClusters = nClusters;
+      return *this;
+   }
+   void AddClusters(const std::vector<DescriptorId_t> &clusterIds)
+   {
+      if (clusterIds.size() != fClusterGroup.GetNClusters())
+         throw RException(R__FAIL("mismatch of number of clusters"));
+      fClusterGroup.fClusterIds = clusterIds;
+   }
 
    RResult<RClusterGroupDescriptor> MoveDescriptor();
 };
 
 // clang-format off
 /**
-\class ROOT::Experimental::RColumnGroupDescriptorBuilder
+\class ROOT::Experimental::Internal::RColumnGroupDescriptorBuilder
 \ingroup NTuple
 \brief A helper class for piece-wise construction of an RColumnGroupDescriptor
 */
@@ -952,7 +1070,7 @@ public:
 
 // clang-format off
 /**
-\class ROOT::Experimental::RNTupleDescriptorBuilder
+\class ROOT::Experimental::Internal::RNTupleDescriptorBuilder
 \ingroup NTuple
 \brief A helper class for piece-wise construction of an RNTupleDescriptor
 
@@ -962,8 +1080,6 @@ Used by RPageStorage implementations in order to construct the RNTupleDescriptor
 class RNTupleDescriptorBuilder {
 private:
    RNTupleDescriptor fDescriptor;
-   std::uint32_t fHeaderCRC32 = 0;
-
    RResult<void> EnsureFieldExists(DescriptorId_t fieldId) const;
 public:
    /// Checks whether invariants hold:
@@ -974,9 +1090,9 @@ public:
    RNTupleDescriptor MoveDescriptor();
 
    void SetNTuple(const std::string_view name, const std::string_view description);
-   void SetHeaderCRC32(std::uint32_t crc32) { fHeaderCRC32 = crc32; }
-   std::uint32_t GetHeaderCRC32() const { return fHeaderCRC32; }
+   void SetFeature(unsigned int flag);
 
+   void SetOnDiskHeaderXxHash3(std::uint64_t xxhash3) { fDescriptor.fOnDiskHeaderXxHash3 = xxhash3; }
    void SetOnDiskHeaderSize(std::uint64_t size) { fDescriptor.fOnDiskHeaderSize = size; }
    /// The real footer size also include the page list envelopes
    void AddToOnDiskFooterSize(std::uint64_t size) { fDescriptor.fOnDiskFooterSize += size; }
@@ -985,20 +1101,21 @@ public:
    RResult<void> AddFieldLink(DescriptorId_t fieldId, DescriptorId_t linkId);
 
    void AddColumn(DescriptorId_t logicalId, DescriptorId_t physicalId, DescriptorId_t fieldId,
-                  const RColumnModel &model, std::uint32_t index);
+                  const RColumnModel &model, std::uint32_t index, std::uint64_t firstElementIdx = 0U);
    RResult<void> AddColumn(RColumnDescriptor &&columnDesc);
 
-   RResult<void> AddClusterSummary(DescriptorId_t clusterId, std::uint64_t firstEntry, std::uint64_t nEntries);
-   void AddClusterGroup(RClusterGroupDescriptorBuilder &&clusterGroup);
-
-   /// Used during writing. For reading, cluster summaries are added in the builder and cluster details are added
-   /// on demand through the RNTupleDescriptor.
-   RResult<void> AddClusterWithDetails(RClusterDescriptor &&clusterDesc);
+   RResult<void> AddClusterGroup(RClusterGroupDescriptor &&clusterGroup);
+   RResult<void> AddCluster(RClusterDescriptor &&clusterDesc);
 
    /// Clears so-far stored clusters, fields, and columns and return to a pristine ntuple descriptor
    void Reset();
+
+   /// Mark the beginning of the header extension; any fields and columns added after a call to this function are
+   /// annotated as begin part of the header extension.
+   void BeginHeaderExtension();
 };
 
+} // namespace Internal
 } // namespace Experimental
 } // namespace ROOT
 

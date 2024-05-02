@@ -19,7 +19,7 @@
 \class RooLinkedList
 \ingroup Roofitcore
 
-RooLinkedList is an collection class for internal use, storing
+Collection class for internal use, storing
 a collection of RooAbsArg pointers in a doubly linked list.
 It can optionally add a hash table to speed up random access
 in large collections
@@ -43,10 +43,12 @@ Use RooAbsCollection derived objects for public use
 #include <memory>
 #include <vector>
 
-using namespace std;
+using std::cout, std::endl;
 
 ClassImp(RooLinkedList);
-;
+
+/// \cond ROOFIT_INTERNAL
+
 namespace RooLinkedListImplDetails {
   /// a chunk of memory in a pool for quick allocation of RooLinkedListElems
   class Chunk {
@@ -59,8 +61,12 @@ namespace RooLinkedListImplDetails {
    //cout << "RLLID::Chunk ctor(" << this << ") of size " << _free << " list elements" << endl ;
    // initialise free list
    for (Int_t i = 0; i < _free; ++i)
-     _chunk[i]._next = (i + 1 < _free) ? &_chunk[i + 1] : 0;
+     _chunk[i]._next = (i + 1 < _free) ? &_chunk[i + 1] : nullptr;
       }
+      /// forbid copying
+      Chunk(const Chunk&) = delete;
+      // forbid assignment
+      Chunk& operator=(const Chunk&) = delete;
       /// destructor
       ~Chunk() { delete[] _chunk; }
       /// chunk capacity
@@ -84,11 +90,11 @@ namespace RooLinkedListImplDetails {
       /// pop a free element off the free list
       RooLinkedListElem* pop_free_elem()
       {
-   if (!_freelist) return 0;
+   if (!_freelist) return nullptr;
    RooLinkedListElem* retVal = _freelist;
    _freelist = retVal->_next;
-   retVal->_arg = 0; retVal->_refCount = 0;
-   retVal->_prev = retVal->_next = 0;
+   retVal->_arg = nullptr; retVal->_refCount = 0;
+   retVal->_prev = retVal->_next = nullptr;
    --_free;
    return retVal;
       }
@@ -104,11 +110,6 @@ namespace RooLinkedListImplDetails {
       Int_t _free;         ///< length of free list
       RooLinkedListElem* _chunk;    ///< chunk from which elements come
       RooLinkedListElem* _freelist; ///< list of free elements
-
-      /// forbid copying
-      Chunk(const Chunk&);
-      // forbid assignment
-      Chunk& operator=(const Chunk&);
   };
 
   class Pool {
@@ -139,8 +140,8 @@ namespace RooLinkedListImplDetails {
       AddrMap _addrmap;
       ChunkList _freelist;
       UInt_t _szmap[(maxsz - minsz) / szincr];
-      Int_t _cursz;
-      UInt_t _refCount;
+      Int_t _cursz = minsz;
+      UInt_t _refCount = 0;
 
       /// adjust _cursz to current largest block
       void updateCurSz(Int_t sz, Int_t incr);
@@ -148,7 +149,7 @@ namespace RooLinkedListImplDetails {
       Int_t nextChunkSz() const;
   };
 
-  Pool::Pool() : _cursz(minsz), _refCount(0)
+  Pool::Pool()
   {
     std::fill(_szmap, _szmap + ((maxsz - minsz) / szincr), 0);
   }
@@ -256,12 +257,14 @@ namespace RooLinkedListImplDetails {
   }
 }
 
-RooLinkedList::Pool* RooLinkedList::_pool = 0;
+/// \endcond
+
+RooLinkedList::Pool* RooLinkedList::_pool = nullptr;
 
 ////////////////////////////////////////////////////////////////////////////////
 
 RooLinkedList::RooLinkedList(Int_t htsize) :
-  _hashThresh(htsize), _size(0), _first(0), _last(0), _htableName(nullptr), _htableLink(nullptr), _useNptr(true)
+  _hashThresh(htsize), _size(0), _first(nullptr), _last(nullptr), _htableName(nullptr), _htableLink(nullptr), _useNptr(true)
 {
   if (!_pool) _pool = new Pool;
   _pool->acquire();
@@ -271,7 +274,7 @@ RooLinkedList::RooLinkedList(Int_t htsize) :
 /// Copy constructor
 
 RooLinkedList::RooLinkedList(const RooLinkedList& other) :
-  TObject(other), _hashThresh(other._hashThresh), _size(0), _first(0), _last(0), _htableName(nullptr), _htableLink(nullptr),
+  TObject(other), _hashThresh(other._hashThresh), _size(0), _first(nullptr), _last(nullptr), _htableName(nullptr), _htableLink(nullptr),
   _name(other._name),
   _useNptr(other._useNptr)
 {
@@ -337,8 +340,8 @@ void RooLinkedList::setHashTableSize(Int_t size)
       return ;
     } else {
       // Remove existing hash table
-      _htableName.reset(nullptr);
-      _htableLink.reset(nullptr);
+      _htableName.reset();
+      _htableLink.reset();
     }
   } else {
 
@@ -350,7 +353,7 @@ void RooLinkedList::setHashTableSize(Int_t size)
     RooLinkedListElem* ptr = _first ;
     while(ptr) {
       _htableName->insert({ptr->_arg->GetName(), ptr->_arg}) ;
-      _htableLink->insert({ptr->_arg, (TObject*)ptr}) ;
+      _htableLink->insert({ptr->_arg, reinterpret_cast<TObject*>(ptr)}) ;
       ptr = ptr->_next ;
     }
   }
@@ -364,13 +367,13 @@ RooLinkedList::~RooLinkedList()
    // Required since we overload TObject::Hash.
    ROOT::CallRecursiveRemoveIfNeeded(*this);
 
-  _htableName.reset(nullptr);
-  _htableLink.reset(nullptr);
+  _htableName.reset();
+  _htableLink.reset();
 
   Clear() ;
   if (_pool->release()) {
     delete _pool;
-    _pool = 0;
+    _pool = nullptr;
   }
 }
 
@@ -382,7 +385,7 @@ RooLinkedListElem* RooLinkedList::findLink(const TObject* arg) const
   if (_htableLink) {
     auto found = _htableLink->find(arg);
     if (found == _htableLink->end()) return nullptr;
-    return (RooLinkedListElem*)found->second;
+    return const_cast<RooLinkedListElem *>(reinterpret_cast<RooLinkedListElem const*>(found->second));
   }
 
   RooLinkedListElem* ptr = _first;
@@ -392,7 +395,7 @@ RooLinkedListElem* RooLinkedList::findLink(const TObject* arg) const
     }
     ptr = ptr->_next ;
   }
-  return 0 ;
+  return nullptr ;
 
 }
 
@@ -431,7 +434,7 @@ void RooLinkedList::Add(TObject* arg, Int_t refCount)
   if (_htableName){
     //cout << "storing link " << _last << " with hash arg " << arg << endl ;
     _htableName->insert({arg->GetName(), arg});
-    _htableLink->insert({arg, (TObject*)_last});
+    _htableLink->insert({arg, reinterpret_cast<TObject *>(_last)});
   }
 
   _size++ ;
@@ -487,7 +490,7 @@ void RooLinkedList::RecursiveRemove(TObject *obj)
 TObject* RooLinkedList::At(Int_t index) const
 {
   // Check range
-  if (index<0 || index>=_size) return 0 ;
+  if (index<0 || index>=_size) return nullptr ;
 
   return _at[index]->_arg;
 //
@@ -517,16 +520,16 @@ bool RooLinkedList::Replace(const TObject* oldArg, const TObject* newArg)
   if (_htableLink) {
     // Link is hashed by contents and may change slot in hash table
     _htableLink->erase(oldArg) ;
-    _htableLink->insert({newArg, (TObject*)elem}) ;
+    _htableLink->insert({newArg, reinterpret_cast<TObject*>(elem)}) ;
   }
 
-  elem->_arg = (TObject*)newArg ;
+  elem->_arg = const_cast<TObject*>(newArg);
   return true ;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Return pointer to obejct with given name. If no such object
-/// is found return a null pointer
+/// Return pointer to object with given name. If no such object
+/// is found return a null pointer.
 
 TObject* RooLinkedList::FindObject(const char* name) const
 {
@@ -539,8 +542,8 @@ TObject* RooLinkedList::FindObject(const char* name) const
 
 TObject* RooLinkedList::FindObject(const TObject* obj) const
 {
-  RooLinkedListElem *elem = findLink((TObject*)obj) ;
-  return elem ? elem->_arg : 0 ;
+  RooLinkedListElem *elem = findLink(const_cast<TObject*>(obj));
+  return elem ? elem->_arg : nullptr ;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -552,8 +555,8 @@ void RooLinkedList::Clear(Option_t *)
     next = elem->_next ;
     deleteElement(elem) ;
   }
-  _first = 0 ;
-  _last = 0 ;
+  _first = nullptr ;
+  _last = nullptr ;
   _size = 0 ;
 
   if (_htableName) {
@@ -581,8 +584,8 @@ void RooLinkedList::Delete(Option_t *)
     deleteElement(elem) ;
     elem = next ;
   }
-  _first = 0 ;
-  _last = 0 ;
+  _first = nullptr ;
+  _last = nullptr ;
   _size = 0 ;
 
   if (_htableName) {
@@ -662,22 +665,22 @@ TObject* RooLinkedList::find(const char* name) const
 RooAbsArg* RooLinkedList::findArg(const RooAbsArg* arg) const
 {
   if (_htableName) {
-    RooAbsArg* a = (RooAbsArg*) (*_htableName)[arg->GetName()] ;
+    RooAbsArg* a = const_cast<RooAbsArg *>(static_cast<RooAbsArg const*>((*_htableName)[arg->GetName()]));
     if (a) return a;
     //cout << "RooLinkedList::findArg: possibly renamed '" << arg->GetName() << "', kRenamedArg=" << arg->namePtr()->TestBit(RooNameReg::kRenamedArg) << endl;
     // See if it might have been renamed
-    if (!arg->namePtr()->TestBit(RooNameReg::kRenamedArg)) return 0;
+    if (!arg->namePtr()->TestBit(RooNameReg::kRenamedArg)) return nullptr;
   }
 
   RooLinkedListElem* ptr = _first ;
   const TNamed* nptr = arg->namePtr();
   while(ptr) {
-    if (((RooAbsArg*)(ptr->_arg))->namePtr() == nptr) {
-      return (RooAbsArg*) ptr->_arg ;
+    if ((static_cast<RooAbsArg*>(ptr->_arg))->namePtr() == nptr) {
+      return static_cast<RooAbsArg*>(ptr->_arg) ;
     }
     ptr = ptr->_next ;
   }
-  return 0 ;
+  return nullptr ;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -820,7 +823,7 @@ RooLinkedListElem* RooLinkedList::mergesort_impl(
    } while (int(sz) != i);
     }
     // link elements in array
-    arr[0]->_prev = arr[sz - 1]->_next = 0;
+    arr[0]->_prev = arr[sz - 1]->_next = nullptr;
     for (int i = 0; i < int(sz - 1); ++i) {
       arr[i]->_next = arr[i + 1];
       arr[i + 1]->_prev = arr[i];
@@ -836,8 +839,8 @@ RooLinkedListElem* RooLinkedList::mergesort_impl(
     if (!end->_next) break;
   }
   // disconnect the two sublists
-  l2->_prev->_next = 0;
-  l2->_prev = 0;
+  l2->_prev->_next = nullptr;
+  l2->_prev = nullptr;
   // sort the two sublists (only recurse if we have to)
   if (l1->_next) l1 = mergesort_impl<ascending>(l1, sz / 2);
   if (l2->_next) l2 = mergesort_impl<ascending>(l2, sz - sz / 2);

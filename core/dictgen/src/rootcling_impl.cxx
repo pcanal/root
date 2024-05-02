@@ -54,6 +54,14 @@
 #include <mach-o/dyld.h>
 #endif
 
+#ifdef R__FBSD
+#include <sys/param.h>
+#include <sys/user.h>
+#include <sys/types.h>
+#include <libutil.h>
+#include <libprocstat.h>
+#endif // R__FBSD
+
 #if !defined(R__WIN32)
 #include <limits.h>
 #include <unistd.h>
@@ -127,9 +135,8 @@ const ROOT::Internal::RootCling::DriverConfig* gDriverConfig = nullptr;
 using HeadersDeclsMap_t = std::map<std::string, std::list<std::string>>;
 
 using namespace ROOT;
-using namespace TClassEdit;
 
-using namespace std;
+using std::string, std::map, std::ifstream, std::ofstream, std::endl, std::ios, std::vector;
 
 namespace genreflex {
    bool verbose = false;
@@ -206,6 +213,19 @@ const char *GetExePath()
       buf[ret] = 0;
       exepath = buf;
     }
+#endif
+#if defined(R__FBSD)
+  procstat* ps = procstat_open_sysctl();  //
+  kinfo_proc* kp = kinfo_getproc(getpid());
+
+  if (kp!=NULL) {
+     char path_str[PATH_MAX] = "";
+     procstat_getpathname(ps, kp, path_str, sizeof(path_str));
+     exepath = path_str;
+  }
+
+  free(kp);
+  procstat_close(ps);
 #endif
 #ifdef _WIN32
     char *buf = new char[MAX_MODULE_NAME32 + 1];
@@ -2636,6 +2656,7 @@ int GenerateFullDict(std::ostream &dictStream,
                      const ROOT::TMetaUtils::RConstructorTypes &ctorTypes,
                      bool isSplit,
                      bool isGenreflex,
+                     bool isSelXML,
                      bool writeEmptyRootPCM)
 {
    ROOT::TMetaUtils::TNormalizedCtxt normCtxt(interp.getLookupHelper());
@@ -2682,7 +2703,7 @@ int GenerateFullDict(std::ostream &dictStream,
 
       if (clang::CXXRecordDecl *CXXRD =
                llvm::dyn_cast<clang::CXXRecordDecl>(const_cast<clang::RecordDecl *>(selClass.GetRecordDecl()))) {
-         AnnotateDecl(*CXXRD, scan.GetDeclsSelRulesMap() , interp, isGenreflex);
+         AnnotateDecl(*CXXRD, scan.GetDeclsSelRulesMap() , interp, isSelXML);
       }
 
       const clang::CXXRecordDecl *CRD = llvm::dyn_cast<clang::CXXRecordDecl>(selClass.GetRecordDecl());
@@ -2754,6 +2775,12 @@ int GenerateFullDict(std::ostream &dictStream,
    // Loop to write all the ClassCode
    if (!gOptIgnoreExistingDict) {
       for (auto const &selClass : scan.fSelectedClasses) {
+         // The "isGenreflex" parameter allows the distinction between
+         // genreflex and rootcling only for the treatment of collections which
+         // are data members. To preserve the behaviour of the original
+         // genreflex and rootcling tools, if the selection is performed with
+         // genreflex, data members with collection type do not trigger the
+         // selection of the collection type
           ROOT::TMetaUtils::WriteClassCode(&CallWriteStreamer,
                                            selClass,
                                            interp,
@@ -3010,10 +3037,6 @@ static void CheckForMinusW(std::string arg,
 
    if (arg.find(pattern) != 0)
       return;
-   if (arg == "-Wno-noexcept-type") {
-      // GCC7 warning not supported by clang 3.9
-      return;
-   }
 
    ROOT::TMetaUtils::ReplaceAll(arg, pattern, "#pragma clang diagnostic ignored \"-W");
    arg += "\"";
@@ -3470,7 +3493,7 @@ public:
 
    void InclusionDirective(clang::SourceLocation /*HashLoc*/, const clang::Token & /*IncludeTok*/,
                            llvm::StringRef FileName, bool IsAngled, clang::CharSourceRange /*FilenameRange*/,
-                           const clang::FileEntry * /*File*/, llvm::StringRef /*SearchPath*/,
+                           clang::OptionalFileEntryRef /*File*/, llvm::StringRef /*SearchPath*/,
                            llvm::StringRef /*RelativePath*/, const clang::Module * /*Imported*/,
                            clang::SrcMgr::CharacteristicKind /*FileType*/) override
    {
@@ -3512,7 +3535,8 @@ public:
          Preprocessor& PP = m_Interpreter->getCI()->getPreprocessor();
          HeaderSearch& HS = PP.getHeaderSearchInfo();
          // FIXME: Reduce to Core.Rtypes.h.
-         Module* CoreModule = HS.lookupModule("Core", /*AllowSearch*/false);
+         Module* CoreModule = HS.lookupModule("Core", SourceLocation(),
+                                              /*AllowSearch*/false);
          assert(M && "Must have module Core");
          PP.makeModuleVisible(CoreModule, ImportLoc);
       }
@@ -3868,7 +3892,7 @@ static bool ModuleContainsHeaders(TModuleGenerator &modGen, clang::HeaderSearch 
          continue;
 
       clang::ModuleMap::KnownHeader SuggestedModule;
-      const clang::DirectoryLookup *CurDir = nullptr;
+      clang::ConstSearchDirIterator *CurDir = nullptr;
       if (auto FE = headerSearch.LookupFile(
                header, clang::SourceLocation(),
                /*isAngled*/ false,
@@ -4267,7 +4291,7 @@ int RootClingMain(int argc,
 
       clingArgsInterpreter.push_back("-fmodule-map-file=" +
                                      std::string(gDriverConfig->fTROOT__GetIncludeDir()) +
-                                     "/module.modulemap");
+                                     "/ROOT.modulemap");
       std::string ModuleMapCWD = ROOT::FoundationUtils::GetCurrentDir() + "/module.modulemap";
       if (llvm::sys::fs::exists(ModuleMapCWD))
          clingArgsInterpreter.push_back("-fmodule-map-file=" + ModuleMapCWD);
@@ -4930,6 +4954,7 @@ int RootClingMain(int argc,
                                  constructorTypes,
                                  gOptSplit,
                                  isGenreflex,
+                                 isSelXML,
                                  gOptWriteEmptyRootPCM);
    }
 

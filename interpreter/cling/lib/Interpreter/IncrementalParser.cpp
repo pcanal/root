@@ -162,14 +162,15 @@ namespace {
 
     void HandleDiagnostic(DiagnosticsEngine::Level DiagLevel,
                           const Diagnostic &Info) override {
+      if (Info.getID() == diag::warn_falloff_nonvoid_function) {
+        DiagLevel = DiagnosticsEngine::Error;
+      }
       if (Ignoring()) {
         if (Info.getID() == diag::warn_unused_expr
+            || Info.getID() == diag::warn_unused_result
             || Info.getID() == diag::warn_unused_call
             || Info.getID() == diag::warn_unused_comparison)
           return; // ignore!
-        if (Info.getID() == diag::warn_falloff_nonvoid_function) {
-          DiagLevel = DiagnosticsEngine::Error;
-        }
         if (Info.getID() == diag::ext_return_has_expr) {
           // An error that we need to suppress.
           auto Diags = const_cast<DiagnosticsEngine*>(Info.getDiags());
@@ -316,6 +317,7 @@ namespace cling {
       auto CG
         = std::unique_ptr<clang::CodeGenerator>(CreateLLVMCodeGen(Diag,
                                                                makeModuleName(),
+                                                  &m_CI->getVirtualFileSystem(),
                                                     m_CI->getHeaderSearchOpts(),
                                                     m_CI->getPreprocessorOpts(),
                                                          m_CI->getCodeGenOpts(),
@@ -926,7 +928,8 @@ namespace cling {
     Sema::LocalEagerInstantiationScope LocalInstantiations(S);
 
     Parser::DeclGroupPtrTy ADecl;
-    while (!m_Parser->ParseTopLevelDecl(ADecl)) {
+    Sema::ModuleImportState IS = Sema::ModuleImportState::NotACXX20Module;
+    while (!m_Parser->ParseTopLevelDecl(ADecl, IS)) {
       // If we got a null return and something *was* parsed, ignore it.  This
       // is due to a top-level semicolon, an action override, or a parse error
       // skipping something.

@@ -112,9 +112,8 @@ double RooVoigtian::evaluate() const
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Compute multiple values of Voigtian distribution.
-void RooVoigtian::computeBatch(cudaStream_t* stream, double* output, size_t nEvents, RooFit::Detail::DataMap const& dataMap) const
+void RooVoigtian::doEval(RooFit::EvalContext &ctx) const
 {
-  auto dispatch = stream ? RooBatchCompute::dispatchCUDA : RooBatchCompute::dispatchCPU;
-  dispatch->compute(stream, RooBatchCompute::Voigtian, output, nEvents,
-          {dataMap.at(x), dataMap.at(mean), dataMap.at(width), dataMap.at(sigma)});
+   RooBatchCompute::compute(ctx.config(this), RooBatchCompute::Voigtian, ctx.output(),
+                            {ctx.at(x), ctx.at(mean), ctx.at(width), ctx.at(sigma)});
 }

@@ -42,7 +42,10 @@ namespace {
 static const char kNoStdInc[] = "-nostdinc";
 #endif
 
-#define PREFIX(NAME, VALUE) const char *const NAME[] = VALUE;
+#define PREFIX(NAME, VALUE)                                                    \
+  static constexpr llvm::StringLiteral NAME##_init[] = VALUE;                  \
+  static constexpr llvm::ArrayRef<llvm::StringLiteral> NAME(                   \
+      NAME##_init, std::size(NAME##_init) - 1);
 #define OPTION(PREFIX, NAME, ID, KIND, GROUP, ALIAS, ALIASARGS, FLAGS, PARAM, \
                HELPTEXT, METAVAR, VALUES)
 #include "cling/Interpreter/ClingOptions.inc"
@@ -60,10 +63,10 @@ static const char kNoStdInc[] = "-nostdinc";
 #undef PREFIX
   };
 
-  class ClingOptTable : public OptTable {
+  class ClingOptTable : public GenericOptTable {
   public:
     ClingOptTable()
-      : OptTable(ClingInfoTable) {}
+      : GenericOptTable(ClingInfoTable) {}
   };
 
   static OptTable* CreateClingOptTable() {
@@ -154,10 +157,7 @@ void CompilerOptions::Parse(int argc, const char* const argv[],
 
   InputArgList Args(OptsC1.ParseArgs(ArgStrings, MissingArgIndex,
                     MissingArgCount, 0,
-                    options::NoDriverOption | options::CLOption));
-
-  std::vector<const char*> LLVMArgs;
-  LLVMArgs.push_back("cling (LLVM option parsing)");
+                    options::NoDriverOption | options::CLOption | options::DXCOption));
 
   for (const Arg* arg : Args) {
     switch (arg->getOption().getID()) {
@@ -183,7 +183,7 @@ void CompilerOptions::Parse(int argc, const char* const argv[],
       case options::OPT_fmodules_cache_path: CachePath = arg->getValue(); break;
       case options::OPT_cuda_path_EQ: CUDAPath = arg->getValue(); break;
       case options::OPT_offload_arch_EQ: CUDAGpuArch = arg->getValue(); break;
-      case options::OPT_cuda_device_only:
+      case options::OPT_offload_device_only:
         Language = true;
         CUDADevice = true;
         CUDAHost = false;
@@ -198,12 +198,6 @@ void CompilerOptions::Parse(int argc, const char* const argv[],
           Inputs->push_back(arg->getValue());
         break;
     }
-  }
-
-  // Check that there were LLVM arguments, other than the first dummy entry.
-  if (LLVMArgs.size() > 1) {
-    LLVMArgs.push_back(nullptr);
-    llvm::cl::ParseCommandLineOptions(LLVMArgs.size() - 1, LLVMArgs.data());
   }
 }
 

@@ -19,7 +19,7 @@
 \class RooConstraintSum
 \ingroup Roofitcore
 
-RooConstraintSum calculates the sum of the -(log) likelihoods of
+Calculates the sum of the -(log) likelihoods of
 a set of RooAbsPfs that represent constraint functions. This class
 is used to calculate the composite -log(L) of constraints to be
 added to the regular -log(L) in RooAbsPdf::fitTo() with Constrain(..)
@@ -48,15 +48,7 @@ RooConstraintSum::RooConstraintSum(const char* name, const char* title, const Ro
   _set1("set1","First set of components",this),
   _takeGlobalObservablesFromData{takeGlobalObservablesFromData}
 {
-  for (const auto comp : constraintSet) {
-    if (!dynamic_cast<RooAbsPdf*>(comp)) {
-      coutE(InputArguments) << "RooConstraintSum::ctor(" << GetName() << ") ERROR: component " << comp->GetName()
-                            << " is not of type RooAbsPdf" << std::endl ;
-      RooErrorHandler::softAbort() ;
-    }
-    _set1.add(*comp) ;
-  }
-
+  _set1.addTyped<RooAbsPdf>(constraintSet);
   _paramSet.add(normSet) ;
 }
 
@@ -87,32 +79,31 @@ double RooConstraintSum::evaluate() const
   return sum;
 }
 
+void RooConstraintSum::translate(RooFit::Detail::CodeSquashContext &ctx) const
+{
+   ctx.addResult(this, ctx.buildCall("RooFit::Detail::EvaluateFuncs::constraintSumEvaluate", _set1, _set1.size()));
+}
 
-void RooConstraintSum::computeBatch(cudaStream_t *, double *output, size_t /*size*/,
-                                    RooFit::Detail::DataMap const &dataMap) const
+void RooConstraintSum::doEval(RooFit::EvalContext &ctx) const
 {
    double sum(0);
 
    for (const auto comp : _set1) {
-      sum -= std::log(dataMap.at(comp)[0]);
+      sum -= std::log(ctx.at(comp)[0]);
    }
 
-   output[0] = sum;
+   ctx.output()[0] = sum;
 }
 
 std::unique_ptr<RooAbsArg> RooConstraintSum::compileForNormSet(RooArgSet const & /*normSet*/, RooFit::Detail::CompileContext & ctx) const
 {
    std::unique_ptr<RooAbsReal> newArg{static_cast<RooAbsReal*>(this->Clone())};
 
-   RooArgList serverClones;
    for (const auto server : newArg->servers()) {
       RooArgSet nset;
       server->getObservables(&_paramSet, nset);
-      if (auto serverClone = ctx.compile(*server, *newArg, nset)) {
-         serverClones.add(*serverClone);
-      }
+      ctx.compileServer(*server, *newArg, nset);
    }
-   newArg->redirectServers(serverClones, false, true);
 
    return newArg;
 }

@@ -96,11 +96,11 @@ public:
    TNDArrayRef<T> operator[] (Int_t idx) const {
       if (!fData) return TNDArrayRef<T>(0, 0);
       R__ASSERT(idx < fSizes[-1] / fSizes[0] && "index out of range!");
-      return TNDArrayRef<T>(fData + idx * fSizes[0], (fSizes[0] == 1) ? 0 : (fSizes + 1));
+      return TNDArrayRef<T>(fData + idx * fSizes[0], (fSizes[0] == 1) ? nullptr : (fSizes + 1));
    }
    operator T() const {
       if (!fData) return T();
-      R__ASSERT(fSizes == 0 && "Element operator can only be used on non-array element. Missing an operator[] level?");
+      R__ASSERT(fSizes == nullptr && "Element operator can only be used on non-array element. Missing an operator[] level?");
       return *fData;
    }
 
@@ -127,13 +127,11 @@ public:
       fData.assign(fSizes[0], T());
    }
 
-#ifndef __CINT__
    TNDArrayRef<T> operator[](Int_t idx) const {
       if (!fData) return TNDArrayRef<T>(0, 0);
       R__ASSERT(idx < fSizes[0] / fSizes[1] && "index out of range!");
       return TNDArrayRef<T>(fData.data() + idx * fSizes[1], fSizes.data() + 2);
    }
-#endif // __CINT__
 
    T At(const Int_t* idx) const {
       return At(GetBin(idx));

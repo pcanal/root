@@ -44,7 +44,7 @@ target_include_directories(emitFromONNX PRIVATE
    ${CMAKE_CURRENT_BINARY_DIR}   # this is for the protobuf headerfile
 )
 
-target_link_libraries(emitFromONNX ${Protobuf_LIBRARIES} ROOTTMVASofie ROOTTMVASofieParser)
+target_link_libraries(emitFromONNX protobuf::libprotobuf ROOTTMVASofie ROOTTMVASofieParser)
 set_target_properties(emitFromONNX PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 ## silence protobuf warnings seen in version 3.0 and 3.6. Not needed from protobuf version 3.17
 target_compile_options(emitFromONNX PRIVATE -Wno-unused-parameter -Wno-array-bounds)
@@ -84,7 +84,7 @@ target_include_directories(emitFromROOT PRIVATE
    ${CMAKE_SOURCE_DIR}/tmva/inc
    ${CMAKE_CURRENT_BINARY_DIR}
 )
-target_link_libraries(emitFromROOT ${Protobuf_LIBRARIES} ROOTTMVASofie ROOTTMVASofieParser)
+target_link_libraries(emitFromROOT protobuf::libprotobuf ROOTTMVASofie ROOTTMVASofieParser)
 set_target_properties(emitFromROOT PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
 ## silence protobuf warnings seen in version 3.0 and 3.6. Not needed from protobuf version 3.17
 target_compile_options(emitFromROOT PRIVATE -Wno-unused-parameter -Wno-array-bounds)
@@ -138,3 +138,36 @@ if (tmva-cpu)
   )
  endif()
 endif()
+
+add_executable(emitGNN
+              GNN/EmitGNN.cxx
+              ${CMAKE_SOURCE_DIR}/tmva/sofie/src/RModel_GNN.cxx
+              ${CMAKE_SOURCE_DIR}/tmva/sofie/src/SOFIE_common.cxx
+)
+target_include_directories(emitGNN PRIVATE
+   ${CMAKE_SOURCE_DIR}/tmva/sofie/inc
+   ${CMAKE_SOURCE_DIR}/tmva/inc
+   ${CMAKE_SOURCE_DIR}/core/foundation/inc
+   ${CMAKE_BINARY_DIR}/ginclude   # this is for RConfigure.h
+)
+target_link_libraries(emitGNN ROOTTMVASofie)
+set_target_properties(emitGNN PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+## silence protobuf warnings seen in version 3.0 and 3.6. Not needed from protobuf version 3.17
+target_compile_options(emitGNN PRIVATE -Wno-unused-parameter -Wno-array-bounds)
+
+
+add_executable(emitGraphIndependent
+              GNN/EmitGraphIndependent.cxx
+              ${CMAKE_SOURCE_DIR}/tmva/sofie/src/RModel_GraphIndependent.cxx
+              ${CMAKE_SOURCE_DIR}/tmva/sofie/src/SOFIE_common.cxx
+)
+target_include_directories(emitGraphIndependent PRIVATE
+   ${CMAKE_SOURCE_DIR}/tmva/sofie/inc
+   ${CMAKE_SOURCE_DIR}/tmva/inc
+   ${CMAKE_SOURCE_DIR}/core/foundation/inc
+   ${CMAKE_BINARY_DIR}/ginclude   # this is for RConfigure.h
+)
+target_link_libraries(emitGraphIndependent ROOTTMVASofie)
+set_target_properties(emitGraphIndependent PROPERTIES POSITION_INDEPENDENT_CODE TRUE)
+## silence protobuf warnings seen in version 3.0 and 3.6. Not needed from protobuf version 3.17
+target_compile_options(emitGraphIndependent PRIVATE -Wno-unused-parameter -Wno-array-bounds)

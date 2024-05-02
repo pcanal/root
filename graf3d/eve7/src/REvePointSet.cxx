@@ -225,6 +225,7 @@ Int_t REvePointSet::WriteCoreJson(nlohmann::json& j, Int_t rnr_offset)
    }
    j["fMarkerSize"]  = GetMarkerSize();
    j["fMarkerColor"] = GetMarkerColor();
+   j["fMarkerStyle"] = GetMarkerStyle();
    j["fSecondarySelect"] = fAlwaysSecSelect;
 
    return ret;
@@ -468,7 +469,7 @@ Bool_t REvePointSetArray::Fill(Double_t x, Double_t y, Double_t z, Double_t quan
       fLastBin = fNBins - 1;
    }
 
-   if (fBins[fLastBin] != 0)
+   if (fBins[fLastBin] != nullptr)
    {
       fBins[fLastBin]->SetNextPoint(x, y, z);
       return kTRUE;

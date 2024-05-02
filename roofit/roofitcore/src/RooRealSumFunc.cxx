@@ -46,7 +46,7 @@ RooRealSumFunc::RooRealSumFunc() : _normIntMgr(this, 10)
 {
    // Default constructor
    // coverity[UNINIT_CTOR]
-   TRACE_CREATE
+   TRACE_CREATE;
 }
 
 //_____________________________________________________________________________
@@ -55,7 +55,7 @@ RooRealSumFunc::RooRealSumFunc(const char *name, const char *title)
      _funcList("!funcList", "List of functions", this), _coefList("!coefList", "List of coefficients", this)
 {
    // Constructor with name and title
-   TRACE_CREATE
+   TRACE_CREATE;
 }
 
 //_____________________________________________________________________________
@@ -72,7 +72,7 @@ RooRealSumFunc::RooRealSumFunc(const char *name, const char *title, RooAbsReal &
    _funcList.add(func1);
    _funcList.add(func2);
    _coefList.add(coef1);
-   TRACE_CREATE
+   TRACE_CREATE;
 }
 
 //_____________________________________________________________________________
@@ -88,7 +88,7 @@ RooRealSumFunc::RooRealSumFunc(const char *name, const char *title, const RooArg
 
    RooRealSumPdf::initializeFuncsAndCoefs(*this, inFuncList, inCoefList, _funcList, _coefList);
 
-   TRACE_CREATE
+   TRACE_CREATE;
 }
 
 //_____________________________________________________________________________
@@ -99,13 +99,13 @@ RooRealSumFunc::RooRealSumFunc(const RooRealSumFunc &other, const char *name)
 {
    // Copy constructor
 
-   TRACE_CREATE
+   TRACE_CREATE;
 }
 
 //_____________________________________________________________________________
 RooRealSumFunc::~RooRealSumFunc()
 {
-   TRACE_DESTROY
+   TRACE_DESTROY;
 }
 
 //_____________________________________________________________________________
@@ -114,6 +114,10 @@ double RooRealSumFunc::evaluate() const
   return RooRealSumPdf::evaluate(*this, _funcList, _coefList, _doFloor || _doFloorGlobal, _haveWarned);
 }
 
+void RooRealSumFunc::translate(RooFit::Detail::CodeSquashContext &ctx) const
+{
+   RooRealSumPdf::translateImpl(ctx, this, _funcList, _coefList);
+}
 
 //_____________________________________________________________________________
 bool RooRealSumFunc::checkObservables(const RooArgSet *nset) const
@@ -169,7 +173,7 @@ void RooRealSumFunc::printMetaArgs(std::ostream &os) const
 std::unique_ptr<RooAbsArg> RooRealSumFunc::compileForNormSet(RooArgSet const &/*normSet*/, RooFit::Detail::CompileContext & ctx) const
 {
    auto newArg = std::unique_ptr<RooAbsArg>{static_cast<RooAbsArg *>(Clone())};
-   newArg->setAttribute("_COMPILED");
+   ctx.markAsCompiled(*newArg);
    ctx.compileServers(*newArg, {});
    return newArg;
 }

@@ -29,9 +29,7 @@ range cannot include zero.
 #include "RooInvTransform.h"
 
 #include "Riostream.h"
-#include <math.h>
-
-using namespace std;
+#include <cmath>
 
 ClassImp(RooInvTransform);
 ;

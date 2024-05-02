@@ -17,7 +17,7 @@
 #include <iostream>
 #include <fstream>
 
-using namespace std;
+using std::ostream, std::ofstream, std::cout, std::endl;
 
 void scandir(THtml& html, const char *dir, const char *title, TObjLink* toplnk);
 
@@ -79,10 +79,10 @@ void MakeTopLinks(TString &links, const char* name, const char* title, const cha
 
    links = "<div id=\"toplinks\"><div class=\"descrhead\">"
            "<table class=\"descrtitle\" id=\"contexttitle\"><tr class=\"descrtitle\">";
-   TObjLink *prevlnk = lnk ? lnk->Prev() : 0;
-   TObjLink *nextlnk = lnk ? lnk->Next() : 0;
+   TObjLink *prevlnk = lnk ? lnk->Prev() : nullptr;
+   TObjLink *nextlnk = lnk ? lnk->Next() : nullptr;
 
-   TNamed* prevname = prevlnk ? (TNamed*)prevlnk->GetObject() : 0;
+   TNamed* prevname = prevlnk ? (TNamed*)prevlnk->GetObject() : nullptr;
    AppendLink(links, 0, prevname);
 
    TNamed upname;
@@ -90,7 +90,7 @@ void MakeTopLinks(TString &links, const char* name, const char* title, const cha
       upname.SetNameTitle(upLink, upTitle);
    AppendLink(links, 1, &upname);
 
-   TNamed* nextname = nextlnk ? (TNamed*)nextlnk->GetObject() : 0;
+   TNamed* nextname = nextlnk ? (TNamed*)nextlnk->GetObject() : nullptr;
    AppendLink(links, 2, nextname);
 
    links += TString("</tr></table></div><h1 class=\"convert\">") + title + "</h1></div>\n";
@@ -103,7 +103,7 @@ void MakeTopLinks(TString &links, const char* name, const char* title, const cha
       subtitle += TString(name);
       suburl = subtitle + "?view=markup";
    }
-   links += TString::Format("<div class=\"location\"><h2>From <a href=\"http://root.cern.ch/viewvc/trunk/tutorials/%s\">$ROOTSYS/tutorials/%s</a></h2></div>",
+   links += TString::Format("<div class=\"location\"><h2>From <a href=\"http://root.cern/viewvc/trunk/tutorials/%s\">$ROOTSYS/tutorials/%s</a></h2></div>",
                             suburl.Data(), subtitle.Data());
 }
 
@@ -137,7 +137,7 @@ void writeItem(ostream& out, Int_t numb, const char *ref, const char *name, cons
    //
    const char *imagenew = "";
    cout << "writingItem: " << numb << ", ref=" << ref << ", name=" << name << ", title=" << title << endl;
-   if (isnew) imagenew = " <img src=\"http://root.cern.ch/root/images/new01.gif\" alt=\"new\" align=\"top\" />";
+   if (isnew) imagenew = " <img src=\"http://root.cern/root/images/new01.gif\" alt=\"new\" align=\"top\" />";
    out << "<li class=\"idxl" << numb%2 << "\">";
    out << "<a href=\"" << ref << "\"><span class=\"typename\">" << numb << ". " << name << "</span></a> "
        << title << imagenew << "</li>" << endl;
@@ -202,14 +202,14 @@ void writeTutorials(THtml& html) {
       {"thread",   "Multi-Threading examples"},
       {"unuran",   "The Unuran package"},
       {"xml",      "XML tools"},
-      {0, 0}
+      {nullptr, nullptr}
    };
 
    // the output file for the directory index
    ofstream fptop("htmldoc/tutorials/index.html");
    writeHeader(html, fptop,"ROOT Tutorials");
    TString topLinks;
-   MakeTopLinks(topLinks, 0, "ROOT Tutorials", "../index", "ROOT", 0, "");
+   MakeTopLinks(topLinks, nullptr, "ROOT Tutorials", "../index", "ROOT", nullptr, "");
    fptop << topLinks << endl;
    fptop << "<ul id=\"indx\">" << endl;
 
@@ -237,7 +237,7 @@ void writeTutorials(THtml& html) {
    }
 
    fptop << "</ul>" << endl;
-   fptop << "<p><a href=\"http://root.cern.ch/drupal/content/downloading-root\">Download ROOT</a> and run the tutorials in $ROOTSYS/tutorials yourself!</p>" << endl;
+   fptop << "<p><a href=\"https://root.cern/install/\">Download ROOT</a> and run the tutorials in $ROOTSYS/tutorials yourself!</p>" << endl;
    writeTrailer(html, fptop);
 }
 
@@ -335,7 +335,7 @@ Bool_t CreateOutput_Tutorial(const char* tut) {
       "guitest_playback",
       "geom_cms_playback",
       "gviz3d.C",
-      0
+      nullptr
    };
 
    for (const char** iVetoed = vetoed; *iVetoed; ++iVetoed)
@@ -359,7 +359,7 @@ void scandir(THtml& html, const char *dir, const char *title, TObjLink* toplnk) 
 
    TString topLinks;
    // Creates links to prev: "hist.html", up: ".html", next: "graph.html".
-   MakeTopLinks(topLinks, 0, title, ".", "ROOT Tutorials", toplnk, dir);
+   MakeTopLinks(topLinks, nullptr, title, ".", "ROOT Tutorials", toplnk, dir);
    // But we need links to prev: "../hist/index.html", up: "../index.html", next: "graph/index.html",
    // so the following works:
    topLinks.ReplaceAll("href=\"", "href=\"../");
@@ -443,7 +443,7 @@ void scandir(THtml& html, const char *dir, const char *title, TObjLink* toplnk) 
       gROOT->GetListOfGeometries()->Delete();
       //gROOT->GetListOfSpecials()->Delete();
       // Create some styles
-      gStyle = 0;
+      gStyle = nullptr;
       TStyle::BuildStyles();
       gROOT->SetStyle("Default");
       lnk = lnk->Next();
@@ -453,13 +453,13 @@ void scandir(THtml& html, const char *dir, const char *title, TObjLink* toplnk) 
 }
 
 void MakeTutorials() {
-   // Bring the ROOT tutorials on the web, see http://root.cern.ch/root/html/tutorials/.
+   // Bring the ROOT tutorials on the web, see http://root.cern/root/html/tutorials/.
    // Demonstrates the use of THtml:Convert() in a realistic context.
 
    if (!gSystem->OpenDirectory("htmldoc")) gSystem->MakeDirectory("htmldoc");
    if (!gSystem->OpenDirectory("htmldoc/tutorials")) gSystem->MakeDirectory("htmldoc/tutorials");
    gEnv->SetValue("Unix.*.Root.Html.SourceDir", "$(ROOTSYS)");
-   gEnv->SetValue("Root.Html.ViewCVS","http://root.cern.ch/viewcvs/trunk/%f?view=log");
+   gEnv->SetValue("Root.Html.ViewCVS","http://root.cern/viewcvs/trunk/%f?view=log");
    gEnv->SetValue("Root.Html.Search", "http://www.google.com/search?q=%s+site%3A%u");
    THtml html;
    html.LoadAllLibs();

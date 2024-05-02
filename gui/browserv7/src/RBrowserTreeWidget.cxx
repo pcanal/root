@@ -20,7 +20,7 @@
 #include "TBranchBrowsable.h"
 #include "TLeaf.h"
 
-using namespace ROOT::Experimental;
+using namespace ROOT;
 
 using namespace std::string_literals;
 
@@ -45,7 +45,7 @@ public:
 
    std::string GetKind() const override { return "tree"s; }
    std::string GetTitle() override { return fTitle; }
-   std::string GetUrl() override { return "../"s + fViewer.GetWindowAddr() + "/"s; }
+   std::string GetUrl() override { return fViewer.GetWindowUrl(false); }
 
    void Show(const std::string &arg) override { fViewer.Show(arg); }
 

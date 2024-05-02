@@ -51,20 +51,21 @@
 #include "RooRealVar.h"
 #include "RooAddGenContext.h"
 #include "RooNameReg.h"
+#include "RooBatchCompute.h"
 
-using namespace std;
+using std::endl, std::ostream;
 
 ClassImp(RooAddModel);
 
 
 ////////////////////////////////////////////////////////////////////////////////
 
-RooAddModel::RooAddModel() :
-  _refCoefNorm("!refCoefNorm","Reference coefficient normalization set",this,false,false),
-  _projCacheMgr(this,10),
-  _intCacheMgr(this,10)
+RooAddModel::RooAddModel()
+   : _refCoefNorm("!refCoefNorm", "Reference coefficient normalization set", this, false, false),
+     _projCacheMgr(this, 10),
+     _intCacheMgr(this, 10),
+     _coefErrCount(_errorCount)
 {
-  _coefErrCount = _errorCount ;
 }
 
 
@@ -80,14 +81,11 @@ RooAddModel::RooAddModel() :
 RooAddModel::RooAddModel(const char *name, const char *title, const RooArgList& inPdfList, const RooArgList& inCoefList, bool ownPdfList) :
   RooResolutionModel(name,title,(static_cast<RooResolutionModel*>(inPdfList.at(0)))->convVar()),
   _refCoefNorm("!refCoefNorm","Reference coefficient normalization set",this,false,false),
-  _refCoefRangeName(0),
   _projCacheMgr(this,10),
   _intCacheMgr(this,10),
   _codeReg(10),
   _pdfList("!pdfs","List of PDFs",this),
-  _coefList("!coefficients","List of coefficients",this),
-  _haveLastCoef(false),
-  _allExtendable(false)
+  _coefList("!coefficients","List of coefficients",this)
 {
    const std::string ownName(GetName() ? GetName() : "");
    if (inPdfList.size() > inCoefList.size() + 1 || inPdfList.size() < inCoefList.size()) {
@@ -157,19 +155,19 @@ RooAddModel::RooAddModel(const char *name, const char *title, const RooArgList& 
 ////////////////////////////////////////////////////////////////////////////////
 /// Copy constructor
 
-RooAddModel::RooAddModel(const RooAddModel& other, const char* name) :
-  RooResolutionModel(other,name),
-  _refCoefNorm("!refCoefNorm",this,other._refCoefNorm),
-  _refCoefRangeName((TNamed*)other._refCoefRangeName),
-  _projCacheMgr(other._projCacheMgr,this),
-  _intCacheMgr(other._intCacheMgr,this),
-  _codeReg(other._codeReg),
-  _pdfList("!pdfs",this,other._pdfList),
-  _coefList("!coefficients",this,other._coefList),
-  _haveLastCoef(other._haveLastCoef),
-  _allExtendable(other._allExtendable)
+RooAddModel::RooAddModel(const RooAddModel &other, const char *name)
+   : RooResolutionModel(other, name),
+     _refCoefNorm("!refCoefNorm", this, other._refCoefNorm),
+     _refCoefRangeName((TNamed *)other._refCoefRangeName),
+     _projCacheMgr(other._projCacheMgr, this),
+     _intCacheMgr(other._intCacheMgr, this),
+     _codeReg(other._codeReg),
+     _pdfList("!pdfs", this, other._pdfList),
+     _coefList("!coefficients", this, other._coefList),
+     _haveLastCoef(other._haveLastCoef),
+     _allExtendable(other._allExtendable),
+     _coefErrCount(_errorCount)
 {
-  _coefErrCount = _errorCount ;
 }
 
 
@@ -206,12 +204,12 @@ void RooAddModel::fixCoefNormalization(const RooArgSet& refCoefNorm)
 /// instructs RooAddModel to freeze its interpretation in the given
 /// named range. If the current normalization range is different
 /// from the reference range, the appropriate fraction coefficients
-/// are automically calculation from the reference fractions using
-/// ratios if integrals
+/// are automatically calculated from the reference fractions using
+/// ratios of integrals.
 
 void RooAddModel::fixCoefRange(const char* rangeName)
 {
-  _refCoefRangeName = (TNamed*)RooNameReg::ptr(rangeName) ;
+  _refCoefRangeName = const_cast<TNamed*>(RooNameReg::ptr(rangeName));
 }
 
 
@@ -232,7 +230,7 @@ RooResolutionModel* RooAddModel::convolution(RooFormulaVar* inBasis, RooAbsArg* 
     ccoutE(InputArguments) << "basis->findServer(0) = " << inBasis->findServer(0) << " " << inBasis->findServer(0)->GetName() << endl ;
     ccoutE(InputArguments) << "x.absArg()           = " << x.absArg() << " " << x.absArg()->GetName() << endl ;
     inBasis->Print("v") ;
-    return 0 ;
+    return nullptr ;
   }
 
   TString newName(GetName()) ;
@@ -282,7 +280,8 @@ RooResolutionModel* RooAddModel::convolution(RooFormulaVar* inBasis, RooAbsArg* 
 
 Int_t RooAddModel::basisCode(const char* name) const
 {
-  bool first(true), code(0) ;
+  bool first(true);
+  bool code(false);
   for (auto obj : _pdfList) {
     auto model = static_cast<RooResolutionModel*>(obj);
     Int_t subCode = model->basisCode(name) ;
@@ -290,7 +289,7 @@ Int_t RooAddModel::basisCode(const char* name) const
       code = subCode ;
       first = false ;
     } else if (subCode==0) {
-      code = 0 ;
+      code = false ;
     }
   }
 
@@ -309,7 +308,7 @@ Int_t RooAddModel::basisCode(const char* name) const
 AddCacheElem* RooAddModel::getProjCache(const RooArgSet* nset, const RooArgSet* iset) const
 {
   // Check if cache already exists
-  auto cache = static_cast<AddCacheElem*>(_projCacheMgr.getObj(nset,iset,0,normRange()));
+  auto cache = static_cast<AddCacheElem*>(_projCacheMgr.getObj(nset,iset,nullptr,normRange()));
   if (cache) {
     return cache ;
   }
@@ -333,7 +332,7 @@ AddCacheElem* RooAddModel::getProjCache(const RooArgSet* nset, const RooArgSet* 
 
 void RooAddModel::updateCoefficients(AddCacheElem& cache, const RooArgSet* nset) const
 {
-  _coefCache.resize(_pdfList.getSize());
+  _coefCache.resize(_pdfList.size());
   for(std::size_t i = 0; i < _coefList.size(); ++i) {
     _coefCache[i] = static_cast<RooAbsReal const&>(_coefList[i]).getVal(nset);
   }
@@ -376,6 +375,42 @@ double RooAddModel::evaluate() const
   return value ;
 }
 
+void RooAddModel::doEval(RooFit::EvalContext &ctx) const
+{
+   // Like many other functions in this class, the implementation was copy-pasted from the RooAddPdf
+   RooBatchCompute::Config config = ctx.config(this);
+
+   _coefCache.resize(_pdfList.size());
+   for (std::size_t i = 0; i < _coefList.size(); ++i) {
+      auto coefVals = ctx.at(&_coefList[i]);
+      // We don't support per-event coefficients in this function. If the CPU
+      // mode is used, we can just fall back to the RooAbsReal implementation.
+      // With CUDA, we can't do that because the inputs might be on the device.
+      // That's why we throw an exception then.
+      if (coefVals.size() > 1) {
+         if (config.useCuda()) {
+            throw std::runtime_error("The RooAddPdf doesn't support per-event coefficients in CUDA mode yet!");
+         }
+         RooAbsReal::doEval(ctx);
+         return;
+      }
+      _coefCache[i] = coefVals[0];
+   }
+
+   std::vector<std::span<const double>> pdfs;
+   std::vector<double> coefs;
+   AddCacheElem *cache = getProjCache(nullptr);
+   updateCoefficients(*cache, nullptr);
+
+   for (unsigned int pdfNo = 0; pdfNo < _pdfList.size(); ++pdfNo) {
+      auto pdf = static_cast<RooAbsPdf *>(&_pdfList[pdfNo]);
+      if (pdf->isSelectedComp()) {
+         pdfs.push_back(ctx.at(pdf));
+         coefs.push_back(_coefCache[pdfNo] / cache->suppNormVal(pdfNo));
+      }
+   }
+   RooBatchCompute::compute(config, RooBatchCompute::AddPdf, ctx.output(), pdfs, coefs);
+}
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -392,7 +427,7 @@ void RooAddModel::resetErrorCounters(Int_t resetValue)
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Check if PDF is valid for given normalization set.
-/// Coeffient and PDF must be non-overlapping, but pdf-coefficient
+/// Coefficient and PDF must be non-overlapping, but pdf-coefficient
 /// pairs may overlap each other
 
 bool RooAddModel::checkObservables(const RooArgSet* nset) const
@@ -443,7 +478,7 @@ void RooAddModel::getCompIntList(const RooArgSet* nset, const RooArgSet* iset, p
 {
   Int_t sterileIdx(-1) ;
 
-  IntCacheElem* cache = (IntCacheElem*) _intCacheMgr.getObj(nset,iset,&sterileIdx,RooNameReg::ptr(isetRangeName)) ;
+  IntCacheElem* cache = static_cast<IntCacheElem*>(_intCacheMgr.getObj(nset,iset,&sterileIdx,RooNameReg::ptr(isetRangeName))) ;
   if (cache) {
     code = _intCacheMgr.lastIndex() ;
     compIntList = &cache->_intList ;
@@ -458,8 +493,7 @@ void RooAddModel::getCompIntList(const RooArgSet* nset, const RooArgSet* iset, p
   for (auto obj : _pdfList) {
     auto model = static_cast<RooResolutionModel*>(obj);
 
-    RooAbsReal* intPdf = model->createIntegral(*iset,nset,0,isetRangeName) ;
-    cache->_intList.addOwned(*intPdf) ;
+    cache->_intList.addOwned(std::unique_ptr<RooAbsReal>{model->createIntegral(*iset,nset,nullptr,isetRangeName)});
   }
 
   // Store the partial integral list and return the assigned code ;
@@ -482,12 +516,12 @@ double RooAddModel::analyticalIntegralWN(Int_t code, const RooArgSet* normSet, c
   }
 
   // Partial integration scenarios
-  IntCacheElem* cache = (IntCacheElem*) _intCacheMgr.getObjByIndex(code-1) ;
+  IntCacheElem* cache = static_cast<IntCacheElem*>(_intCacheMgr.getObjByIndex(code-1)) ;
 
   RooArgList* compIntList ;
 
   // If cache has been sterilized, revive this slot
-  if (cache==0) {
+  if (cache==nullptr) {
     std::unique_ptr<RooArgSet> vars{getParameters(RooArgSet())} ;
     RooArgSet nset = _intCacheMgr.selectFromSet1(*vars, code-1) ;
     RooArgSet iset = _intCacheMgr.selectFromSet2(*vars, code-1) ;
@@ -564,7 +598,7 @@ double RooAddModel::expectedEvents(const RooArgSet* nset) const
 
 void RooAddModel::selectNormalization(const RooArgSet* depSet, bool force)
 {
-  if (!force && _refCoefNorm.getSize()!=0) {
+  if (!force && !_refCoefNorm.empty()) {
     return ;
   }
 

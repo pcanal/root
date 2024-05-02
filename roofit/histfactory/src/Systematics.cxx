@@ -33,7 +33,7 @@ std::string RooStats::HistFactory::Constraint::Name( Constraint::Type type ) {
 
 RooStats::HistFactory::Constraint::Type RooStats::HistFactory::Constraint::GetType( const std::string& Name ) {
 
-  if( Name == "" ) {
+  if( Name.empty() ) {
     std::cout << "Error: Given empty name for ConstraintType" << std::endl;
     throw hf_exc();
   }
@@ -54,7 +54,7 @@ RooStats::HistFactory::Constraint::Type RooStats::HistFactory::Constraint::GetTy
 }
 
 // Norm Factor
-RooStats::HistFactory::NormFactor::NormFactor() : fName(""), fVal(1.0),
+RooStats::HistFactory::NormFactor::NormFactor() :  fVal(1.0),
                     fLow(1.0), fHigh(1.0) {}
 
 void RooStats::HistFactory::NormFactor::Print( std::ostream& stream ) const {
@@ -214,7 +214,7 @@ void RooStats::HistFactory::ShapeFactor::Print( std::ostream& stream ) const {
 
   stream << "\t \t Name: " << fName << std::endl;
 
-  if( fHistoNameHigh != "" ) {
+  if( !fHistoNameHigh.empty() ) {
     stream << "\t \t "
       << " Shape Hist Name: " << fHistoNameHigh
       << " Shape Hist Path Name: " << fHistoPathHigh

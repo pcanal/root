@@ -29,8 +29,6 @@ class THttpCallArg;
 class THttpServer;
 
 namespace ROOT {
-namespace Experimental {
-
 
 /// function signature for connect/disconnect call-backs
 /// argument is connection id
@@ -47,6 +45,7 @@ using WebWindowDataCallback_t = std::function<void(unsigned, const std::string &
 /// Waiting will be performed until function returns non-zero value
 using WebWindowWaitFunc_t = std::function<int(double)>;
 
+class RFileDialog;
 class RWebWindowsManager;
 class RWebWindowWSHandler;
 
@@ -55,6 +54,7 @@ class RWebWindow {
    friend class RWebWindowsManager;
    friend class RWebWindowWSHandler;
    friend class RWebDisplayHandle;
+   friend class RFileDialog;
 
 private:
    using timestamp_t = std::chrono::time_point<std::chrono::system_clock>;
@@ -71,6 +71,7 @@ private:
       bool fHeadlessMode{false};           ///<! indicate if connection represent batch job
       std::string fKey;                    ///<! key value supplied to the window (when exists)
       int fKeyUsed{0};                     ///<! key value used to verify connection
+      std::string fNewKey;                 ///<! new key if connection request reload
       std::unique_ptr<RWebDisplayHandle> fDisplayHandle;  ///<! handle assigned with started web display (when exists)
       std::shared_ptr<THttpCallArg> fHold; ///<! request used to hold headless browser
       timestamp_t fSendStamp;              ///<! last server operation, always used from window thread
@@ -83,6 +84,8 @@ private:
       int fSendCredits{0};                 ///<! how many send operation can be performed without confirmation from other side
       int fClientCredits{0};               ///<! number of credits received from client
       bool fDoingSend{false};              ///<! true when performing send operation
+      unsigned long fRecvSeq{0};           ///<! sequence id of last received packet
+      unsigned long fSendSeq{1};           ///<! sequence id of last send packet
       std::queue<QueueItem> fQueue;        ///<! output queue
       std::map<int,std::shared_ptr<RWebWindow>> fEmbed; ///<! map of embed window for that connection, key value is channel id
       WebConn() = default;
@@ -105,9 +108,17 @@ private:
          fDoingSend = false;
          fSendCredits = 0;
          fClientCredits = 0;
+         fRecvSeq = 0;
+         fSendSeq = 1;
          while (!fQueue.empty())
             fQueue.pop();
       }
+   };
+
+   struct MasterConn {
+      unsigned connid{0};
+      int channel{-1};
+      MasterConn(unsigned _connid, int _channel) : connid(_connid), channel(_channel) {}
    };
 
    enum EQueueEntryKind { kind_None, kind_Connect, kind_Data, kind_Disconnect };
@@ -124,14 +135,15 @@ private:
 
    std::shared_ptr<RWebWindowsManager> fMgr;        ///<! display manager
    std::shared_ptr<RWebWindow> fMaster;             ///<! master window where this window is embedded
-   unsigned fMasterConnId{0};                       ///<! master connection id
-   int fMasterChannel{-1};                          ///<! channel id in the master window
+   std::vector<MasterConn> fMasterConns;            ///<! master connections
    std::string fDefaultPage;                        ///<! HTML page (or file name) returned when window URL is opened
    std::string fPanelName;                          ///<! panel name which should be shown in the window
    unsigned fId{0};                                 ///<! unique identifier
    bool fUseServerThreads{false};                   ///<! indicates that server thread is using, no special window thread
+   bool fUseProcessEvents{false};                   ///<! all window functionality will run through process events
    bool fProcessMT{false};                          ///<! if window event processing performed in dedicated thread
    bool fSendMT{false};                             ///<! true is special threads should be used for sending data
+   bool fRequireAuthKey{true};                      ///<! defines if authentication key always required when connect to the widget
    std::shared_ptr<RWebWindowWSHandler> fWSHandler; ///<! specialize websocket handler for all incoming connections
    unsigned fConnCnt{0};                            ///<! counter of new connections to assign ids
    ConnectionsList_t fPendingConn;                  ///<! list of pending connection with pre-assigned keys
@@ -168,16 +180,16 @@ private:
 
    void CompleteWSSend(unsigned wsid);
 
-   ConnectionsList_t GetConnections(unsigned connid = 0, bool only_active = false) const;
-
-   std::shared_ptr<WebConn> FindOrCreateConnection(unsigned wsid, bool make_new, const char *query);
+   ConnectionsList_t GetWindowConnections(unsigned connid = 0, bool only_active = false) const;
 
    /// Find connection with specified websocket id
-   std::shared_ptr<WebConn> FindConnection(unsigned wsid) { return FindOrCreateConnection(wsid, false, nullptr); }
+   std::shared_ptr<WebConn> FindConnection(unsigned wsid);
 
    std::shared_ptr<WebConn> RemoveConnection(unsigned wsid);
 
    std::shared_ptr<WebConn> _FindConnWithKey(const std::string &key) const;
+
+   bool _CanTrustIn(std::shared_ptr<WebConn> &conn, const std::string &key, const std::string &ntry, bool remote, bool test_first_time);
 
    std::string _MakeSendHeader(std::shared_ptr<WebConn> &conn, bool txt, const std::string &data, int chid);
 
@@ -193,6 +205,8 @@ private:
 
    bool HasKey(const std::string &key) const;
 
+   void RemoveKey(const std::string &key);
+
    std::string GenerateKey() const;
 
    void CheckPendingConnections();
@@ -201,9 +215,15 @@ private:
 
    unsigned AddDisplayHandle(bool headless_mode, const std::string &key, std::unique_ptr<RWebDisplayHandle> &handle);
 
-   unsigned AddEmbedWindow(std::shared_ptr<RWebWindow> window, int channel);
+   unsigned AddEmbedWindow(std::shared_ptr<RWebWindow> window, unsigned connid, int channel);
 
    void RemoveEmbedWindow(unsigned connid, int channel);
+
+   void AddMasterConnection(std::shared_ptr<RWebWindow> window, unsigned connid, int channel);
+
+   std::vector<MasterConn> GetMasterConnections(unsigned connid = 0) const;
+
+   void RemoveMasterConnection(unsigned connid = 0);
 
    bool ProcessBatchHolder(std::shared_ptr<THttpCallArg> &arg);
 
@@ -213,7 +233,11 @@ private:
 
    unsigned FindHeadlessConnection();
 
-   void CheckThreadAssign();
+   static std::function<bool(const std::shared_ptr<RWebWindow> &, unsigned, const std::string &)> gStartDialogFunc;
+
+   static void SetStartDialogFunc(std::function<bool(const std::shared_ptr<RWebWindow> &, unsigned, const std::string &)>);
+
+   static std::string HMAC(const std::string &key, const std::string &sessionKey, const char *msg, int msglen);
 
 public:
 
@@ -288,6 +312,14 @@ public:
    /// returns true if only native (own-created) connections are allowed
    bool IsNativeOnlyConn() const { return fNativeOnlyConn; }
 
+   /////////////////////////////////////////////////////////////////////////
+   /// Configure if authentication key in connection string is required
+   void SetRequireAuthKey(bool on) { fRequireAuthKey = on; }
+
+   /////////////////////////////////////////////////////////////////////////
+   /// returns true if authentication string is required
+   bool IsRequireAuthKey() const { return fRequireAuthKey; }
+
    void SetClientVersion(const std::string &vers);
 
    std::string GetClientVersion() const;
@@ -299,6 +331,8 @@ public:
    int NumConnections(bool with_pending = false) const;
 
    unsigned GetConnectionId(int num = 0) const;
+
+   std::vector<unsigned> GetConnections(unsigned excludeid = 0) const;
 
    bool HasConnection(unsigned connid = 0, bool only_active = true) const;
 
@@ -375,9 +409,11 @@ public:
 
    static unsigned ShowWindow(std::shared_ptr<RWebWindow> window, const RWebDisplayArgs &args = "");
 
+   static bool IsFileDialogMessage(const std::string &msg);
+
+   static bool EmbedFileDialog(const std::shared_ptr<RWebWindow> &window, unsigned connid, const std::string &args);
 };
 
-} // namespace Experimental
 } // namespace ROOT
 
 #endif

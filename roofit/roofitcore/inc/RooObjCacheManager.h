@@ -18,7 +18,6 @@
 
 #include "Rtypes.h"
 
-#include "RooNormSetCache.h"
 #include "RooAbsReal.h"
 #include "RooArgSet.h"
 #include "RooArgList.h"
@@ -56,7 +55,7 @@ protected:
   bool _allowOptimize ;
   bool _optCacheModeSeen  ;              ///<!
 
-  RooArgSet* _optCacheObservables ;        ///<! current optCacheObservables
+  RooArgSet* _optCacheObservables = nullptr; ///<! current optCacheObservables
 
   static bool _clearObsList ; ///< Clear obslist on sterilize?
 

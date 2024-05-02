@@ -13,7 +13,10 @@
 
 #include <RooFit/Detail/CodeSquashContext.h>
 
-#include <RooArgSet.h>
+#include "RooFitImplHelpers.h"
+
+#include <algorithm>
+#include <cctype>
 
 namespace RooFit {
 
@@ -26,20 +29,12 @@ void CodeSquashContext::addResult(const char *key, std::string const &value)
 {
    const TNamed *namePtr = RooNameReg::known(key);
    if (namePtr)
-      addResult(namePtr, value, false);
+      addResult(namePtr, value);
 }
 
-void CodeSquashContext::addResult(TNamed const *key, std::string const &value, bool isReducerNode)
+void CodeSquashContext::addResult(TNamed const *key, std::string const &value)
 {
-   if (!isReducerNode && outputSize(key) == 1) {
-      // If this is a scalar result, it will go into the global scope because
-      // it doesn't need to be recomputed inside loops.
-      std::string outputVarName = getTmpVarName();
-      addToGlobalScope("double " + outputVarName + " = " + value + ";\n");
-      _nodeNames[key] = outputVarName;
-   } else {
-      _nodeNames[key] = value;
-   }
+   _nodeNames[key] = value;
 }
 
 /// @brief Gets the result for the given node using the node name. This node also performs the necessary
@@ -85,7 +80,12 @@ void CodeSquashContext::addToGlobalScope(std::string const &str)
 /// @return The final body of the function.
 std::string CodeSquashContext::assembleCode(std::string const &returnExpr)
 {
-   return _globalScope + _code + "\n return " + returnExpr + ";\n";
+   std::string arrDecl;
+   if(!_xlArr.empty()) {
+      arrDecl += "double auxArr[" + std::to_string(_xlArr.size()) + "];\n";
+      arrDecl += "for (int i = 0; i < " + std::to_string(_xlArr.size()) + "; i++) auxArr[i] = xlArr[i];\n";
+   }
+   return arrDecl + _globalScope + _code + "\n return " + returnExpr + ";\n";
 }
 
 /// @brief Since the squashed code represents all observables as a single flattened array, it is important
@@ -100,39 +100,68 @@ void CodeSquashContext::addVecObs(const char *key, int idx)
       _vecObsIndices[namePtr] = idx;
 }
 
+/// @brief Adds the input string to the squashed code body. If a class implements a translate function that wants to
+/// emit something to the squashed code body, it must call this function with the code it wants to emit. In case of
+/// loops, automatically determines if code needs to be stored inside or outside loop scope.
+/// @param klass The class requesting this addition, usually 'this'.
+/// @param in String to add to the squashed code.
+void CodeSquashContext::addToCodeBody(RooAbsArg const *klass, std::string const &in)
+{
+   // If we are in a loop and the value is scope independent, save it at the top of the loop.
+   // else, just save it in the current scope.
+   addToCodeBody(in, isScopeIndependent(klass));
+}
+
+/// @brief A variation of the previous addToCodeBody that takes in a bool value that determines
+/// if input is independent. This overload exists because there might other ways to determine if
+/// a value/collection of values is scope independent.
+/// @param in String to add to the squashed code.
+/// @param isScopeIndep The value determining if the input is scope dependent.
+void CodeSquashContext::addToCodeBody(std::string const &in, bool isScopeIndep /* = false */)
+{
+   // If we are in a loop and the value is scope independent, save it at the top of the loop.
+   // else, just save it in the current scope.
+   if (_scopePtr != -1 && isScopeIndep) {
+      _tempScope += in;
+   } else {
+      _code += in;
+   }
+}
+
 /// @brief Create a RAII scope for iterating over vector observables. You can't use the result of vector observables
 /// outside these loop scopes.
-/// @param loopVars The vector observables to iterate over. If one of the
-/// loopVars is not a vector observable, it is ignored, i.e., it can be used just like outside the loop scope.
-std::unique_ptr<CodeSquashContext::LoopScope> CodeSquashContext::beginLoop(RooArgSet const &loopVars)
+/// @param in A pointer to the calling class, used to determine the loop dependent variables.
+std::unique_ptr<CodeSquashContext::LoopScope> CodeSquashContext::beginLoop(RooAbsArg const *in)
 {
+   std::string idx = "loopIdx" + std::to_string(_loopLevel);
+
+   std::vector<TNamed const *> vars;
+   // set the results of the vector observables
+   for (auto const &it : _vecObsIndices) {
+      if (!in->dependsOn(it.first))
+         continue;
+
+      vars.push_back(it.first);
+      _nodeNames[it.first] = "obs[" + std::to_string(it.second) + " + " + idx + "]";
+   }
+
    // TODO: we are using the size of the first loop variable to the the number
    // of iterations, but it should be made sure that all loop vars are either
    // scalar or have the same size.
    std::size_t numEntries = 1;
-   for (RooAbsArg *arg : loopVars) {
-      std::size_t n = outputSize(arg);
+   for (auto &it : vars) {
+      std::size_t n = outputSize(it);
       if (n > 1 && numEntries > 1 && n != numEntries) {
          throw std::runtime_error("Trying to loop over variables with different sizes!");
       }
       numEntries = std::max(n, numEntries);
    }
 
+   // Save the current size of the code array so that we can insert the code at the right position.
+   _scopePtr = _code.size();
+
    // Make sure that the name of this variable doesn't clash with other stuff
-   std::string idx = "loopIdx" + std::to_string(_loopLevel);
-   addToCodeBody("for(int " + idx + " = 0; " + idx + " < " + std::to_string(numEntries) + "; " + idx + "++) {\n");
-
-   std::vector<TNamed const *> vars;
-   for (RooAbsArg const *var : loopVars) {
-      vars.push_back(var->namePtr());
-   }
-
-   for (auto const &ptr : vars) {
-      // set the results of the vector observables
-      auto found = _vecObsIndices.find(ptr);
-      if (found != _vecObsIndices.end())
-         _nodeNames[found->first] = "obs[" + std::to_string(found->second) + " + " + idx + "]";
-   }
+   addToCodeBody(in, "for(int " + idx + " = 0; " + idx + " < " + std::to_string(numEntries) + "; " + idx + "++) {\n");
 
    ++_loopLevel;
    return std::make_unique<LoopScope>(*this, std::move(vars));
@@ -142,9 +171,10 @@ void CodeSquashContext::endLoop(LoopScope const &scope)
 {
    _code += "}\n";
 
-   // The current code body will be written to the global scope and cleared
-   _globalScope += _code;
-   _code.clear();
+   // Insert the temporary code into the correct code position.
+   _code.insert(_scopePtr, _tempScope);
+   _tempScope.erase();
+   _scopePtr = -1;
 
    // clear the results of the loop variables if they were vector observables
    for (auto const &ptr : scope.vars()) {
@@ -155,9 +185,77 @@ void CodeSquashContext::endLoop(LoopScope const &scope)
 }
 
 /// @brief Get a unique variable name to be used in the generated code.
-std::string CodeSquashContext::getTmpVarName()
+std::string CodeSquashContext::getTmpVarName() const
 {
-   return "tmpVar" + std::to_string(_tmpVarIdx++);
+   return "t" + std::to_string(_tmpVarIdx++);
+}
+
+/// @brief A function to save an expression that includes/depends on the result of the input node.
+/// @param in The node on which the valueToSave depends on/belongs to.
+/// @param valueToSave The actual string value to save as a temporary.
+void CodeSquashContext::addResult(RooAbsArg const *in, std::string const &valueToSave)
+{
+   //std::string savedName = RooFit::Detail::makeValidVarName(in->GetName());
+   std::string savedName = getTmpVarName();
+
+   // Only save values if they contain operations.
+   bool hasOperations = valueToSave.find_first_of(":-+/*") != std::string::npos;
+
+   // If the name is not empty and this value is worth saving, save it to the correct scope.
+   // otherwise, just return the actual value itself
+   if (hasOperations) {
+      // If this is a scalar result, it will go just outside the loop because
+      // it doesn't need to be recomputed inside loops.
+      std::string outVarDecl = "const double " + savedName + " = " + valueToSave + ";\n";
+      addToCodeBody(in, outVarDecl);
+   } else {
+      savedName = valueToSave;
+   }
+
+   addResult(in->namePtr(), savedName);
+}
+
+/// @brief Function to save a RooListProxy as an array in the squashed code.
+/// @param in The list to convert to array.
+/// @return Name of the array that stores the input list in the squashed code.
+std::string CodeSquashContext::buildArg(RooAbsCollection const &in)
+{
+   auto it = listNames.find(in.uniqueId().value());
+   if (it != listNames.end())
+      return it->second;
+
+   std::string savedName = getTmpVarName();
+   bool canSaveOutside = true;
+
+   std::stringstream declStrm;
+   declStrm << "double " << savedName << "[] = {";
+   for (const auto arg : in) {
+      declStrm << getResult(*arg) << ",";
+      canSaveOutside = canSaveOutside && isScopeIndependent(arg);
+   }
+   declStrm.seekp(-1, declStrm.cur);
+   declStrm << "};\n";
+
+   addToCodeBody(declStrm.str(), canSaveOutside);
+
+   listNames.insert({in.uniqueId().value(), savedName});
+   return savedName;
+}
+
+std::string CodeSquashContext::buildArg(std::span<const double> arr)
+{
+   unsigned int n = arr.size();
+   std::string offset = std::to_string(_xlArr.size());
+   _xlArr.reserve(_xlArr.size() + n);
+   for (unsigned int i = 0; i < n; i++) {
+      _xlArr.push_back(arr[i]);
+   }
+   return "auxArr + " + offset;
+}
+
+bool CodeSquashContext::isScopeIndependent(RooAbsArg const *in) const
+{
+   return !in->isReducerNode() && outputSize(in->namePtr()) == 1;
 }
 
 } // namespace Detail

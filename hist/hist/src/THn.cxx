@@ -36,11 +36,11 @@ namespace {
                  Bool_t respectAxisRange);
       ~THnBinIter() override { delete [] fCounter; }
 
-      Long64_t Next(Int_t* coord = 0) override;
+      Long64_t Next(Int_t* coord = nullptr) override;
       Int_t GetCoord(Int_t dim) const override { return fCounter[dim].i; }
    private:
-      THnBinIter(const THnBinIter&); // intentionally unimplemented
-      THnBinIter& operator=(const THnBinIter&); // intentionally unimplemented
+      THnBinIter(const THnBinIter&) = delete; // intentionally unimplemented
+      THnBinIter& operator=(const THnBinIter&) = delete; // intentionally unimplemented
 
    public:
       Int_t fNdimensions;
@@ -138,7 +138,7 @@ classes:
 
     THnD (typedef for THnT<Double_t>): bin content held by a Double_t,
     THnF (typedef for THnT<Float_t>): bin content held by a Float_t,
-    THnL (typedef for THnT<Long_t>): bin content held by a Long_t,
+    THnL (typedef for THnT<Long64_t>): bin content held by a Long64_t,
     THnI (typedef for THnT<Int_t>): bin content held by an Int_t,
     THnS (typedef for THnT<Short_t>): bin content held by a Short_t,
     THnC (typedef for THnT<Char_t>): bin content held by a Char_t,

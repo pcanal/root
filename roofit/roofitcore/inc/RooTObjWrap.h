@@ -1,3 +1,5 @@
+/// \cond ROOFIT_INTERNAL
+
 /*****************************************************************************
  * Project: RooFit                                                           *
  * Package: RooFitCore                                                       *
@@ -13,6 +15,7 @@
  * with or without modification, are permitted according to the terms        *
  * listed in LICENSE (http://roofit.sourceforge.net/license.txt)             *
  *****************************************************************************/
+
 #ifndef ROO_TOBJ_WRAP
 #define ROO_TOBJ_WRAP
 
@@ -24,7 +27,11 @@ class RooTObjWrap : public TNamed {
 public:
 
   RooTObjWrap(bool isArray=false) : _isArray(isArray), _owning(false) {} ;
-  RooTObjWrap(TObject* inObj, bool isArray=false) : TNamed(), _isArray(isArray), _owning(false) { if (inObj) _list.Add(inObj) ; }
+  RooTObjWrap(TObject *inObj, bool isArray = false) : _isArray(isArray), _owning(false)
+  {
+     if (inObj)
+        _list.Add(inObj);
+  }
   RooTObjWrap(const RooTObjWrap& other) : TNamed(other),  _isArray(other._isArray), _owning(false), _list(other._list) {}
   ~RooTObjWrap() override { if (_owning) _list.Delete() ; } ;
 
@@ -48,3 +55,5 @@ protected:
 };
 
 #endif
+
+/// \endcond

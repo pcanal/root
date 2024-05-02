@@ -69,10 +69,11 @@ double RooStats::RatioOfProfiledLikelihoodsTestStat::ProfiledLikelihood(RooAbsDa
    int type = (fSubtractMLE) ? 0 : 2;
 
    // null
-   if ( &pdf == fNullProfile.GetPdf() )
+   if (&pdf == fNullProfile.GetPdf()) {
       return fNullProfile.EvaluateProfileLikelihood(type, data, poi);
-   else if (&pdf == fAltProfile.GetPdf() )
+   } else if (&pdf == fAltProfile.GetPdf()) {
       return fAltProfile.EvaluateProfileLikelihood(type, data, poi);
+   }
 
    oocoutE(nullptr,InputArguments) << "RatioOfProfiledLikelihoods::ProfileLikelihood - invalid pdf used for computing the profiled likelihood - return NaN"
                          << std::endl;
@@ -103,14 +104,14 @@ double  RooStats::RatioOfProfiledLikelihoodsTestStat::Evaluate(RooAbsData& data,
    if (fDetailedOutputEnabled) {
       fDetailedOutput = new RooArgSet();
       for (auto const *var : static_range_cast<RooRealVar *>(*nullset)) {
-         RooRealVar* cloneVar = new RooRealVar(TString::Format("nullprof_%s", var->GetName()),
+         auto cloneVar = std::make_unique<RooRealVar>(TString::Format("nullprof_%s", var->GetName()),
                                                TString::Format("%s for null", var->GetTitle()), var->getVal());
-         fDetailedOutput->addOwned(*cloneVar);
+         fDetailedOutput->addOwned(std::move(cloneVar));
       }
       for (auto const *var : static_range_cast<RooRealVar *>(*altset)) {
-         RooRealVar* cloneVar = new RooRealVar(TString::Format("altprof_%s", var->GetName()),
+         auto cloneVar = std::make_unique<RooRealVar>(TString::Format("altprof_%s", var->GetName()),
                                                TString::Format("%s for null", var->GetTitle()), var->getVal());
-         fDetailedOutput->addOwned(*cloneVar);
+         fDetailedOutput->addOwned(std::move(cloneVar));
       }
    }
 

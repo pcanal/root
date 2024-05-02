@@ -52,8 +52,9 @@ ROOT_STANDARD_LIBRARY_PACKAGE(HistFactory
     src/HistFactoryImpl.cxx
     src/HistFactoryModelUtils.cxx
     src/HistFactoryNavigation.cxx
-    src/HistoToWorkspaceFactoryFast.cxx
     src/HistRef.cxx
+    src/HistoToWorkspaceFactoryFast.cxx
+    src/JSONTool.cxx
     src/LinInterpVar.cxx
     src/MakeModelAndMeasurementsFast.cxx
     src/Measurement.cxx
@@ -80,12 +81,13 @@ ROOT_STANDARD_LIBRARY_PACKAGE(HistFactory
     Graf
     Gpad
     RooStats
+    RooFitJSONInterface
   ${EXTRA_DICT_OPTS}
 )
 
 # For recent clang, this can facilitate auto-vectorisation.
 # In RooFit, the errno side effect is not needed, anyway:
-if(NOT MSVC)
+if("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")
   target_compile_options(HistFactory PUBLIC -fno-math-errno)
 endif()
 

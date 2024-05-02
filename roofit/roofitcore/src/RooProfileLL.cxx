@@ -14,7 +14,7 @@
 \class RooProfileLL
 \ingroup Roofitcore
 
-Class RooProfileLL implements the profile likelihood estimator for
+Implements the profile likelihood estimator for
 a given likelihood and set of parameters of interest. The value return by
 RooProfileLL is the input likelihood nll minimized w.r.t all nuisance parameters
 (which are all parameters except for those listed in the constructor) minus
@@ -30,7 +30,7 @@ as a MIGRAD minimization step is executed for each function evaluation
 #include "RooMsgService.h"
 #include "RooRealVar.h"
 
-using namespace std ;
+using std::endl;
 
 ClassImp(RooProfileLL);
 
@@ -39,15 +39,10 @@ ClassImp(RooProfileLL);
 /// Default constructor
 /// Should only be used by proof.
 
- RooProfileLL::RooProfileLL() :
-   RooAbsReal("RooProfileLL","RooProfileLL"),
-   _nll(),
-   _obs("paramOfInterest","Parameters of interest",this),
-   _par("nuisanceParam","Nuisance parameters",this,false,false),
-   _startFromMin(true),
-   _absMinValid(false),
-   _absMin(0),
-   _neval(0)
+RooProfileLL::RooProfileLL()
+   : RooAbsReal("RooProfileLL", "RooProfileLL"),
+     _obs("paramOfInterest", "Parameters of interest", this),
+     _par("nuisanceParam", "Nuisance parameters", this, false, false)
 {
 }
 
@@ -63,11 +58,7 @@ RooProfileLL::RooProfileLL(const char *name, const char *title,
   RooAbsReal(name,title),
   _nll("input","-log(L) function",this,nllIn),
   _obs("paramOfInterest","Parameters of interest",this),
-  _par("nuisanceParam","Nuisance parameters",this,false,false),
-  _startFromMin(true),
-  _absMinValid(false),
-  _absMin(0),
-  _neval(0)
+  _par("nuisanceParam","Nuisance parameters",this,false,false)
 {
   // Determine actual parameters and observables
   nllIn.getObservables(&observables, _obs) ;
@@ -79,16 +70,13 @@ RooProfileLL::RooProfileLL(const char *name, const char *title,
 ////////////////////////////////////////////////////////////////////////////////
 /// Copy constructor
 
-RooProfileLL::RooProfileLL(const RooProfileLL& other, const char* name) :
-  RooAbsReal(other,name),
-  _nll("nll",this,other._nll),
-  _obs("obs",this,other._obs),
-  _par("par",this,other._par),
-  _startFromMin(other._startFromMin),
-  _absMinValid(false),
-  _absMin(0),
-  _paramFixed(other._paramFixed),
-  _neval(0)
+RooProfileLL::RooProfileLL(const RooProfileLL &other, const char *name)
+   : RooAbsReal(other, name),
+     _nll("nll", this, other._nll),
+     _obs("obs", this, other._obs),
+     _par("par", this, other._par),
+     _startFromMin(other._startFromMin),
+     _paramFixed(other._paramFixed)
 {
   _paramAbsMin.addClone(other._paramAbsMin) ;
   _obsAbsMin.addClone(other._obsAbsMin) ;
@@ -121,7 +109,7 @@ const RooArgSet& RooProfileLL::bestFitObs() const
 /// Return profile of original function in terms of stated parameters
 /// of interest rather than profiling recursively.
 
-RooAbsReal* RooProfileLL::createProfile(const RooArgSet& paramsOfInterest)
+RooFit::OwningPtr<RooAbsReal> RooProfileLL::createProfile(const RooArgSet& paramsOfInterest)
 {
   return nll().createProfile(paramsOfInterest) ;
 }
@@ -227,10 +215,10 @@ void RooProfileLL::validateAbsMin() const
     _obs.snapshot(obsStart, false) ;
 
     // Start from previous global minimum
-    if (_paramAbsMin.getSize()>0) {
+    if (!_paramAbsMin.empty()) {
       const_cast<RooSetProxy&>(_par).assignValueOnly(_paramAbsMin) ;
     }
-    if (_obsAbsMin.getSize()>0) {
+    if (!_obsAbsMin.empty()) {
       const_cast<RooSetProxy&>(_obs).assignValueOnly(_obsAbsMin) ;
     }
 
@@ -281,8 +269,6 @@ void RooProfileLL::validateAbsMin() const
 bool RooProfileLL::redirectServersHook(const RooAbsCollection& newServerList, bool mustReplaceAll,
                                        bool nameChange, bool isRecursive)
 {
-  _minimizer.reset(nullptr);
+  _minimizer.reset();
   return RooAbsReal::redirectServersHook(newServerList, mustReplaceAll, nameChange, isRecursive);
 }
-
-

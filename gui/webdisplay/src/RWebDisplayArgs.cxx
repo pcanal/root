@@ -19,16 +19,16 @@
 #include "TROOT.h"
 #include <string>
 
-using namespace ROOT::Experimental;
+using namespace ROOT;
 
-RLogChannel &ROOT::Experimental::WebGUILog()
+ROOT::Experimental::RLogChannel &ROOT::WebGUILog()
 {
-   static RLogChannel sLog("ROOT.WebGUI");
+   static ROOT::Experimental::RLogChannel sLog("ROOT.WebGUI");
    return sLog;
 }
 
 
-/** \class ROOT::Experimental::RWebDisplayArgs
+/** \class ROOT::RWebDisplayArgs
 \ingroup webdisplay
 
 Holds different arguments for starting browser with RWebDisplayHandle::Display() method
@@ -79,9 +79,9 @@ RWebDisplayArgs::RWebDisplayArgs(int width, int height, int x, int y, const std:
 /// Constructor.
 /// Let specify master window and channel (if reserved already)
 
-RWebDisplayArgs::RWebDisplayArgs(std::shared_ptr<RWebWindow> master, int channel)
+RWebDisplayArgs::RWebDisplayArgs(std::shared_ptr<RWebWindow> master, unsigned conndid, int channel)
 {
-   SetMasterWindow(master, channel);
+   SetMasterWindow(master, conndid, channel);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -143,16 +143,18 @@ bool RWebDisplayArgs::SetPosAsStr(const std::string &str)
 ///
 /// Recognized values:
 ///
-///      chrome - use Google Chrome web browser, supports headless mode from v60, default
-///     firefox - use Mozilla Firefox browser, supports headless mode from v57
-///      native - (or empty string) either chrome or firefox, only these browsers support batch (headless) mode
-///     browser - default system web-browser, no batch mode
-///      safari - Safari browser on Mac
+///      chrome - use Google Chrome web browser
+///     firefox - use Mozilla Firefox web browser
+///        edge - use Microsoft Edge web browser (Windows only)
+///      native - either chrome/edge or firefox, only these browsers support batch (headless) mode
+///     default - default system web-browser, no batch mode
 ///         cef - Chromium Embeded Framework, local display, local communication
 ///         qt5 - Qt5 QWebEngine, local display, local communication
 ///         qt6 - Qt6 QWebEngineCore, local display, local communication
 ///       local - either cef or qt5 or qt6
-///    `<prog>` - any program name which will be started instead of default browser, like /usr/bin/opera
+///         off - disable web display
+///          on - first try "local", then "native", then "default" (default option)
+///    `<prog>` - any program name which will be started to open widget URL, like "/usr/bin/opera"
 
 RWebDisplayArgs &RWebDisplayArgs::SetBrowserKind(const std::string &_kind)
 {
@@ -210,7 +212,9 @@ RWebDisplayArgs &RWebDisplayArgs::SetBrowserKind(const std::string &_kind)
       SetBrowserKind(kLocal);
    else if (kind == "native")
       SetBrowserKind(kNative);
-   else if (kind.empty() || (kind == "dflt") || (kind == "default") || (kind == "browser"))
+   else if (kind.empty() || (kind == "on"))
+      SetBrowserKind(kOn);
+   else if ((kind == "dflt") || (kind == "default") || (kind == "browser"))
       SetBrowserKind(kDefault);
    else if (kind == "firefox")
       SetBrowserKind(kFirefox);
@@ -256,6 +260,7 @@ std::string RWebDisplayArgs::GetBrowserName() const
       case kServer: return "server";
       case kEmbedded: return "embed";
       case kOff: return "off";
+      case kOn: return "on";
       case kCustom:
           auto pos = fExec.find(" ");
           return (pos == std::string::npos) ? fExec : fExec.substr(0,pos);
@@ -265,12 +270,13 @@ std::string RWebDisplayArgs::GetBrowserName() const
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-/// Assign window and channel id where other window will be embed
+/// Assign window, connection and channel id where other window will be embed
 
-void RWebDisplayArgs::SetMasterWindow(std::shared_ptr<RWebWindow> master, int channel)
+void RWebDisplayArgs::SetMasterWindow(std::shared_ptr<RWebWindow> master, unsigned connid, int channel)
 {
    SetBrowserKind(kEmbedded);
    fMaster = master;
+   fMasterConnection = connid;
    fMasterChannel = channel;
 }
 
@@ -338,15 +344,15 @@ std::string RWebDisplayArgs::GetCustomExec() const
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 /// Returns string which can be used as argument in RWebWindow::Show() method
-/// to display web window in provided QWidget.
+/// to display web window in provided Qt5 QWidget.
 ///
 /// After RWebWindow is displayed created QWebEngineView can be found with the command:
 ///
 ///     auto view = qparent->findChild<QWebEngineView*>("RootWebView");
 
-std::string RWebDisplayArgs::GetQt5EmbedQualifier(const void *qparent, const std::string &urlopt)
+std::string RWebDisplayArgs::GetQt5EmbedQualifier(const void *qparent, const std::string &urlopt, unsigned qtversion)
 {
-   std::string where = "qt5";
+   std::string where = (qtversion >= 0x60000) ? "qt6" : "qt5";
    if (qparent) {
       where.append(":");
       where.append(std::to_string((uintptr_t) qparent));
@@ -357,4 +363,3 @@ std::string RWebDisplayArgs::GetQt5EmbedQualifier(const void *qparent, const std
    }
    return where;
 }
-

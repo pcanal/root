@@ -28,17 +28,14 @@
 #include <RooConstraintSum.h>
 #include <RooDataHist.h>
 #include <RooRealSumPdf.h>
+#ifdef ROOFIT_LEGACY_EVAL_BACKEND
 #include <RooNLLVar.h>
+#endif
 #include <RooRealVar.h>
 
 #include <algorithm> // count_if
 
-#include <gtest/gtest.h>
-
-// Backward compatibility for gtest version < 1.10.0
-#ifndef INSTANTIATE_TEST_SUITE_P
-#define INSTANTIATE_TEST_SUITE_P INSTANTIATE_TEST_CASE_P
-#endif
+#include "../gtest_wrapper.h"
 
 class RooRealL : public ::testing::TestWithParam<std::tuple<std::size_t>> {};
 
@@ -51,7 +48,7 @@ TEST_P(RooRealL, getVal)
    w.factory("Gaussian::g(x[-5,5],mu[0,-3,3],sigma[1,0.01,5.0])");
    auto x = w.var("x");
    RooAbsPdf *pdf = w.pdf("g");
-   std::unique_ptr<RooDataSet> data{pdf->generate(RooArgSet(*x), 10000)};
+   std::unique_ptr<RooDataSet> data{pdf->generate(*x, 10000)};
    std::unique_ptr<RooAbsReal> nll{pdf->createNLL(*data)};
 
    auto nominal_result = nll->getVal();
@@ -64,6 +61,7 @@ TEST_P(RooRealL, getVal)
    EXPECT_DOUBLE_EQ(nominal_result, mp_result);
 }
 
+#ifdef ROOFIT_LEGACY_EVAL_BACKEND
 void check_NLL_type(RooAbsReal *nll, bool verbose = false)
 {
    if (dynamic_cast<RooAddition *>(nll) != nullptr) {
@@ -102,7 +100,8 @@ void count_NLL_components(RooAbsReal *nll, bool verbose = false)
          std::cout << "the NLL object is a RooAddition*..." << std::endl;
       }
       std::size_t nll_component_count = 0;
-      for (const auto &component : *nll->getComponents()) {
+      std::unique_ptr<RooArgSet> components{nll->getComponents()};
+      for (const auto &component : *components) {
          if (component->IsA() == RooNLLVar::Class()) {
             ++nll_component_count;
          }
@@ -208,8 +207,13 @@ TEST_P(RooRealL, setVal)
    w.factory("Gaussian::g(x[-5,5],mu[0,-3,3],sigma[1,0.01,5.0])");
    auto x = w.var("x");
    RooAbsPdf *pdf = w.pdf("g");
-   std::unique_ptr<RooDataSet> data{pdf->generate(RooArgSet(*x), 10000)};
-   std::unique_ptr<RooAbsReal> nll{pdf->createNLL(*data)};
+   std::unique_ptr<RooDataSet> data{pdf->generate(*x, 10000)};
+
+   // The reference likelihood is using the legacy evaluation backend, because
+   // the multiprocess test statistics classes were designed to give values
+   // that are bit-by-bit identical with the old test statistics based on
+   // RooAbsTestStatistic.
+   std::unique_ptr<RooAbsReal> nll{pdf->createNLL(*data, RooFit::EvalBackend::Legacy())};
 
    RooFit::TestStatistics::RooRealL nll_new("nll_new", "new style NLL",
                                             std::make_unique<RooFit::TestStatistics::RooUnbinnedL>(pdf, data.get()));
@@ -239,11 +243,13 @@ TEST_P(RooRealL, setVal)
       std::cout << "failed test had seed = " << std::get<0>(GetParam()) << std::endl;
    }
 }
+#endif // ROOFIT_LEGACY_EVAL_BACKEND
 
 INSTANTIATE_TEST_SUITE_P(NworkersModeSeed, RooRealL, ::testing::Values(2, 3)); // random seed
 
 class RealLVsMPFE : public ::testing::TestWithParam<std::tuple<std::size_t>> {};
 
+#ifdef ROOFIT_LEGACY_EVAL_BACKEND
 TEST_P(RealLVsMPFE, getVal)
 {
    // Compare our MP NLL to actual RooRealMPFE results using the same strategies.
@@ -259,9 +265,13 @@ TEST_P(RealLVsMPFE, getVal)
    w.factory("Gaussian::g(x[-5,5],mu[0,-3,3],sigma[1,0.01,5.0])");
    auto x = w.var("x");
    RooAbsPdf *pdf = w.pdf("g");
-   std::unique_ptr<RooDataSet> data{pdf->generate(RooArgSet(*x), 10000)};
+   std::unique_ptr<RooDataSet> data{pdf->generate(*x, 10000)};
 
-   std::unique_ptr<RooAbsReal> nll_mpfe{pdf->createNLL(*data)};
+   // The reference likelihood is using the legacy evaluation backend, because
+   // the multiprocess test statistics classes were designed to give values
+   // that are bit-by-bit identical with the old test statistics based on
+   // RooAbsTestStatistic.
+   std::unique_ptr<RooAbsReal> nll_mpfe{pdf->createNLL(*data, RooFit::EvalBackend::Legacy())};
 
    auto mpfe_result = nll_mpfe->getVal();
 
@@ -275,6 +285,7 @@ TEST_P(RealLVsMPFE, getVal)
       std::cout << "failed test had seed = " << std::get<0>(GetParam()) << std::endl;
    }
 }
+#endif // ROOFIT_LEGACY_EVAL_BACKEND
 
 TEST_P(RealLVsMPFE, minimize)
 {
@@ -295,7 +306,7 @@ TEST_P(RealLVsMPFE, minimize)
    RooRealVar *mu = w.var("mu");
    RooRealVar *sigma = w.var("sigma");
 
-   std::unique_ptr<RooDataSet> data{pdf->generate(RooArgSet(*x), 10000)};
+   std::unique_ptr<RooDataSet> data{pdf->generate(*x, 10000)};
    mu->setVal(-2.9);
 
    // If we don't set sigma constant, the fit is not stable as we start with mu

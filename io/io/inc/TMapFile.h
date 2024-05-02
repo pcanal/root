@@ -17,12 +17,13 @@
 #endif
 
 #include "TObject.h"
+#include "TVirtualMapFile.h"
 
 class TDirectory;
 class TList;
 class TMapRec;
 
-class TMapFile : public TObject {
+class TMapFile : public TVirtualMapFile {
 
 friend class TMapRec;
 
@@ -76,7 +77,7 @@ public:
    enum { kDefaultMapSize = 0x80000 }; // default size of mapped heap is 500 KB
 
    // Should both be protected (waiting for cint)
-   virtual ~TMapFile();
+   ~TMapFile() override;
    void *operator new(size_t sz) { return TObject::operator new(sz); }
    void *operator new[](size_t sz) { return TObject::operator new[](sz); }
    void *operator new(size_t sz, void *vp) { return TObject::operator new(sz, vp); }
@@ -84,7 +85,7 @@ public:
    void     operator delete(void *vp);
 
    void          Browse(TBrowser *b) override;
-   void          Close(Option_t *option = "");
+   void          Close(Option_t *option = "") override;
    void         *GetBaseAddr() const { return (void *)fBaseAddr; }
    void         *GetBreakval() const;
    TDirectory   *GetDirectory() const {return fDirectory;}

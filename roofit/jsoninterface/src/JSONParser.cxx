@@ -16,6 +16,17 @@
 
 #include <nlohmann/json.hpp>
 
+namespace {
+inline nlohmann::json parseWrapper(std::istream &is)
+{
+   try {
+      return nlohmann::json::parse(is);
+   } catch (const nlohmann::json::exception &ex) {
+      throw std::runtime_error(ex.what());
+   }
+}
+} // namespace
+
 // TJSONTree methods
 
 TJSONTree::TJSONTree() : root(this){};
@@ -70,7 +81,7 @@ class TJSONTree::Node::Impl::BaseNode : public TJSONTree::Node::Impl {
 public:
    nlohmann::json &get() override { return node; }
    const nlohmann::json &get() const override { return node; }
-   BaseNode(std::istream &is) : Impl(""), node(nlohmann::json::parse(is)) {}
+   BaseNode(std::istream &is) : Impl(""), node(parseWrapper(is)) {}
    BaseNode() : Impl("") {}
 };
 
@@ -108,8 +119,6 @@ TJSONTree::Node::Node(TJSONTree *t, Impl &other)
 
 TJSONTree::Node::Node(const Node &other) : Node(other.tree, *other.node) {}
 
-TJSONTree::Node::~Node() {}
-
 // TJSONNode interface
 
 void TJSONTree::Node::writeJSON(std::ostream &os) const
@@ -135,6 +144,12 @@ TJSONTree::Node &TJSONTree::Node::operator<<(double d)
    return *this;
 }
 
+TJSONTree::Node &TJSONTree::Node::operator<<(bool b)
+{
+   node->get() = b;
+   return *this;
+}
+
 const TJSONTree::Node &TJSONTree::Node::operator>>(std::string &v) const
 {
    v = node->get().get<std::string>();
@@ -146,19 +161,9 @@ TJSONTree::Node &TJSONTree::Node::operator[](std::string const &k)
    return Impl::mkNode(tree, k, node->get()[k]);
 }
 
-TJSONTree::Node &TJSONTree::Node::operator[](size_t pos)
-{
-   return Impl::mkNode(tree, "", node->get()[pos]);
-}
-
 const TJSONTree::Node &TJSONTree::Node::operator[](std::string const &k) const
 {
    return Impl::mkNode(tree, k, node->get()[k]);
-}
-
-const TJSONTree::Node &TJSONTree::Node::operator[](size_t pos) const
-{
-   return Impl::mkNode(tree, "", node->get()[pos]);
 }
 
 bool TJSONTree::Node::is_container() const
@@ -188,7 +193,7 @@ bool isResettingPossible(nlohmann::json const &node)
    }
 
    if (node.type() == nlohmann::json::value_t::string) {
-      if (node.get<std::string>() == "") {
+      if (node.get<std::string>().empty()) {
          return true;
       }
    }
@@ -204,7 +209,7 @@ TJSONTree::Node &TJSONTree::Node::set_map()
    if (isResettingPossible(node->get())) {
       node->get() = nlohmann::json::object();
    } else {
-      throw std::runtime_error("cannot declare " + this->key() + " to be of map-type, already of type " +
+      throw std::runtime_error("cannot declare \"" + this->key() + "\" to be of map - type, already of type " +
                                node->get().type_name());
    }
    return *this;
@@ -218,7 +223,7 @@ TJSONTree::Node &TJSONTree::Node::set_seq()
    if (isResettingPossible(node->get())) {
       node->get() = nlohmann::json::array();
    } else {
-      throw std::runtime_error("cannot declare " + this->key() + " to be of seq-type, already of type " +
+      throw std::runtime_error("cannot declare \"" + this->key() + "\" to be of seq - type, already of type " +
                                node->get().type_name());
    }
    return *this;
@@ -243,8 +248,8 @@ std::string TJSONTree::Node::val() const
    case nlohmann::json::value_t::number_unsigned: return std::to_string(node->get().get<unsigned int>());
    case nlohmann::json::value_t::number_float: return std::to_string(node->get().get<double>());
    default:
-      throw std::runtime_error(std::string("node " + node->key() + ": implicit string conversion for type " +
-                                           node->get().type_name() + " not supported!"));
+      throw std::runtime_error("node \"" + node->key() + "\": implicit string conversion for type " +
+                               node->get().type_name() + " not supported!");
    }
 }
 

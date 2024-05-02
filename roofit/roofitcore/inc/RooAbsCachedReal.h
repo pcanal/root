@@ -27,7 +27,6 @@ public:
   RooAbsCachedReal() : _cacheMgr(this,10) {}
   RooAbsCachedReal(const char *name, const char *title, Int_t ipOrder=0);
   RooAbsCachedReal(const RooAbsCachedReal& other, const char* name=nullptr) ;
-  ~RooAbsCachedReal() override ;
 
   double getValV(const RooArgSet* set=nullptr) const override ;
   virtual bool selfNormalized() const {
@@ -75,6 +74,9 @@ protected:
     bool cacheSource() { return _cacheSource ; }
     void setCacheSource(bool flag) { _cacheSource = flag ; }
 
+    // Not Relevant for RooAbsCachedReal, only the RooAbsCachedPdf.
+    void setUnitNorm() { }
+
   private:
     // Payload
     RooHistFunc*      _func ;
@@ -83,6 +85,8 @@ protected:
     RooAbsReal*       _sourceClone ;
     bool            _cacheSource ;
   } ;
+
+  using CacheElem = FuncCacheElem;
 
   FuncCacheElem* getCache(const RooArgSet* nset) const ;
 
@@ -95,7 +99,7 @@ protected:
   }
   virtual FuncCacheElem* createCache(const RooArgSet* nset) const ;
   virtual const char* inputBaseName() const = 0 ;
-  virtual RooArgSet* actualObservables(const RooArgSet& nset) const = 0 ;
+  virtual RooFit::OwningPtr<RooArgSet> actualObservables(const RooArgSet& nset) const = 0 ;
   virtual RooFit::OwningPtr<RooArgSet> actualParameters(const RooArgSet& nset) const = 0 ;
   virtual void fillCacheObject(FuncCacheElem& cache) const = 0 ;
 

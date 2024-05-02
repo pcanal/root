@@ -144,6 +144,7 @@ clang/LLVM technology.
 #include <utility>
 #include <vector>
 #include <functional>
+#include <optional>
 
 #ifndef R__WIN32
 #include <cxxabi.h>
@@ -163,7 +164,7 @@ clang/LLVM technology.
 #include <dlfcn.h>
 #endif
 
-#ifdef R__LINUX
+#if defined(R__LINUX) || defined(R__FBSD)
 # ifndef _GNU_SOURCE
 #  define _GNU_SOURCE
 # endif
@@ -198,6 +199,7 @@ extern "C" {
 #else
 #include "Windows4Root.h"
 #include <Psapi.h>
+#include <direct.h>
 #undef GetModuleFileName
 #define RTLD_DEFAULT ((void *)::GetModuleHandle(NULL))
 #define dlsym(library, function_name) ::GetProcAddress((HMODULE)library, function_name)
@@ -255,7 +257,7 @@ R__DLLEXPORT bool TCling__TEST_isInvalidDecl(ClassInfo_t *input) {
    return info->GetDecl()->isInvalidDecl();
 }
 
-using namespace std;
+using std::string, std::vector;
 using namespace clang;
 using namespace ROOT;
 
@@ -628,9 +630,9 @@ extern "C" int TCling__AutoParseCallback(const char* className)
    return ((TCling*)gCling)->AutoParse(className);
 }
 
-extern "C" const char* TCling__GetClassSharedLibs(const char* className)
+extern "C" const char* TCling__GetClassSharedLibs(const char* className, bool skipCore)
 {
-   return ((TCling*)gCling)->GetClassSharedLibs(className);
+   return ((TCling*)gCling)->GetClassSharedLibs(className, skipCore);
 }
 
 // Returns 0 for failure 1 for success
@@ -861,7 +863,7 @@ namespace {
    // Yes, throwing exceptions in error handlers is bad.
    // Doing nothing is pretty terrible, too.
    void exceptionErrorHandler(void * /*user_data*/,
-                              const std::string& reason,
+                              const char *reason,
                               bool /*gen_crash_diag*/) {
       throw std::runtime_error(std::string(">>> Interpreter compilation error:\n") + reason);
    }
@@ -1398,9 +1400,10 @@ TCling::TCling(const char *name, const char *title, const char* const argv[], vo
 
       clingArgsStorage.push_back("-Wno-undefined-inline");
       clingArgsStorage.push_back("-fsigned-char");
-      // The -O1 optimization flag has nasty side effects on Windows (32 bit)
+      // The -O1 optimization flag has nasty side effects on Windows (32 and 64 bit)
       // See the GitHub issues #9809 and #9944
-#if !defined(_MSC_VER) || defined(_WIN64)
+      // TODO: to be reviewed after the upgrade of LLVM & Clang
+#ifndef _MSC_VER
       clingArgsStorage.push_back("-O1");
       // Disable optimized register allocation which is turned on automatically
       // by -O1, but seems to require -O2 to not explode in run time.
@@ -1410,8 +1413,8 @@ TCling::TCling(const char *name, const char *title, const char* const argv[], vo
    }
 
    // Process externally passed arguments if present.
-   llvm::Optional<std::string> EnvOpt = llvm::sys::Process::GetEnv("EXTRA_CLING_ARGS");
-   if (EnvOpt.hasValue()) {
+   std::optional<std::string> EnvOpt = llvm::sys::Process::GetEnv("EXTRA_CLING_ARGS");
+   if (EnvOpt.has_value()) {
       StringRef Env(*EnvOpt);
       while (!Env.empty()) {
          StringRef Arg;
@@ -1420,10 +1423,9 @@ TCling::TCling(const char *name, const char *title, const char* const argv[], vo
       }
    }
 
-   auto GetEnvVarPath = [](const std::string &EnvVar,
-                       std::vector<std::string> &Paths) {
-      llvm::Optional<std::string> EnvOpt = llvm::sys::Process::GetEnv(EnvVar);
-      if (EnvOpt.hasValue()) {
+   auto GetEnvVarPath = [](const std::string &EnvVar, std::vector<std::string> &Paths) {
+      std::optional<std::string> EnvOpt = llvm::sys::Process::GetEnv(EnvVar);
+      if (EnvOpt.has_value()) {
          StringRef Env(*EnvOpt);
          while (!Env.empty()) {
             StringRef Arg;
@@ -1450,7 +1452,7 @@ TCling::TCling(const char *name, const char *title, const char* const argv[], vo
 
    // FIXME: This only will enable frontend timing reports.
    EnvOpt = llvm::sys::Process::GetEnv("ROOT_CLING_TIMING");
-   if (EnvOpt.hasValue())
+   if (EnvOpt.has_value())
      clingArgsStorage.push_back("-ftime-report");
 
    // Add the overlay file. Note that we cannot factor it out for both root
@@ -1459,7 +1461,7 @@ TCling::TCling(const char *name, const char *title, const char* const argv[], vo
    if (fCxxModulesEnabled && !fromRootCling) {
       // For now we prefer rootcling to enumerate explicitly its modulemaps.
       std::vector<std::string> ModuleMaps;
-      std::string ModuleMapSuffix = ROOT::FoundationUtils::GetPathSeparator() + "module.modulemap";
+      std::string ModuleMapSuffix = ROOT::FoundationUtils::GetPathSeparator() + "ROOT.modulemap";
       ModuleMaps.push_back(TROOT::GetIncludeDir().Data() + ModuleMapSuffix);
       GetEnvVarPath("CLING_MODULEMAP_FILES", ModuleMaps);
 
@@ -1473,7 +1475,7 @@ TCling::TCling(const char *name, const char *title, const char* const argv[], vo
 
       std::string ModulesCachePath;
       EnvOpt = llvm::sys::Process::GetEnv("CLING_MODULES_CACHE_PATH");
-      if (EnvOpt.hasValue()){
+      if (EnvOpt.has_value()){
          StringRef Env(*EnvOpt);
          assert(llvm::sys::fs::exists(Env) && "Path does not exist!");
          ModulesCachePath = Env.str();
@@ -1535,7 +1537,7 @@ TCling::TCling(const char *name, const char *title, const char* const argv[], vo
    // Add the Rdict module file extension.
    cling::Interpreter::ModuleFileExtensions extensions;
    EnvOpt = llvm::sys::Process::GetEnv("ROOTDEBUG_RDICT");
-   if (!EnvOpt.hasValue())
+   if (!EnvOpt.has_value())
       extensions.push_back(std::make_shared<TClingRdictModuleFileExtension>());
 
    fInterpreter = std::make_unique<cling::Interpreter>(interpArgs.size(),
@@ -1851,7 +1853,13 @@ void TCling::LoadPCM(std::string pcmFileNameFullPath)
 
       cling::Interpreter::PushTransactionRAII deserRAII(GetInterpreterImpl());
       LoadPCMImpl(pcmMemFile);
-      fPendingRdicts.erase(pendingRdict);
+      // Currently the module file are never unloaded (even if the library is
+      // unloaded) and, of course, never reloaded.
+      // Consequently, we must NOT remove the `pendingRdict` from the list
+      // of pending dictionary, otherwise if a library is unloaded and then
+      // reload we will be unable to update properly the TClass object
+      // (because we wont be able to load the rootpcm file by executing the
+      // above lines)
 
       return;
    }
@@ -2156,8 +2164,10 @@ void TCling::RegisterModule(const char* modulename,
                   }
                }
                if (scopes.empty() || DC) {
-                  // We know the scope; let's look for the enum.
-                  size_t posEnumName = fwdDeclsLine.find("\"))) ", 32);
+                  // We know the scope; let's look for the enum. For that, look
+                  // for the *last* closing parentheses of an attribute because
+                  // there can be multiple.
+                  size_t posEnumName = fwdDeclsLine.rfind("\"))) ");
                   R__ASSERT(posEnumName != std::string::npos && "Inconsistent enum fwd decl!");
                   posEnumName += 5; // skip "\"))) "
                   while (isspace(fwdDeclsLine[posEnumName]))
@@ -2532,7 +2542,7 @@ Longptr_t TCling::ProcessLine(const char* line, EErrorCode* error/*=0*/)
             if (strncmp(sLine.Data(), ".L", 2) != 0) {
                // if execution was requested.
 
-               if (arguments.Length()==0) {
+               if (arguments.Length() == 0) {
                   arguments = "()";
                }
                // We need to remove the extension.
@@ -2545,8 +2555,37 @@ Longptr_t TCling::ProcessLine(const char* line, EErrorCode* error/*=0*/)
                indent = HandleInterpreterException(GetMetaProcessorImpl(), mod_line, compRes, &result);
             }
          }
+      } else if (cling::DynamicLibraryManager::isSharedLibrary(fname.Data()) &&
+                 strncmp(sLine.Data(), ".L", 2) != 0) { // .x *.so or *.dll
+         if (gSystem->Load(fname) < 0) {
+            // Loading failed.
+            compRes = cling::Interpreter::kFailure;
+         } else {
+            if (arguments.Length() == 0) {
+               arguments = "()";
+            }
+            // We need to remove the extension. (*.so or *.dll)
+            Ssiz_t ext = fname.Last('.');
+            if (ext != kNPOS) {
+               fname.Remove(ext);
+            }
+            // Now we try to find the 'main' function to run within this shared library
+            // We distinguish two cases: a library.so with a function library(args),
+            // or a precompiled ACLiC macro (macro_C.so) with a function macro(args).
+            // Only in the second case, we need to strip the suffix _C or _cpp from fname.
+            if (!gInterpreter->GetFunction(nullptr, gSystem->BaseName(fname))) { // AcLiC macro
+               // We need to remove the automatically appended _ extension when compiling (macro_C from macro.C)
+               ext = fname.Last('_');
+               if (ext != kNPOS) {
+                  fname.Remove(ext);
+               }
+            }
+            const char *function = gSystem->BaseName(fname);
+            mod_line = function + arguments + io;
+            indent = HandleInterpreterException(GetMetaProcessorImpl(), mod_line, compRes, &result);
+         }
       } else {
-         // not ACLiC
+         // neither ACLiC nor run shared-library (.x)
          size_t unnamedMacroOpenCurly;
          {
             std::string code;
@@ -2638,6 +2677,13 @@ void TCling::AddIncludePath(const char *path)
       path += 2;
    TString sPath(path);
    gSystem->ExpandPathName(sPath);
+#ifdef _MSC_VER
+   if (sPath.BeginsWith("/")) {
+      char drive[3];
+      snprintf(drive, 3, "%c:", _getdrive() + 'A' - 1);
+      sPath.Prepend(drive);
+   }
+#endif
    fInterpreter->AddIncludePath(sPath.Data());
 }
 
@@ -3181,7 +3227,7 @@ Bool_t TCling::IsLoaded(const char* filename) const
       return kTRUE;
 
    //FIXME: We must use the cling::Interpreter::lookupFileOrLibrary iface.
-   const clang::DirectoryLookup *CurDir = nullptr;
+   clang::ConstSearchDirIterator *CurDir = nullptr;
    clang::Preprocessor &PP = fInterpreter->getCI()->getPreprocessor();
    clang::HeaderSearch &HS = PP.getHeaderSearchInfo();
    auto FE = HS.LookupFile(file_name.c_str(),
@@ -3200,7 +3246,7 @@ Bool_t TCling::IsLoaded(const char* filename) const
                            /*BuildSystemModule*/ false,
                            /*OpenFile*/ false,
                            /*CacheFail*/ false);
-   if (FE && FE->isValid()) {
+   if (FE) {
       // check in the source manager if the file is actually loaded
       clang::SourceManager &SM = fInterpreter->getCI()->getSourceManager();
       // this works only with header (and source) files...
@@ -3258,7 +3304,7 @@ static bool R__UpdateLibFileForLinking(TString &lib)
 }
 #endif // R__MACOSX
 
-#ifdef R__LINUX
+#if defined (R__LINUX) || defined (R__FBSD)
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Callback for dl_iterate_phdr(), see `man dl_iterate_phdr`.
@@ -3273,6 +3319,16 @@ static int callback_for_dl_iterate_phdr(struct dl_phdr_info *info, size_t size, 
    if (!sKnownLoadedLibBaseAddrs.count(info->dlpi_addr)) {
       // Skip \0, "", and kernel pseudo-libs linux-vdso.so.1 or linux-gate.so.1
       if (info->dlpi_name && info->dlpi_name[0]
+#if defined(R__FBSD)
+          //skip the executable (with null addr)
+          && info->dlpi_addr
+          //has no path
+          && strncmp(info->dlpi_name, "[vdso]", 6)
+          //the linker does not like to be mmapped
+          //causes a crash in cling::DynamicLibraryManager::loadLibrary())
+          //with error message "mmap of entire address space failed: Cannot allocate memory"
+          && strncmp(info->dlpi_name, "/libexec/ld-elf.so.1", 20)
+#endif
           && strncmp(info->dlpi_name, "linux-vdso.so", 13)
           && strncmp(info->dlpi_name, "linux-vdso32.so", 15)
           && strncmp(info->dlpi_name, "linux-vdso64.so", 15)
@@ -3284,7 +3340,7 @@ static int callback_for_dl_iterate_phdr(struct dl_phdr_info *info, size_t size, 
    return 0;
 }
 
-#endif // R__LINUX
+#endif // R__LINUX || R__FBSD
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -3331,7 +3387,7 @@ void TCling::UpdateListOfLoadedSharedLibraries()
       ++imageIndex;
    }
    fPrevLoadedDynLibInfo = (void*)(size_t)imageIndex;
-#elif defined(R__LINUX)
+#elif defined(R__LINUX) || defined(R__FBSD)
    // fPrevLoadedDynLibInfo is unused on Linux.
    (void) fPrevLoadedDynLibInfo;
 
@@ -4058,7 +4114,6 @@ void TCling::SetClassInfo(TClass* cl, Bool_t reload)
    if (cl->fState != TClass::kHasTClassInit) {
       if (cl->fClassInfo) {
          cl->fState = TClass::kInterpreted;
-         cl->ResetBit(TClass::kIsEmulation);
       } else {
 //         if (TClassEdit::IsSTLCont(cl->GetName()) {
 //            There will be an emulated collection proxy, is that the same?
@@ -4271,6 +4326,8 @@ TCling::CheckClassInfo(const char *name, Bool_t autoload, Bool_t isClassOrNamesp
 Bool_t TCling::CheckClassTemplate(const char *name)
 {
    const cling::LookupHelper& lh = fInterpreter->getLookupHelper();
+   // Interpreter transaction ahead, needs locking
+   R__LOCKGUARD(gInterpreterMutex);
    const clang::Decl *decl
       = lh.findClassTemplate(name,
                              gDebug > 5 ? cling::LookupHelper::WithDiagnostics
@@ -4489,9 +4546,7 @@ TClass *TCling::GenerateTClass(const char *classname, Bool_t emulation, Bool_t s
    }
    R__LOCKGUARD(gInterpreterMutex);
    TClass *cl = new TClass(classname, version, silent);
-   if (emulation) {
-      cl->SetBit(TClass::kIsEmulation);
-   } else {
+   if (!emulation) {
       // Set the class version if the class is versioned.
       // Note that we cannot just call CLASS::Class_Version() as we might not have
       // an execution engine (when invoked from rootcling).
@@ -4615,7 +4670,6 @@ TClass *TCling::GenerateTClass(ClassInfo_t *classinfo, Bool_t silent /* = kFALSE
       if (cl == nullptr) {
          int version = TClass::GetClass("TVirtualStreamerInfo")->GetClassVersion();
          cl = new TClass(classinfo, version, nullptr, nullptr, -1, -1, silent);
-         cl->SetBit(TClass::kIsEmulation);
       }
    } else {
       // For regular class, just create a TClass on the fly ...
@@ -4697,6 +4751,9 @@ TInterpreter::DeclId_t TCling::GetDataMember(ClassInfo_t *opaque_cl, const char 
    DeclId_t d;
    TClingClassInfo *cl = (TClingClassInfo*)opaque_cl;
 
+   // Could trigger deserialization of decls.
+   cling::Interpreter::PushTransactionRAII RAII(GetInterpreterImpl());
+
    if (cl) {
       d = cl->GetDataMember(name);
       // We check if the decl of the data member has an annotation which indicates
@@ -4727,8 +4784,6 @@ TInterpreter::DeclId_t TCling::GetDataMember(ClassInfo_t *opaque_cl, const char 
    LookupResult R(SemaR, DName, SourceLocation(), Sema::LookupOrdinaryName,
                   Sema::ForExternalRedeclaration);
 
-   // Could trigger deserialization of decls.
-   cling::Interpreter::PushTransactionRAII RAII(GetInterpreterImpl());
    cling::utils::Lookup::Named(&SemaR, R);
 
    LookupResult::Filter F = R.makeFilter();
@@ -5505,20 +5560,18 @@ int TCling::ReadRootmapFile(const char *rootmapfile, TUniqueString *uniqueString
          if (brpos == string::npos)
             continue;
          lib_name = line.substr(1, brpos - 1);
-         size_t nspaces = 0;
-         while (lib_name[nspaces] == ' ')
-            ++nspaces;
-         if (nspaces)
-            lib_name.replace(0, nspaces, "");
+         // Remove spaces at the beginning and at the end of the library name
+         lib_name.erase(lib_name.find_last_not_of(' ') + 1);
+         lib_name.erase(0, lib_name.find_first_not_of(' '));
          if (gDebug > 3) {
             TString lib_nameTstr(lib_name.c_str());
             TObjArray *tokens = lib_nameTstr.Tokenize(" ");
             const char *lib = ((TObjString *)tokens->At(0))->GetName();
             const char *wlib = gSystem->DynamicPathName(lib, kTRUE);
             if (wlib) {
-               Info("ReadRootmapFile", "new section for %s", lib_nameTstr.Data());
+               Info("ReadRootmapFile", "%s: New section for %s", rootmapfile, lib_nameTstr.Data());
             } else {
-               Info("ReadRootmapFile", "section for %s (library does not exist)", lib_nameTstr.Data());
+               Info("ReadRootmapFile", "%s: Section for %s (library does not exist)", rootmapfile, lib_nameTstr.Data());
             }
             delete[] wlib;
             delete tokens;
@@ -5531,25 +5584,31 @@ int TCling::ReadRootmapFile(const char *rootmapfile, TUniqueString *uniqueString
          // Do not make a copy, just start after the key
          const char *keyname = line.c_str() + keyLen;
          if (gDebug > 6)
-            Info("ReadRootmapFile", "class %s in %s", keyname, lib_name.c_str());
+            Info("ReadRootmapFile", "%s: class %s in %s", rootmapfile, keyname, lib_name.c_str());
          TEnvRec *isThere = fMapfile->Lookup(keyname);
          if (isThere) {
             if (lib_name != isThere->GetValue()) { // the same key for two different libs
                if (firstChar == 'n') {
                   if (gDebug > 3)
-                     Info("ReadRootmapFile", "namespace %s found in %s is already in %s", keyname, lib_name.c_str(),
-                          isThere->GetValue());
+                     Info("ReadRootmapFile",
+                          "While processing %s, namespace %s was found to be associated to %s although it is already "
+                          "associated to %s",
+                          rootmapfile, keyname, lib_name.c_str(), isThere->GetValue());
                } else if (firstChar == 'h') { // it is a header: add the libname to the list of libs to be loaded.
                   lib_name += " ";
                   lib_name += isThere->GetValue();
                   fMapfile->SetValue(keyname, lib_name.c_str());
                } else if (!TClassEdit::IsSTLCont(keyname)) {
-                  Warning("ReadRootmapFile", "%s %s found in %s is already in %s", line.substr(0, keyLen).c_str(),
-                          keyname, lib_name.c_str(), isThere->GetValue());
+                  Warning("ReadRootmapFile",
+                          "While processing %s, %s %s was found to be associated to %s although it is already "
+                          "associated to %s",
+                          rootmapfile, line.substr(0, keyLen - 1).c_str(), keyname, lib_name.c_str(),
+                          isThere->GetValue());
                }
             } else { // the same key for the same lib
                if (gDebug > 3)
-                  Info("ReadRootmapFile", "Key %s was already defined for %s", keyname, lib_name.c_str());
+                  Info("ReadRootmapFile", "While processing %s, key %s was found to be already defined for %s",
+                       rootmapfile, keyname, lib_name.c_str());
             }
          } else {
             fMapfile->SetValue(keyname, lib_name.c_str());
@@ -6581,7 +6640,6 @@ void TCling::RefreshClassInfo(TClass *cl, const clang::NamedDecl *def, bool alia
          if (cl->fState != TClass::kHasTClassInit) {
             // if (!cl->fClassInfo->IsValid()) cl->fState = TClass::kForwardDeclared; else
             cl->fState = TClass::kInterpreted;
-            cl->ResetBit(TClass::kIsEmulation);
          }
          TClass::AddClassToDeclIdMap(((TClingClassInfo *)(cl->fClassInfo))->GetDeclId(), cl);
       } else {
@@ -6908,7 +6966,7 @@ const char* TCling::GetSharedLibs()
    return fSharedLibs;
 }
 
-static std::string GetClassSharedLibsForModule(const char *cls, cling::LookupHelper &LH)
+static std::string GetClassSharedLibsForModule(const char *cls, cling::LookupHelper &LH, bool skipCore)
 {
    if (!cls || !*cls)
       return {};
@@ -6986,7 +7044,7 @@ static std::string GetClassSharedLibsForModule(const char *cls, cling::LookupHel
          if (!M->LinkLibraries.size())
             continue;
          // We have preloaded the Core module thus libCore.so
-         if (M->Name == "Core")
+         if (M->Name == "Core" && skipCore)
             continue;
          assert(M->LinkLibraries.size() == 1);
          if (!result.empty())
@@ -7003,10 +7061,17 @@ static std::string GetClassSharedLibsForModule(const char *cls, cling::LookupHel
 /// The first library in the list is the one containing the class, the
 /// others are the libraries the first one depends on. Returns 0
 /// in case the library is not found.
+/// \param cls the name of the class
+/// \param skipCore if true (default), remove "Core" from the returned list
 
-const char* TCling::GetClassSharedLibs(const char* cls)
+const char* TCling::GetClassSharedLibs(const char* cls, bool skipCore)
 {
    if (fCxxModulesEnabled) {
+      // Lock the interpreter mutex before interacting with cling.
+      // TODO: Can we move this further deep? In principle the lock should be in
+      // GetClassSharedLibsForModule, but it might be needed also for
+      // getLookupHelper?
+      R__LOCKGUARD(gInterpreterMutex);
       llvm::StringRef className = cls;
       // If we get a class name containing lambda, we cannot parse it and we
       // can exit early.
@@ -7018,7 +7083,7 @@ const char* TCling::GetClassSharedLibs(const char* cls)
       // Limit the recursion which can be induced by GetClassSharedLibsForModule.
       SuspendAutoLoadingRAII AutoLoadingDisabled(this);
       cling::LookupHelper &LH = fInterpreter->getLookupHelper();
-      std::string libs = GetClassSharedLibsForModule(cls, LH);
+      std::string libs = GetClassSharedLibsForModule(cls, LH, skipCore);
       if (!libs.empty()) {
          fAutoLoadLibStorage.push_back(libs);
          return fAutoLoadLibStorage.back().c_str();
@@ -7354,6 +7419,7 @@ int TCling::DisplayIncludePath(FILE *fout) const
 
 void* TCling::FindSym(const char* entry) const
 {
+   R__LOCKGUARD(gInterpreterMutex);
    return fInterpreter->getAddressOfGlobal(entry);
 }
 
@@ -7405,6 +7471,8 @@ int TCling::GetSecurityError() const
 
 int TCling::LoadFile(const char* path) const
 {
+   // Modifying the interpreter state needs locking.
+   R__LOCKGUARD(gInterpreterMutex);
    cling::Interpreter::CompilationResult compRes;
    HandleInterpreterException(GetMetaProcessorImpl(), TString::Format(".L %s", path), compRes, /*cling::Value*/nullptr);
    return compRes == cling::Interpreter::kFailure;
@@ -7551,6 +7619,8 @@ void TCling::SetTempLevel(int val) const
 
 int TCling::UnloadFile(const char* path) const
 {
+   // Modifying the interpreter state needs locking.
+   R__LOCKGUARD(gInterpreterMutex);
    cling::DynamicLibraryManager* DLM = fInterpreter->getDynamicLibraryManager();
    std::string canonical = DLM->lookupLibrary(path);
    if (canonical.empty()) {
@@ -8910,6 +8980,7 @@ void TCling::MethodInfo_Delete(MethodInfo_t* minfo) const
 void TCling::MethodInfo_CreateSignature(MethodInfo_t* minfo, TString& signature) const
 {
    TClingMethodInfo* info = (TClingMethodInfo*) minfo;
+   // The next call locks the interpreter mutex.
    info->CreateSignature(signature);
 }
 
@@ -8950,6 +9021,7 @@ MethodInfo_t* TCling::MethodInfo_FactoryCopy(MethodInfo_t* minfo) const
 void* TCling::MethodInfo_InterfaceMethod(MethodInfo_t* minfo) const
 {
    TClingMethodInfo* info = (TClingMethodInfo*) minfo;
+   // The next call locks the interpreter mutex.
    return info->InterfaceMethod();
 }
 
@@ -8990,6 +9062,7 @@ int TCling::MethodInfo_Next(MethodInfo_t* minfo) const
 Long_t TCling::MethodInfo_Property(MethodInfo_t* minfo) const
 {
    TClingMethodInfo* info = (TClingMethodInfo*) minfo;
+   // The next call locks the interpreter mutex.
    return info->Property();
 }
 
@@ -8998,6 +9071,7 @@ Long_t TCling::MethodInfo_Property(MethodInfo_t* minfo) const
 Long_t TCling::MethodInfo_ExtraProperty(MethodInfo_t* minfo) const
 {
    TClingMethodInfo* info = (TClingMethodInfo*) minfo;
+   // The next call locks the interpreter mutex.
    return info->ExtraProperty();
 }
 
@@ -9006,6 +9080,7 @@ Long_t TCling::MethodInfo_ExtraProperty(MethodInfo_t* minfo) const
 TypeInfo_t* TCling::MethodInfo_Type(MethodInfo_t* minfo) const
 {
    TClingMethodInfo* info = (TClingMethodInfo*) minfo;
+   // The next call locks the interpreter mutex.
    return (TypeInfo_t*)info->Type();
 }
 
@@ -9015,6 +9090,7 @@ const char* TCling::MethodInfo_GetMangledName(MethodInfo_t* minfo) const
 {
    TClingMethodInfo* info = (TClingMethodInfo*) minfo;
    TTHREAD_TLS_DECL(TString, mangled_name);
+   // The next call locks the interpreter mutex.
    mangled_name = info->GetMangledName();
    return mangled_name;
 }
@@ -9024,6 +9100,7 @@ const char* TCling::MethodInfo_GetMangledName(MethodInfo_t* minfo) const
 const char* TCling::MethodInfo_GetPrototype(MethodInfo_t* minfo) const
 {
    TClingMethodInfo* info = (TClingMethodInfo*) minfo;
+   // The next call locks the interpreter mutex.
    return info->GetPrototype();
 }
 
@@ -9032,6 +9109,7 @@ const char* TCling::MethodInfo_GetPrototype(MethodInfo_t* minfo) const
 const char* TCling::MethodInfo_Name(MethodInfo_t* minfo) const
 {
    TClingMethodInfo* info = (TClingMethodInfo*) minfo;
+   // The next call locks the interpreter mutex.
    return info->Name();
 }
 
@@ -9040,6 +9118,7 @@ const char* TCling::MethodInfo_Name(MethodInfo_t* minfo) const
 const char* TCling::MethodInfo_TypeName(MethodInfo_t* minfo) const
 {
    TClingMethodInfo* info = (TClingMethodInfo*) minfo;
+   // The next call locks the interpreter mutex.
    return info->TypeName();
 }
 
@@ -9048,6 +9127,7 @@ const char* TCling::MethodInfo_TypeName(MethodInfo_t* minfo) const
 std::string TCling::MethodInfo_TypeNormalizedName(MethodInfo_t* minfo) const
 {
    TClingMethodInfo* info = (TClingMethodInfo*) minfo;
+   // The next part locks the interpreter mutex.
    if (info && info->IsValid())
       return info->Type()->NormalizedName(*fNormalizedCtxt);
    else
@@ -9059,6 +9139,7 @@ std::string TCling::MethodInfo_TypeNormalizedName(MethodInfo_t* minfo) const
 const char* TCling::MethodInfo_Title(MethodInfo_t* minfo) const
 {
    TClingMethodInfo* info = (TClingMethodInfo*) minfo;
+   // The next call locks the interpreter mutex.
    return info->Title();
 }
 
@@ -9213,6 +9294,14 @@ std::string TCling::MethodArgInfo_TypeNormalizedName(MethodArgInfo_t* marginfo) 
    return info->Type()->NormalizedName(*fNormalizedCtxt);
 }
 
+////////////////////////////////////////////////////////////////////////////////
+
+TypeInfo_t* TCling::MethodArgInfo_TypeInfo(MethodArgInfo_t *marginfo) const
+{
+   TClingMethodArgInfo* info = (TClingMethodArgInfo*) marginfo;
+   return (TypeInfo_t*) info->Type();
+}
+
 //______________________________________________________________________________
 //
 //  TypeInfo interface
@@ -9303,6 +9392,14 @@ const char* TCling::TypeInfo_TrueName(TypeInfo_t* tinfo) const
 {
    TClingTypeInfo* TClinginfo = (TClingTypeInfo*) tinfo;
    return TClinginfo->TrueName(*fNormalizedCtxt);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+void* TCling::TypeInfo_QualTypePtr(TypeInfo_t* tinfo) const
+{
+   TClingTypeInfo* TClinginfo = (TClingTypeInfo*) tinfo;
+   return TClinginfo->QualTypePtr();
 }
 
 
@@ -9405,6 +9502,71 @@ const char* TCling::TypedefInfo_Title(TypedefInfo_t* tinfo) const
 {
    TClingTypedefInfo* TClinginfo = (TClingTypedefInfo*) tinfo;
    return TClinginfo->Title();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+bool TCling::IsSameType(const void * QualTypePtr1, const void * QualTypePtr2) const
+{
+   clang::QualType QT1 = clang::QualType::getFromOpaquePtr(QualTypePtr1);
+   clang::QualType QT2 = clang::QualType::getFromOpaquePtr(QualTypePtr2);
+   return fInterpreter->getCI()->getASTContext().hasSameType(QT1, QT2);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+bool TCling::IsIntegerType(const void * QualTypePtr) const
+{
+   clang::QualType QT = clang::QualType::getFromOpaquePtr(QualTypePtr);
+   return QT->hasIntegerRepresentation();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+bool TCling::IsSignedIntegerType(const void * QualTypePtr) const
+{
+   clang::QualType QT = clang::QualType::getFromOpaquePtr(QualTypePtr);
+   return QT->hasSignedIntegerRepresentation();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+bool TCling::IsUnsignedIntegerType(const void * QualTypePtr) const
+{
+   clang::QualType QT = clang::QualType::getFromOpaquePtr(QualTypePtr);
+   return QT->hasUnsignedIntegerRepresentation();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+bool TCling::IsFloatingType(const void * QualTypePtr) const
+{
+   clang::QualType QT = clang::QualType::getFromOpaquePtr(QualTypePtr);
+   return QT->hasFloatingRepresentation();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+bool TCling::IsPointerType(const void * QualTypePtr) const
+{
+   clang::QualType QT = clang::QualType::getFromOpaquePtr(QualTypePtr);
+   return QT->hasPointerRepresentation();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+bool TCling::IsVoidPointerType(const void * QualTypePtr) const
+{
+   clang::QualType QT = clang::QualType::getFromOpaquePtr(QualTypePtr);
+   return QT->isVoidPointerType();
+}
+
+////////////////////////////////////////////////////////////////////////////////
+
+bool TCling::FunctionDeclId_IsMethod(DeclId_t fdeclid) const
+{
+   clang::FunctionDecl *FD = (clang::FunctionDecl *) fdeclid;
+   return llvm::isa_and_nonnull<clang::CXXMethodDecl>(FD);
 }
 
 ////////////////////////////////////////////////////////////////////////////////

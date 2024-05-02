@@ -62,6 +62,9 @@
 #include <shlobj.h>
 #include <conio.h>
 #include <time.h>
+#include <bcrypt.h>
+#include <chrono>
+#include <thread>
 
 #if defined (_MSC_VER) && (_MSC_VER >= 1400)
    #include <intrin.h>
@@ -155,9 +158,9 @@ namespace {
    typedef NET_API_STATUS (WINAPI *pfn1)(LPVOID);
    typedef NET_API_STATUS (WINAPI *pfn2)(LPCWSTR, LPCWSTR, DWORD, LPBYTE*);
    typedef NET_API_STATUS (WINAPI *pfn3)(LPCWSTR, LPCWSTR, DWORD, LPBYTE*,
-                                       DWORD, LPDWORD, LPDWORD, PDWORD);
+                                         DWORD, LPDWORD, LPDWORD, PDWORD_PTR);
    typedef NET_API_STATUS (WINAPI *pfn4)(LPCWSTR, DWORD, LPBYTE*, DWORD, LPDWORD,
-                                       LPDWORD, PDWORD);
+                                         LPDWORD, PDWORD_PTR);
    static pfn1 p2NetApiBufferFree;
    static pfn2 p2NetUserGetInfo;
    static pfn3 p2NetLocalGroupGetMembers;
@@ -1129,9 +1132,9 @@ Bool_t TWinNTSystem::Init()
       if (buf[0]) AddDynamicPath(buf);
    }
    delete [] buf;
+   std::this_thread::sleep_for(std::chrono::duration<double, std::nano>(10));
    SetConsoleWindowName();
    fGroupsInitDone = kFALSE;
-   fFirstFile = kTRUE;
 
    return kFALSE;
 }
@@ -1260,6 +1263,17 @@ const char *TWinNTSystem::GetError()
       return error_msg;
    }
    return sys_errlist[err];
+}
+
+////////////////////////////////////////////////////////////////////////////////
+/// Return cryptographic random number
+/// Fill provided buffer with random values
+/// Returns number of bytes written to buffer or -1 in case of error
+
+Int_t TWinNTSystem::GetCryptoRandom(void *buf, Int_t len)
+{
+   auto res = BCryptGenRandom((BCRYPT_ALG_HANDLE) NULL, (PUCHAR) buf, (ULONG) len, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+   return !res ? len : -1;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1915,19 +1929,29 @@ int  TWinNTSystem::MakeDirectory(const char *name)
 }
 
 ////////////////////////////////////////////////////////////////////////////////
+/// Struct used to pass information between OpenDirectory and GetDirEntry in a
+/// thread safe way (each thread creates a new instance of it).
+
+struct FindFileData_t {
+   HANDLE          fSearchFile;         // HANDLE returned by FindFirstFile and used by FindNextFile
+   WIN32_FIND_DATA fFindFileData;       // Structure to look for files (aka OpenDir under UNIX)
+   Bool_t          fFirstFile{kFALSE};  // Flag used by OpenDirectory/GetDirEntry
+};
+
+////////////////////////////////////////////////////////////////////////////////
 /// Close a WinNT file system directory.
 
 void TWinNTSystem::FreeDirectory(void *dirp)
 {
-   TSystem *helper = FindHelper(0, dirp);
-   if (helper) {
+   if (!dirp)
+      return;
+   if (TSystem *helper = FindHelper(0, dirp)) {
       helper->FreeDirectory(dirp);
       return;
    }
-
-   if (dirp) {
-      ::FindClose(dirp);
-   }
+   auto tsfd = static_cast<FindFileData_t *>(dirp);
+   ::FindClose(tsfd->fSearchFile);
+   delete dirp;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1935,23 +1959,21 @@ void TWinNTSystem::FreeDirectory(void *dirp)
 
 const char *TWinNTSystem::GetDirEntry(void *dirp)
 {
-   TSystem *helper = FindHelper(0, dirp);
-   if (helper) {
+   if (!dirp)
+      return nullptr;
+   if (TSystem *helper = FindHelper(0, dirp)) {
       return helper->GetDirEntry(dirp);
    }
-
-   if (dirp) {
-      HANDLE searchFile = (HANDLE)dirp;
-      if (fFirstFile) {
-         // when calling TWinNTSystem::OpenDirectory(), the fFindFileData
-         // structure is filled by a call to FindFirstFile().
-         // So first returns this one, before calling FindNextFile()
-         fFirstFile = kFALSE;
-         return (const char *)fFindFileData.cFileName;
-      }
-      if (::FindNextFile(searchFile, &fFindFileData)) {
-         return (const char *)fFindFileData.cFileName;
-      }
+   auto tsfd = static_cast<FindFileData_t *>(dirp);
+   if (tsfd->fFirstFile) {
+      // when calling TWinNTSystem::OpenDirectory(), the fFindFileData
+      // structure is filled by a call to FindFirstFile().
+      // So first returns this one, before calling FindNextFile()
+      tsfd->fFirstFile = kFALSE;
+      return (const char *)tsfd->fFindFileData.cFileName;
+   }
+   if (::FindNextFile(tsfd->fSearchFile, &tsfd->fFindFileData)) {
+      return (const char *)tsfd->fFindFileData.cFileName;
    }
    return nullptr;
 }
@@ -2093,18 +2115,19 @@ void *TWinNTSystem::OpenDirectory(const char *fdir)
          entry[strlen(dir)-1] = '\0';
       strlcat(entry,"*",nche);
 
-      HANDLE searchFile;
-      searchFile = ::FindFirstFile(entry, &fFindFileData);
-      if (searchFile == INVALID_HANDLE_VALUE) {
+      FindFileData_t *dirp = new FindFileData_t;
+      dirp->fSearchFile = ::FindFirstFile(entry, &dirp->fFindFileData);
+      if (dirp->fSearchFile == INVALID_HANDLE_VALUE) {
+         delete dirp;
          ((TWinNTSystem *)gSystem)->Error( "Unable to find' for reading:", entry);
          delete [] entry;
          delete [] dir;
          return nullptr;
       }
+      dirp->fFirstFile = kTRUE;
       delete [] entry;
       delete [] dir;
-      fFirstFile = kTRUE;
-      return searchFile;
+      return dirp;
    }
 
    delete [] entry;
@@ -2248,20 +2271,44 @@ const char *TWinNTSystem::TempDirectory() const
 /// Create a secure temporary file by appending a unique
 /// 6 letter string to base. The file will be created in
 /// a standard (system) directory or in the directory
-/// provided in dir. The full filename is returned in base
+/// provided in dir. Optionally one can provide suffix
+/// append to the final name - like extension ".txt" or ".html".
+/// The full filename is returned in base
 /// and a filepointer is returned for safely writing to the file
 /// (this avoids certain security problems). Returns 0 in case
 /// of error.
 
-FILE *TWinNTSystem::TempFileName(TString &base, const char *dir)
+FILE *TWinNTSystem::TempFileName(TString &base, const char *dir, const char *suffix)
 {
    char tmpName[MAX_PATH];
 
-   ::GetTempFileName(dir ? dir : TempDirectory(), base.Data(), 0, tmpName);
-   base = tmpName;
-   FILE *fp = fopen(tmpName, "w+");
+   auto res = ::GetTempFileName(dir ? dir : TempDirectory(), base.Data(), 0, tmpName);
+   if (res == 0) {
+      ::SysError("TempFileName", "Fail to generate temporary file name");
+      return nullptr;
+   }
 
-   if (!fp) ::SysError("TempFileName", "error opening %s", tmpName);
+   base = tmpName;
+   if (suffix && *suffix) {
+      base.Append(suffix);
+
+      if (!AccessPathName(base, kFileExists)) {
+         ::SysError("TempFileName", "Temporary file %s already exists", base.Data());
+         Unlink(tmpName);
+         return nullptr;
+      }
+
+      auto res2 = Rename(tmpName, base.Data());
+      if (res2 != 0) {
+         ::SysError("TempFileName", "Fail to rename temporary file to %s", base.Data());
+         Unlink(tmpName);
+         return nullptr;
+      }
+   }
+
+   FILE *fp = fopen(base.Data(), "w+");
+
+   if (!fp) ::SysError("TempFileName", "error opening %s", base.Data());
 
    return fp;
 }
@@ -3150,7 +3197,8 @@ Bool_t TWinNTSystem::CountMembers(const char *lpszGroupName)
 {
    NET_API_STATUS NetStatus = NERR_Success;
    LPBYTE Data = NULL;
-   DWORD Index = 0, ResumeHandle = 0, Total = 0;
+   DWORD Index = 0, Total = 0;
+   DWORD_PTR ResumeHandle = 0;
    LOCALGROUP_MEMBERS_INFO_1 *MemberInfo;
    WCHAR wszGroupName[256];
    int iRetOp = 0;
@@ -3209,7 +3257,8 @@ Bool_t TWinNTSystem::GetNbGroups()
 {
    NET_API_STATUS NetStatus = NERR_Success;
    LPBYTE Data = NULL;
-   DWORD Index = 0, ResumeHandle = 0, Total = 0, i;
+   DWORD Index = 0, Total = 0, i;
+   DWORD_PTR ResumeHandle = 0;
    LOCALGROUP_INFO_0 *GroupInfo;
    char szAnsiName[256];
    DWORD dwLastError = 0;
@@ -3337,7 +3386,8 @@ Bool_t TWinNTSystem::CollectMembers(const char *lpszGroupName, int &groupIdx,
 
    NET_API_STATUS NetStatus = NERR_Success;
    LPBYTE Data = NULL;
-   DWORD Index = 0, ResumeHandle = 0, Total = 0, i;
+   DWORD Index = 0, Total = 0, i;
+   DWORD_PTR ResumeHandle = 0;
    LOCALGROUP_MEMBERS_INFO_1 *MemberInfo;
    char szAnsiMemberName[256];
    char szFullMemberName[256];
@@ -3470,7 +3520,8 @@ Bool_t TWinNTSystem::CollectGroups()
 {
    NET_API_STATUS NetStatus = NERR_Success;
    LPBYTE Data = NULL;
-   DWORD Index = 0, ResumeHandle = 0, Total = 0, i;
+   DWORD Index = 0, Total = 0, i;
+   DWORD_PTR ResumeHandle = 0;
    LOCALGROUP_INFO_0 *GroupInfo;
    char szAnsiName[256];
    DWORD dwLastError = 0;
@@ -4318,11 +4369,28 @@ const char *TWinNTSystem::GetLibraries(const char *regexp, const char *options,
          }
          // full path not found, so split it to extract the library name
          // only, set its extension to '.lib' and add it to the list of
-         // libraries to search
-         _splitpath(str.c_str(), drive, dir, fname, ext);
-         std::string libname(fname);
-         libname += ".lib";
-         all_libs.push_back(libname);
+         // libraries to search, but only if not a system DLL for which
+         // we might not have the proper import library
+         char *windir;
+         size_t requiredSize;
+         getenv_s( &requiredSize, NULL, 0, "WinDir");
+         if (requiredSize == 0) {
+            windir = strdup(":\\WINDOWS");
+         } else {
+            windir = (char*) malloc(requiredSize * sizeof(char));
+            if (!windir) {
+               windir = strdup(":\\WINDOWS");
+            } else {
+               getenv_s( &requiredSize, windir, requiredSize, "WinDir" );
+            }
+         }
+         if (str.find(windir) == std::string::npos) {
+            _splitpath(str.c_str(), drive, dir, fname, ext);
+            std::string libname(fname);
+            libname += ".lib";
+            all_libs.push_back(libname);
+         }
+         free(windir);
       }
       for (auto lib : all_libs) {
          // loop over all libraries to check which one exists
@@ -4514,7 +4582,7 @@ TTime TWinNTSystem::Now()
 
 void TWinNTSystem::Sleep(UInt_t milliSec)
 {
-   ::Sleep(milliSec);
+   std::this_thread::sleep_for(std::chrono::milliseconds(milliSec));
 }
 
 ////////////////////////////////////////////////////////////////////////////////

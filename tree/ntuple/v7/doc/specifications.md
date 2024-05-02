@@ -1,8 +1,34 @@
-# RNTuple Reference Specifications (WIP)
+# RNTuple Reference Specifications 0.2.0.0
 
 **Note:** This is work in progress. The RNTuple specification is not yet finalized.
 
-This document describes version 1 of the RNTuple binary format.
+## Versioning Notes
+
+The RNTuple binary format vesion is inspired by semantic versioning.
+It uses the following scheme: EPOCH.MAJOR.MINOR.PATCH
+
+_Epoch_: an increment of the epoch indicates backwards-incompatible changes.
+The RNTuple pre-release has epoch 0.
+The fist public release will get epoch 1.
+There is currently no further epoch foreseen.
+
+_Major_: an increment of the major version indicates forward-incompatible changes.
+A forward-incompatible change is known to break reading in previous software versions that do not support that feature.
+The use of new, forward-incompatible features must be indicated in the feature flag in the header (see below).
+For the RNTuple pre-release (epoch == 0), the major version is the release candidate number.
+
+_Minor_: an increment of the minor version indicates new, optional format features.
+Such optional features, although unknown to previous software versions,
+won't prevent those software versions from properly reading the file.
+Old readers will safely ignore these features.
+
+_Patch_: an increment of the patch version indicates backported features from newer format versions.
+The backported features may correspond to a major or a minor release.
+
+Except for the epoch, the versioning is for reporting only.
+Readers should use the feature flag in the header to determine whether they support reading the file.
+
+## Introduction
 
 The RNTuple binary format describes the serialized, on-disk representation of an RNTuple data set.
 The data on disk is organized in **pages** (typically 10-100kB in size)
@@ -15,20 +41,48 @@ Envelopes can reference other envelopes and pages by means of a **locator** or a
 for a file embedding, the locator consists of an offset and a size.
 The RNTuple format does _not_ establish a specific order of pages and envelopes.
 
-Every embedding must define an **anchor** that contains the envelope links (location, compressed and uncompressed size)
-of the header and footer envelopes.
+For the ROOT file embedding, pages and envelopes are stored in "invisible", non-indexed **RBlob** keys.
+The RNTuple format does _not_ establish a semantic mapping from objects to keys or vice versa.
+For example, one key may hold a single page or a number of pages of the same cluster.
+The only relevant means of finding objects is the locator information, consisting of an offset and a size.
+
+Every embedding must define an **anchor** that contains the format version supported by the writer,
+and envelope links (location, compressed and uncompressed size) of the header and footer envelopes.
 For the ROOT file embedding, the **ROOT::Experimental::RNTuple** object acts as an anchor.
 
 
 ## Compression Block
 
 RNTuple envelopes and pages are wrapped in compression blocks.
-In order to deserialize a page or an envelope, its compressed and ucompressed size needs to be known.
+In order to deserialize a page or an envelope, its compressed and uncompressed size needs to be known.
 
-TODO(jblomer): reference or describe the compression block format.
-  - Compressed size == uncompressed size --> uncompressed
-  - Otherwise: connected compressed chunks with the 9 byte header
+If the compressed size == uncompressed size, the data is stored unmodified in uncompressed form.
+Otherwise, data is represented as a series of compressed chunks.
+Each chunk is prepended with the following 9 bytes header.
 
+```
+Byte
+0      1      2      3      4      5      6      7      8      9
++------+------+------+------+------+------+------+------+------+...
+|     Algorithm      |  Compressed size   |  Uncompressed size | <COMPRESSED DATA>
++------+------+------+------+------+------+------+------+------+...
+```
+
+_Algorithm_: Identifies the compression algorithm used to compress the data. This can take one of the following values
+
+| Algorithm                | Meaning                                      |
+|--------------------------|----------------------------------------------|
+| 'Z' 'L' '\x08'           | zlib                                         |
+| 'C' 'S' '\x08'           | Old Jean-loup Gailly's deflation algorithm   |
+| 'X' 'Z' '\x00'           | LZMA                                         |
+| 'L' '4' <VERSION_MAJOR>  | LZ4; third byte encodes major version number |
+| 'Z' 'S' '\x01'           | Zstd                                         |
+
+_Compressed size_: An unsigned, little-endian integer that indicates the compressed size of the data that follows the header.
+
+_Uncompressed size_: An unsigned, little-endian integer that indicates the uncompressed size of the data that follows.
+The maximum representable value is $(2^{24})-1$, i.e. 16777215, and thus each compressed chunk can represent up to 16 MiB of uncompressed data.
+If the original data is larger than this value, more compressed chunks will follow.
 
 ## Basic Types
 
@@ -43,7 +97,7 @@ followed by the characters.
 Strings are ASCII encoded; every character is a signed 8bit integer.
 
 _Compression settings_: A 32bit integer containing both a compression algorithm and the compression level.
-The compression settings are encoded according to this formula: $$ settings = algorithm * 100 + level $$
+The compression settings are encoded according to this formula: $settings = algorithm * 100 + level$.
 See Compression.[h/cxx] for details and available algorithms.
 
 The meta-data envelope defines additional basic types (see below).
@@ -51,36 +105,45 @@ The meta-data envelope defines additional basic types (see below).
 
 ### Feature Flags
 
-Feature flags are 64bit integers where every bit represents a certain feature that is used
-in the binary format of the RNTuple at hand.
+Feature flags are 64bit integers where every bit represents a certain forward-incompatible feature that is used
+in the binary format of the RNTuple at hand (see Versioning Notes).
 The most significant bit is used to indicate that there are more than 63 features to specify.
 That means that readers need to continue reading feature flags as long as their signed integer value is negative.
+
+Readers should gracefully abort reading when they encounter unknown bits set.
+
+The following feature bits are defined:
+
+| Bit                                | Feature              |
+------------------------------------ |----------------------|
+| 137 (0x09 of the 3rd feature int)  | Reserved for testing |
 
 
 ## Frames
 
 RNTuple envelopes can store records and lists of basic types and other records or lists by means of **frames**.
-The frame has the following format
 
+A frame has the following format
 ```
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                             Size                            |T|
+|                                                               |
++                             Size                            +-+
+|                                                             |T|
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|           Number of Items (for list frames)           |Reserv.|
+|              Number of Items (for list frames)                |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 |                         FRAME PAYLOAD                         |
 |                              ...                              |
 ```
 
-_Size_: The size in bytes of the frame and the payload
+_Size_: The absolute value gives the size in bytes of the frame and the payload.
 
 _T(ype)_: Can be either 0 for a **record frame** or 1 for a **list frame**.
-The type can be interpreted as the sign bit of the size, i.e. negative sizes indicate list frames.
+The type should be interpreted as the sign bit of the size, i.e. negative sizes indicate list frames.
 
-_Reserved, Number of items_: Only used for list frames to indicate the length of the list in the frame payload.
-The reserved bits might be used in a future format versions.
+_Number of items_: Only used for list frames to indicate the length of the list in the frame payload.
 
 File format readers should use the size provided in the frame to seek to the data that follows a frame
 instead of summing up the sizes of the elements in the frame.
@@ -144,7 +207,7 @@ Each locator type follows a given format for the payload (see Section "Well-know
 
 _Reserved_ is an 8bit field that can be used by the storage backend corresponding to the type in order to store additional information about the locator.
 
-An envelope link consists of a 32bit unsigned integer that specifies the uncompressed size of the envelope
+An envelope link consists of a 64bit unsigned integer that specifies the uncompressed size of the envelope
 followed by a locator.
 
 ### Well-known Payload Formats
@@ -173,16 +236,15 @@ In particular, it might contain a partial address that can be qualified using so
 
 ## Envelopes
 
-An Envelope is a data block containing information that describe the RNTuple data.
+An Envelope is a data block containing information that describes the RNTuple data.
 The following envelope types exist
 
-| Type              | Contents                                                          |
-|-------------------|-------------------------------------------------------------------|
-| Header            | RNTuple schema: field and column types                            |
-| Footer            | Description of clusters, location of user meta-data               |
-| Page list         | Location of data pages                                            |
-| User meta-data    | Key-value pairs of additional information about the data          |
-| Checkpoint (?)    | Minimal footer at X MB boundaries for recovery of crashed writes  |
+| Type              |  ID  | Contents                                                          |
+|-------------------|------|-------------------------------------------------------------------|
+| Header            | 0x01 | RNTuple schema: field and column types                            |
+| Footer            | 0x02 | Description of clusters, location of user meta-data               |
+| Page list         | 0x03 | Location of data pages                                            |
+| User meta-data    | 0x04 | Key-value pairs of additional information about the data          |
 
 Envelopes have the following format
 
@@ -190,26 +252,28 @@ Envelopes have the following format
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|        Envelope Version       |        Minimum Version        |
+|        Envelope Type ID       |                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+        Envelope Length        +
+|                                                               |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
                          ENVELOPE PAYLOAD
                                ...
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                             CRC32                             |
+|                                                               |
++                            XxHash-3                           +
+|                                                               |
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ```
 
-_Envelope version_: Envelope types are versioned independently from each other.
-The envelope version is the version that the writer used to build the envelope.
+_Envelope type ID_: As specified in the table above,
+encoded in the least significant 16 bits of the first 64bit integer
 
-_Minimum version_:
-A reader must support at least this version in order to extract meaningful data from the envelope.
-If the envelope version is larger than the minimum version, there might be additional data in the envelope
-that older readers can safely ignore.
+_Envelope length: Uncompressed size of the envelope,
+encoded in the 48 most significant bits of the first 64bit integer
 
-_CRC32_: Checksum of the envelope and the payload bytes together (CRC32 has the property that `crc32("123456") == crc32("456", crc32("123")`)
+_XxHash-3_: Checksum of the envelope and the payload bytes together
 
-Note that the size of envelopes is given by the RNTuple anchor (header, footer)
+Note that the compressed size (and also the length) of envelopes is given by the RNTuple anchor (header, footer)
 or by a locator that references the envelope.
 
 
@@ -218,7 +282,6 @@ or by a locator that references the envelope.
 The header consists of the following elements:
 
  - Feature flag
- - UInt32: Release candidate tag
  - String: name of the ntuple
  - String: description of the ntuple
  - String: identifier of the library or program that writes the data
@@ -227,8 +290,7 @@ The header consists of the following elements:
  - List frame: list of alias column record frames
  - List frame: list of extra type information
 
-The release candidate tag is used to mark unstable implementations of the file format.
-Production code sets the tag to zero.
+The last four list frames containing information about fields and columns are collectively referred to as _schema description_.
 
 #### Field Description
 
@@ -309,27 +371,51 @@ The column type and bits on storage integers can have one of the following value
 |------|------|--------------|-------------------------------------------------------------------------------|
 | 0x01 |   64 | Index64      | Mother columns of (nested) collections, counting is relative to the cluster   |
 | 0x02 |   32 | Index32      | Mother columns of (nested) collections, counting is relative to the cluster   |
-| 0x03 |   64 | Switch       | Lower 44 bits like kIndex64, higher 20 bits are a dispatch tag to a column ID |
+| 0x03 |   96 | Switch       | Tuple of a kIndex64 value followed by a 32 bits dispatch tag to a column ID   |
 | 0x04 |    8 | Byte         | An uninterpreted byte, e.g. part of a blob                                    |
 | 0x05 |    8 | Char         | ASCII character                                                               |
 | 0x06 |    1 | Bit          | Boolean value                                                                 |
 | 0x07 |   64 | Real64       | IEEE-754 double precision float                                               |
 | 0x08 |   32 | Real32       | IEEE-754 single precision float                                               |
 | 0x09 |   16 | Real16       | IEEE-754 half precision float                                                 |
-| 0x0A |   64 | Int64        | Two's complement, little-endian 8 byte integer                                |
-| 0x0B |   32 | Int32        | Two's complement, little-endian 4 byte integer                                |
-| 0x0C |   16 | Int16        | Two's complement, little-endian 2 byte integer                                |
-| 0x0D |    8 | Int8         | Two's complement, 1 byte integer                                              |
+| 0x16 |   64 | Int64        | Two's complement, little-endian 8 byte signed integer                         |
+| 0x0A |   64 | UInt64       | Little-endian 8 byte unsigned integer                                         |
+| 0x17 |   32 | Int32        | Two's complement, little-endian 4 byte signed integer                         |
+| 0x0B |   32 | UInt32       | Little-endian 4 byte unsigned integer                                         |
+| 0x18 |   16 | Int16        | Two's complement, little-endian 2 byte signed integer                         |
+| 0x0C |   16 | UInt16       | Little-endian 2 byte unsigned integer                                         |
+| 0x19 |    8 | Int8         | Two's complement, 1 byte signed integer                                       |
+| 0x0D |    8 | UInt8        | 1 byte unsigned integer                                                       |
 | 0x0E |   64 | SplitIndex64 | Like Index64 but pages are stored in split + delta encoding                   |
 | 0x0F |   32 | SplitIndex32 | Like Index32 but pages are stored in split + delta encoding                   |
 | 0x10 |   64 | SplitReal64  | Like Real64 but in split encoding                                             |
 | 0x11 |   32 | SplitReal32  | Like Real32 but in split encoding                                             |
 | 0x12 |   16 | SplitReal16  | Like Real16 but in split encoding                                             |
-| 0x13 |   64 | SplitInt64   | Like Int64 but in split encoding                                              |
-| 0x14 |   32 | SplitInt32   | Like Int32 but in split encoding                                              |
-| 0x15 |   16 | SplitInt16   | Like Int16 but in split encoding                                              |
+| 0x1A |   64 | SplitInt64   | Like Int64 but in split + zigzag encoding                                     |
+| 0x13 |   64 | SplitUInt64  | Like UInt64 but in split encoding                                             |
+| 0x1B |   64 | SplitInt32   | Like Int32 but in split + zigzag encoding                                     |
+| 0x14 |   32 | SplitUInt32  | Like UInt32 but in split encoding                                             |
+| 0x1C |   16 | SplitInt16   | Like Int16 but in split + zigzag encoding                                     |
+| 0x15 |   16 | SplitUInt16  | Like UInt16 but in split encoding                                             |
 
-Future versions of the file format may introduce addtional column types
+The "split encoding" columns apply a byte transformation encoding to all pages of that column
+and in addition, depending on the column type, delta or zigzag encoding:
+
+Split (only)
+: Rearranges the bytes of elements: All the first bytes first, then all the second bytes, etc.
+
+Delta + split
+: The first element is stored unmodified, all other elements store the delta to the previous element.
+  Followed by split encoding.
+
+Zigzag + split
+: Used on signed integers only; it maps $x$ to $2x$ if $x$ is positive and to $-(2x+1)$ if $x$ is negative.
+  Followed by split encoding.
+
+**Note**: these encodings always happen within each page, thus decoding should be done page-wise,
+not cluster-wise.
+
+Future versions of the file format may introduce additional column types
 without changing the minimum version of the header.
 Old readers need to ignore these columns and fields constructed from such columns.
 Old readers can, however, figure out the number of elements stored in such unknown columns.
@@ -341,7 +427,14 @@ The flags field can have one of the following bits set
 | 0x01     | Elements in the column are sorted (monotonically increasing) |
 | 0x02     | Elements in the column are sorted (monotonically decreasing) |
 | 0x04     | Elements have only non-negative values                       |
+| 0x08     | Index of first element in the column is not zero             |
 
+If flag 0x08 (deferred column) is set, the index of the first element in this column is not zero, which happens if the column is added at a later point during write.
+In this case, an additional 64bit integer containing the first element index follows the flags field.
+Compliant implementations should yield synthetic data pages made up of 0x00 bytes when trying to read back elements in the range $[0, firstElementIndex-1]$.
+This results in zero-initialized values in the aforementioned range for fields of any supported C++ type, including `std::variant<Ts...>` and collections such as `std::vector<T>`.
+The leading zero pages of deferred columns are _not_ part of the page list, i.e. they have no page locator.
+In practice, deferred columns only appear in the schema extension record frame (see Section Footer Envelope).
 
 #### Alias columns
 
@@ -399,24 +492,35 @@ The following kinds of content are supported:
 The footer envelope has the following structure:
 
 - Feature flags
-- Header checksum (CRC32)
-- List frame of extension header envelope links
+- Header checksum (XxHash-3 64bit)
+- Schema extension record frame
 - List frame of column group record frames
-- List frame of cluster summary record frames
 - List frame of cluster group record frames
 - List frame of meta-data block envelope links
 
 The header checksum can be used to cross-check that header and footer belong together.
+The meaning of the feature flags is the same as for the header.
+The header flags do not need to be repeated.
+Readers should combine (logical `or` of the bits) the feature flags from header and footer for the complete set of flags.
 
-The extension headers are just additional headers with an empty name and description.
-They are necessary when fields have been backfilled during writing.
+#### Schema Extension Record Frame
 
-The ntuple meta-data can be split over multiple meta-data envelopes (see below).
+The schema extension record frame contains an additional schema description that is incremental with respect to the schema contained in the header (see Section Header Envelope). Specifically, it is a record frame with the following four fields (identical to the last four fields in Header Envelope):
+
+ - List frame: list of field record frames
+ - List frame: list of column record frames
+ - List frame: list of alias column record frames
+ - List frame: list of extra type information
+
+
+In general, a schema extension is optional and thus this record frame might be empty.
+The interpretation of the information contained therein should be identical as if it was found directly at the end of the header.
+This is necessary when fields have been added during writing.
 
 #### Column Group Record Frame
 The column group record frame is used to set IDs for certain subsets of column IDs.
 Column groups are only used when there are sharded clusters.
-Otherwise the enclosing list frame in the footer envelope is empty and all clusters span all columns.
+Otherwise, the enclosing list frame in the footer envelope is empty and all clusters span all columns.
 The purpose of column groups is to prevent repetition of column ID ranges in cluster summaries.
 
 The column group record frame consists of a list frame of 32bit integer items.
@@ -435,6 +539,44 @@ The frame hierarchy is as follows
     |
     |---- Column group 2 record frame
     | ...
+
+
+#### Cluster Group Record Frame
+
+The cluster group record frame references the page list envelopes for groups of clusters.
+A cluster group record frame starts with
+
+```
+ 0                   1                   2                   3
+ 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                      Minimum Entry Number                     +
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                                                               |
++                          Entry Span                           +
+|                                                               |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+|                       Number of clusters                      |
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
+```
+Followed by the page list envelope link.
+
+To compute the minimum entry number, take first entry number from all clusters in the cluster group,
+and take the minimum among these numbers.
+The entry span is the number of entries that are (partially for sharded clusters) covered by this cluster group.
+The entry range allows for finding the right page list for random access requests to entries.
+The number of clusters information allows for using consistent cluster IDs even if cluster groups are accessed non-sequentially.
+
+### Page List Envelope
+
+The page list envelope contains cluster summaries and page locations.
+It has the following structure
+
+  - Header checksum (XxHash-3 64bit)
+  - List frame of cluster summary record frames
+  - Nested list frame of page locations
 
 #### Cluster Summary Record Frame
 The cluster summary record frame contains the entry range of a cluster:
@@ -456,27 +598,15 @@ The cluster summary record frame contains the entry range of a cluster:
 If flag 0x01 (sharded cluster) is set,
 an additional 32bit integer containing the column group ID follows the flags field.
 If flags is zero, the cluster stores the event range of _all_ the original columns
-_excluding_ the columns from extension headers.
+_including_ the columns from extension headers.
 
-The order of the cluster summaries defines the cluster IDs, starting from zero.
+The order of the cluster summaries defines the cluster IDs,
+starting from the first cluster ID of the cluster group that corresponds to the page list.
 
-#### Cluster Group Record Frame
-The cluster group record frame references the page list envelopes for groups of clusters.
-The order and cardinality of the cluster groups corresponds to the cluster IDs as defined by the cluster summaries.
-A cluster group record frame starts with
+#### Page Locations
 
-```
- 0                   1                   2                   3
- 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|            Number of Clusters in the Cluster Group            |
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-```
-Followed by the page list envelope link.
-
-### Page List Envelope
-
-The page list envelope contains a top-most list frame where every item corresponds to a cluster.
+The page locations are stored in a nested list frame as follows.
+A top-most list frame where every item corresponds to a cluster.
 The order of items corresponds to the cluster IDs as defined by the cluster groups and cluster summaries.
 
 Every item of the top-most list frame consists of an outer list frame where every item corresponds to a column.
@@ -494,13 +624,13 @@ Every inner item (that describes a page) has the following structure:
  0                   1                   2                   3
  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
-|                     Number of Elements                    |Fl.|
+|                     Number of Elements                      |C|
 +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
 ```
 
 Followed by a locator for the page.
-If flag 0x01 is set, a CRC32 checksum of the uncompressed page data is stored just after the page.
-Note that columns might be empty, i.e. the number of pages is zero.
+_C(hecksum)_: If set, an XxHash-3 64bit checksum of the uncompressed page data is stored just after the page.
+This bit should be interpreted as the sign bit of the size, i.e. negative values indicate pages with checksums.
 
 Depending on the number of pages per column per cluster, every page induces
 a total of 28-36 Bytes of data to be stored in the page list envelope.
@@ -522,7 +652,7 @@ The hierarchical structure of the frames in the page list envelope is as follows
     |     |     |---- Page 2 description (inner item)
     |     |     | ...
     |     |---- Column 1 element offset (UInt64)
-    |     |---- Column 1 flags (UInt32)
+    |     |---- Column 1 compression settings (UInt32)
     |     |---- Column 2 page list frame
     |     | ...
     |
@@ -565,17 +695,13 @@ If the most significant bit of the type is set (i.e., the type has a negative va
 the value is a list of the type given by the absolute value of the type field.
 The list is stored as a list frame.
 
-Future versions of the file format may introduce addtional meta-data types
-without changing the minimum version of the meta-data envelope.
+Future versions of the file format may introduce additional meta-data types
+without setting a feature flag.
 Old readers need to ignore these key-value pairs.
 
 Key versioning starts with zero.
 The version is given by the order of serialization within a meta-data envelope
 and by the order of meta-data envelope links in the footer.
-
-### Checkpoint Envelope
-
-TODO(jblomer)
 
 ## Mapping of C++ Types to Fields and Columns
 
@@ -591,15 +717,24 @@ The following fundamental types are stored as `leaf` fields with a single column
 -----------------------------------|------------------------|-----------------------|
 | bool                             | Bit                    |                       |
 | char                             | Char                   |                       |
-| int8_t, uint_8_t, unsigned char  | Int8                   |                       |
-| int16_t, uint16_t                | SplitInt16             | Int16                 |
-| int32_t, uint32_t                | SplitInt32             | Int32                 |
-| int64_t, uint64_t                | SplitInt64             | Int64                 |
+| int8_t                           | Int8                   |                       |
+| uint_8_t, unsigned char          | UInt8                  |                       |
+| int16_t                          | SplitInt16             | Int16                 |
+| uint16_t                         | SplitUInt16            | UInt16                |
+| uint32_t                         | SplitUInt32            | UInt32                |
+| int32_t                          | SplitInt32             | Int32                 |
+| uint64_t                         | SplitUInt64            | UInt64                |
+| int64_t                          | SplitInt64             | Int64                 |
 | float                            | SplitReal32            | Real32                |
 | double                           | SplitReal64            | Real64                |
 
 Possibly available `const` and `volatile` qualifiers of the C++ types are ignored for serialization.
 If the ntuple is stored uncompressed, the default changes from split encoding to non-split encoding where applicable.
+
+### Low-precision Floating Points
+
+The ROOT type `Double32_t` is stored on disk as a `double` field with a `SplitReal32` column representation.
+The field's type alias is set to `Double32_t`.
 
 ### STL Types and Collections
 
@@ -616,21 +751,24 @@ A string is stored as a single field with two columns.
 The first (principle) column is of type SplitIndex32.
 The second column is of type Char.
 
-#### std::vector<T> and ROOT::RVec<T>
+#### std::vector\<T\> and ROOT::RVec\<T\>
 
 STL vector and ROOT's RVec have identical on-disk representations.
 They are stored as two fields:
-  - Collection mother field of type SplitIndex32 or SplitIndex64
+  - Collection mother field whose principal column is of type `(Split)Index[64|32]`.
   - Child field of type `T`, which must by a type with RNTuple I/O support.
     The name of the child field is `_0`.
+
+For RVecs, ROOT will always store the fully qualified type name `ROOT::VecOps::RVec<T>`.
+Implementations should also be able to parse the shorter alias `ROOT::Vec<T>`.
 
 #### std::array<T, N> and array type of the form T[N]
 
 Fixed-sized arrays are stored as two fields:
   - A repetitive field of type `std::array<T, N>` with no attached columns. The array size `N` is stored in the field meta-data.
-  - Child field of type `T`, which must be a type with RNTuple I/O support.
+  - Child field of type `T` named `_0`, which must be a type with RNTuple I/O support.
 
-Multi-dimensional arrays of the form `T[N][M]...` are currently not supported.
+Note that T can itself be an array type, which includes support for multidimensional C-style arrays.
 
 #### std::variant<T1, T2, ..., Tn>
 
@@ -649,13 +787,50 @@ The child fileds are named `_0` and `_1`.
 #### std::tuple<T1, T2, ..., Tn>
 
 A tuple is stored using an empty mother field with $n$ subfields of type `T1`, `T2`, ..., `Tn`. All types must have RNTuple I/O support.
-The child fileds are named `_0`, `_1`, ...
+The child fields are named `_0`, `_1`, ...
 
-#### std::bitset<N>
+#### std::bitset\<N\>
 
 A bitset is stored as a repetitive leaf field with an attached `Bit` column.
 The bitset size `N` is stored as repetition parameter in the field meta-data.
 Within the repetition blocks, bits are stored in little-endian order, i.e. the least significant bits come first.
+
+#### std::unique_ptr\<T\>, std::optional\<T\>
+
+A unique pointer and an optional type have the same on disk representation.
+They are represented as a collection of `T`s of zero or one elements.
+A collection mother field has a single subfield named `_0` for `T`, where `T` must have RNTuple I/O support.
+Note that RNTuple does not support polymorphism, so the type `T` is expected to be `T` and not a child class of `T`.
+
+By default, the mother field has a principal column of type `(Split)Index[64|32]`.
+This is called sparse representation.
+The alternative, dense representation uses a `Bit` column to mask non-existing instances of the subfield.
+In this second case, a default-constructed `T` (or, if applicable, a `T` constructed by the ROOT I/O constructor) is stored on disk for the non-existing instances.
+
+#### std::set\<T\> and std::unordered_set\<T\>
+
+While STL (unordered) sets by definition are associative containers (i.e., elements are referenced by their keys, which in the case for sets are equal to the values), on disk they are represented as indexed collections.
+This means that they have the same on-disk representation as `std::vector<T>`, using two fields:
+  - Collection mother field whose principal column is of type `(Split)Index[64|32]`.
+  - Child field of type `T`, which must by a type with RNTuple I/O support.
+    The name of the child field is `_0`.
+
+#### std::map\<K, V\> and std::unordered_map\<K, V\>
+
+An (unordered) map is stored using a collection mother field, whose principal column is of type `(Split)Index[64|32]` and a child field of type `std::pair<K, V>` named `_0`.
+
+### std::atomic\<T\>
+
+Atomic types are stored as a leaf field with a single subfield named `_0`.
+The mother field has no attached columns.
+The subfield corresponds to the the inner type `T`.
+
+### User-defined enums
+
+User-defined enums are stored as a leaf field with a single subfield named `_0`.
+The mother field has no attached columns.
+The subfield corresponds to the integer type the underlies the enum.
+Unscoped and scoped enums are supported as long as the enum has a dictionary.
 
 ### User-defined classes
 
@@ -667,10 +842,12 @@ The behavior depends on whether the class has an associated collection proxy.
 User defined C++ classes are supported with the following limitations
   - The class must have a dictionary
   - All persistent members and base classes must be themselves types with RNTuple I/O support
-  - Transient members must be marked by a `//!` comment
+  - Transient members must be marked, e.g. by a `//!` comment
   - The class must not be in the `std` namespace
+  - The class must be empty or splittable (e.g., the class must not provide a custom streamer)
   - There is no support for polymorphism,
     i.e. a field of class `A` cannot store class `B` that derives from `A`
+  - Virtual inheritance is unsupported
 
 User classes are stored as a record mother field with no attached columns.
 Direct base classes and persistent members are stored as subfields with their respective types.
@@ -683,29 +860,72 @@ User classes that specify a collection proxy behave as collections of a given va
 Associative collections are not currently supported.
 
 The on-disk representation is similar to a `std::vector<T>` where `T` is the value type; specifically, it is stored as two fields:
-  - Collection mother field of type SplitIndex32 or SplitIndex64
+  - Collection mother field whose principal column is of type `(Split)Index[64|32]`.
   - Child field of type `T`, which must by a type with RNTuple I/O support.
     The name of the child field is `_0`.
 
-### ROOT::Experimental::RNTupleCardinality
+### ROOT::Experimental::RNTupleCardinality<SizeT>
 
-A field whose type is `ROOT::Experimental::RNTupleCardinality` is associated to a single column of type (Split)Index32 or (Split)Index64.
+A field whose type is `ROOT::Experimental::RNTupleCardinality<SizeT>` is associated to a single column of type (Split)Index32 or (Split)Index64.
 This field presents the offsets in the index column as lengths that correspond to the cardinality of the pointed-to collection.
 
 The value for the $i$-th element is computed by subtracting the $(i-1)$-th value from the $i$-th value in the index column.
 If $i == 0$, i.e. it falls on the start of a cluster, the $(i-1)$-th value in the index column is assumed to be 0, e.g. given the index column values `[1, 1, 3]`, the values yielded by `RNTupleCardinality` shall be `[1, 0, 2]`.
 
+The `SizeT` template parameter defines the in-memory integer type of the collection size.
+The valid types are `std::uint32_t` and `std::uint64_t`.
+
 ## Limits
 
-TODO(jblomer)
+This section summarizes key design limits of RNTuple data sets.
+The limits refer to a single RNTuple and do not consider combinations/joins such as "friends" and "chains".
 
-- Max page size: 100M / 1B elements
-- maximum size of frame, envelope: 2GB
-- max number of fields, columns, clusters: 200M (due to frame limits)
--   Due to switch column: 1M fields, columns
-- max cluster size: 16TB (switch column)
-- max file size / data set size
-- Maximum element size: 8k (better 4?)
+| Limit                                          | Value                        | Reason / Comment                                     |
+|------------------------------------------------|------------------------------|------------------------------------------------------|
+| Maximum volume                                 | 10 PB (theoretically more)   | Assuming 10k cluster groups of 10k clusters of 100MB |
+| Maximum number of elements, entries            | 2^64                         | Using default (Split)Index64, otherwise 2^32         |
+| Maximum cluster & entry size                   | 8TB (depends on pagination)  | Assuming limit of 4B pages of 4kB each               |
+| Maximum page size                              | 2B elements, 256MB-2GB       | #elements * element size, 2GB limit from locator     |
+| Maximum element size                           | 8kB                          | 16bit for number of bits per element                 |
+| Maximum number of column types                 | 64k                          | 16bit for column type                                |
+| Maximum envelope size                          | 2^48B (~280TB)               | Envelope header encoding                             |
+| Maximum frame size                             | 2^62B, 4B items (list frame) | Frame preamble encoding                              |
+| Maximum field / type version                   | 4B                           | Field meta-data encoding                             |
+| Maximum number of fields, columns              | 4B (foreseen: <10M)          | 32bit column / field IDs, list frame limit           |
+| Maximum number of cluster groups               | 4B (foreseen: <10k)          | List frame limits                                    |
+| Maximum number of clusters per group           | 4B (foreseen: <10k)          | List frame limits, cluster group summary encoding    |
+| Maximum number of pages per cluster per column | 4B                           | List frame limits                                    |
+| Maximum number of entries per cluster          | 2^60                         | Cluster summary encoding                             |
+| Maximum string length (meta-data)              | 4GB                          | String encoding                                      |
+
+## Glossary
+
+TODO: This glossary is not yet complete
+
+### Column
+
+A column is a storage backed vector of a number of **elements** of a simple type.
+Column elements have a fixed bit-length depending on the column type.
+
+### Page
+
+A page is segment of a column.
+Columns are partitioned in pages.
+A page is a unit of compression.
+Typical page sizes are of the order of 10-100kB.
+
+### Cluster
+
+A cluster is a set of pages from a fixed set of columns that contain all the data that belongs to a certain entry range.
+The data set is partitioned in clusters.
+Typically, a cluster comprises pages from all the available columns.
+If only a subset of the available columns are covered, it is called a **sharded cluster**.
+A typical cluster size is 50MB - 500MB.
+
+### Indications of size
+
+In this document, the `length` of something (e.g., a page) refers to its size in bytes in memory, uncompressed.
+The `size` of something refers to the size in bytes on disk, possibly compressed.
 
 ## Notes on Backward and Forward Compatibility
 
@@ -717,14 +937,3 @@ TODO(jblomer)
 - Skipping of unknown information (frames, envelopes)
 - Writer version and minimum version
 - Feature flag skipping
-
-# Questions:
-  - Better big endian?
-    - Most significant bits are transferred first
-    - On the other hand: little-endian allows for reinterpreting ints with a smaller length
-      - Examples for LE formats: FAT, XLS
-  - Field ID and column ID: 32 bit?
-  - Take ROOT::Experimental::RNTuple out of experimental?
-  - Which locator types should we specify in addition? SHA-1 hash? 128bit UUID?
-  - Reference fields
-  - Column types complete? Should we have 128bit floats, ints? 8bit floats? Interval floats?

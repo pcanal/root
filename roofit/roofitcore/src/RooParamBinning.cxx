@@ -19,7 +19,7 @@
 \class RooParamBinning
 \ingroup Roofitcore
 
-Class RooParamBinning is an implementation of RooAbsBinning that constructs
+Implementation of RooAbsBinning that constructs
 a binning with a range definition that depends on external RooAbsReal objects.
 The external RooAbsReal definitions are explicitly allowed to depend on other
 observables and parameters, and make it possible to define non-rectangular
@@ -33,20 +33,17 @@ by the RooRealVar::setRange() that takes RooAbsReal references as arguments
 #include "Riostream.h"
 
 
-using namespace std;
+using std::endl, std::ostream;
 
 ClassImp(RooParamBinning);
-;
 
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Default constructor
-///   cout << "RooParamBinning(" << this << ") default ctor" << endl ;
 
 RooParamBinning::RooParamBinning(const char* name) :
-  RooAbsBinning(name), _xlo(0), _xhi(0), _nbins(100), _binw(0), _lp(0), _owner(0)
+  RooAbsBinning(name)
 {
-  _array = 0 ;
 }
 
 
@@ -56,13 +53,9 @@ RooParamBinning::RooParamBinning(const char* name) :
 
 RooParamBinning::RooParamBinning(RooAbsReal& xloIn, RooAbsReal& xhiIn, Int_t nBins, const char* name) :
   RooAbsBinning(name),
-  _array(0),
   _xlo(&xloIn),
   _xhi(&xhiIn),
-  _nbins(nBins),
-  _binw(0),
-  _lp(0),
-  _owner(0)
+  _nbins(nBins)
 {
 }
 
@@ -83,15 +76,13 @@ RooParamBinning::~RooParamBinning()
 /// Copy constructor
 ///   cout << "RooParamBinning::cctor(" << this << ") orig = " << &other << endl ;
 
-RooParamBinning::RooParamBinning(const RooParamBinning& other, const char* name) :
-  RooAbsBinning(name), _binw(0), _owner(0)
+RooParamBinning::RooParamBinning(const RooParamBinning &other, const char *name) : RooAbsBinning(name)
 {
-  _array = 0 ;
 
   if (other._lp) {
 //     cout << "RooParamBinning::cctor(this = " << this << ") taking addresses from orig  ListProxy" << endl ;
-    _xlo = (RooAbsReal*) other._lp->at(0) ;
-    _xhi = (RooAbsReal*) other._lp->at(1) ;
+    _xlo = static_cast<RooAbsReal*>(other._lp->at(0)) ;
+    _xhi = static_cast<RooAbsReal*>(other._lp->at(1)) ;
 
   } else {
 
@@ -102,7 +93,7 @@ RooParamBinning::RooParamBinning(const RooParamBinning& other, const char* name)
   }
 
   _nbins = other._nbins ;
-  _lp = 0 ;
+  _lp = nullptr ;
 
   //cout << "RooParamBinning::cctor(this = " << this << " xlo = " << &_xlo << " xhi = " << &_xhi << " _lp = " << _lp << " owner = " << _owner << ")" << endl ;
 }
@@ -133,8 +124,8 @@ void RooParamBinning::insertHook(RooAbsRealLValue& owner) const
   _lp = new RooListProxy(Form("range::%s",GetName()),"lp",&owner,false,true) ;
   _lp->add(*_xlo) ;
   _lp->add(*_xhi) ;
-  _xlo = 0 ;
-  _xhi = 0 ;
+  _xlo = nullptr ;
+  _xhi = nullptr ;
 
 
 }
@@ -147,14 +138,14 @@ void RooParamBinning::insertHook(RooAbsRealLValue& owner) const
 
 void RooParamBinning::removeHook(RooAbsRealLValue& /*owner*/) const
 {
-  _owner = 0 ;
+  _owner = nullptr ;
 
   // Remove list proxy from owner
   if (_lp) {
     _xlo = xlo() ;
     _xhi = xhi() ;
     delete _lp ;
-    _lp = 0 ;
+    _lp = nullptr ;
   }
 }
 
@@ -299,5 +290,3 @@ void RooParamBinning::printMultiline(ostream &os, Int_t /*content*/, bool /*verb
     xhi()->Print("t") ;
   }
 }
-
-

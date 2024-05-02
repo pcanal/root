@@ -1,7 +1,11 @@
 ROOT_STANDARD_LIBRARY_PACKAGE(RooFitXRooFit
         HEADERS
         RooBrowser.h
+        XRooFit.h
+        RooFit/xRooFit/xRooFit.h
         RooFit/xRooFit/xRooNode.h
+        RooFit/xRooFit/xRooNLLVar.h
+        RooFit/xRooFit/xRooHypoSpace.h
         RooFit/xRooFit/xRooBrowser.h
         SOURCES
         src/Asymptotics.cxx
@@ -18,10 +22,12 @@ ROOT_STANDARD_LIBRARY_PACKAGE(RooFitXRooFit
         RooFit
         RooFitHS3
         RooStats
+        FitPanel
         DEPENDENCIES
         Gui
         Ged
         RooFitCore
+        FitPanel
         LINKDEF
         inc/LinkDef.h
         )

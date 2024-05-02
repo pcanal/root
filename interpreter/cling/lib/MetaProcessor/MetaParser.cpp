@@ -18,9 +18,10 @@
 #include "cling/Utils/Output.h"
 #include "cling/Utils/Paths.h"
 
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/Support/Path.h"
+
+#include <optional>
 
 namespace cling {
 
@@ -279,6 +280,11 @@ namespace cling {
       int forward = 0;
       std::string args;
       llvm::StringRef file(getCurTok().getBufStart());
+
+      if (file.empty()) {
+        return false; // FIXME: Issue proper diagnostics
+      }
+
       while (!lookAhead(forward).is(tok::eof))
 	++forward;
 
@@ -367,7 +373,7 @@ namespace cling {
     const Token& currTok = getCurTok();
     if (currTok.is(tok::ident)) {
       llvm::StringRef ident = currTok.getIdent();
-      if (ident.startswith("O")) {
+      if (ident.starts_with("O")) {
         if (ident.size() > 1) {
           int level = 0;
           if (!ident.substr(1).getAsInteger(10, level) && level >= 0) {
@@ -428,7 +434,7 @@ namespace cling {
   bool MetaParser::isdebugCommand() {
     if (getCurTok().is(tok::ident) &&
         getCurTok().getIdent().equals("debug")) {
-      llvm::Optional<int> mode;
+      std::optional<int> mode;
       consumeToken();
       skipWhitespace();
       if (getCurTok().is(tok::constant))

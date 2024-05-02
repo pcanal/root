@@ -5,7 +5,7 @@
 
 namespace {
 /// Simple collection proxy for `StructUsingCollectionProxy<T>`
-template <typename CollectionT>
+template <typename CollectionT, Int_t CollectionKind = ROOT::kSTLvector>
 class SimpleCollectionProxy : public TVirtualCollectionProxy {
    /// The internal representation of an iterator, which in this simple test only contains a pointer to an element
    struct IteratorData {
@@ -17,8 +17,15 @@ class SimpleCollectionProxy : public TVirtualCollectionProxy {
    {
       static_assert(sizeof(IteratorData) <= TVirtualCollectionProxy::fgIteratorArenaSize);
       auto &vec = static_cast<CollectionT *>(collection)->v;
-      static_cast<IteratorData *>(*begin_arena)->ptr = &(*vec.begin());
-      static_cast<IteratorData *>(*end_arena)->ptr = &(*vec.end());
+      if constexpr (CollectionKind == ROOT::kSTLvector) {
+         // An iterator on an array-backed container is just a pointer; thus, it can be directly stored in `*xyz_arena`,
+         // saving one dereference (see TVirtualCollectionProxy documentation)
+         *begin_arena = &(*vec.begin());
+         *end_arena = &(*vec.end());
+      } else {
+         static_cast<IteratorData *>(*begin_arena)->ptr = &(*vec.begin());
+         static_cast<IteratorData *>(*end_arena)->ptr = &(*vec.end());
+      }
    }
 
    static void *Func_Next(void *iter, const void *end)
@@ -40,13 +47,16 @@ public:
       : TVirtualCollectionProxy(TClass::GetClass(ROOT::Internal::GetDemangledTypeName(typeid(CollectionT)).c_str()))
    {
    }
-   SimpleCollectionProxy(const SimpleCollectionProxy &) : SimpleCollectionProxy() {}
+   SimpleCollectionProxy(const SimpleCollectionProxy<CollectionT, CollectionKind> &) : SimpleCollectionProxy() {}
 
-   TVirtualCollectionProxy *Generate() const override { return new SimpleCollectionProxy<CollectionT>(*this); }
-   Int_t GetCollectionType() const override { return ROOT::kSTLvector; }
+   TVirtualCollectionProxy *Generate() const override
+   {
+      return new SimpleCollectionProxy<CollectionT, CollectionKind>(*this);
+   }
+   Int_t GetCollectionType() const override { return CollectionKind; }
    ULong_t GetIncrement() const override { return sizeof(typename CollectionT::ValueType); }
    UInt_t Sizeof() const override { return sizeof(CollectionT); }
-   Bool_t HasPointers() const override { return kFALSE; }
+   bool HasPointers() const override { return false; }
 
    TClass *GetValueClass() const override
    {
@@ -71,7 +81,7 @@ public:
    void *At(UInt_t idx) override { return &fObject->v[idx]; }
    void Clear(const char * /*opt*/ = "") override { fObject->v.clear(); }
    UInt_t Size() const override { return fObject->v.size(); }
-   void *Allocate(UInt_t n, Bool_t /*forceDelete*/) override
+   void *Allocate(UInt_t n, bool /*forceDelete*/) override
    {
       fObject->v.resize(n);
       return fObject;
@@ -93,11 +103,11 @@ public:
    TStreamerInfoActions::TActionSequence *GetReadMemberWiseActions(Int_t /*version*/) override { return nullptr; }
    TStreamerInfoActions::TActionSequence *GetWriteMemberWiseActions() override { return nullptr; }
 
-   CreateIterators_t GetFunctionCreateIterators(Bool_t /*read*/ = kTRUE) override { return &Func_CreateIterators; }
-   CopyIterator_t GetFunctionCopyIterator(Bool_t /*read*/ = kTRUE) override { return nullptr; }
-   Next_t GetFunctionNext(Bool_t /*read*/ = kTRUE) override { return &Func_Next; }
-   DeleteIterator_t GetFunctionDeleteIterator(Bool_t /*read*/ = kTRUE) override { return nullptr; }
-   DeleteTwoIterators_t GetFunctionDeleteTwoIterators(Bool_t /*read*/ = kTRUE) override
+   CreateIterators_t GetFunctionCreateIterators(bool /*read*/ = true) override { return &Func_CreateIterators; }
+   CopyIterator_t GetFunctionCopyIterator(bool /*read*/ = true) override { return nullptr; }
+   Next_t GetFunctionNext(bool /*read*/ = true) override { return &Func_Next; }
+   DeleteIterator_t GetFunctionDeleteIterator(bool /*read*/ = true) override { return nullptr; }
+   DeleteTwoIterators_t GetFunctionDeleteTwoIterators(bool /*read*/ = true) override
    {
       return &Func_DeleteTwoIterators;
    }

@@ -17,9 +17,8 @@
 #define ROO_TREE_DATA_STORE
 
 #include "RooAbsDataStore.h"
-#include "RunContext.h"
 
-#include "ROOT/RStringView.hxx"
+#include <string_view>
 
 #include <vector>
 #include <list>
@@ -38,7 +37,7 @@ public:
   RooTreeDataStore() ;
   RooTreeDataStore(TTree* t, const RooArgSet& vars, const char* wgtVarName=nullptr) ;
 
-  // Empty ctor
+  // Empty constructor
   RooTreeDataStore(RooStringView name, RooStringView title, const RooArgSet& vars, const char* wgtVarName=nullptr) ;
   RooAbsDataStore* clone(const char* newname=nullptr) const override { return new RooTreeDataStore(*this,newname) ; }
   RooAbsDataStore* clone(const RooArgSet& vars, const char* newname=nullptr) const override { return new RooTreeDataStore(*this,vars,newname) ; }
@@ -81,7 +80,7 @@ public:
     (void)first; (void)len;
     return {};
   }
-  RooSpan<const double> getWeightBatch(std::size_t first, std::size_t len) const override;
+  std::span<const double> getWeightBatch(std::size_t first, std::size_t len) const override;
 
   // Change observable name
   bool changeObservableName(const char* from, const char* to) override ;

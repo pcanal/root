@@ -80,6 +80,8 @@ public:
     return const_cast<RooAbsAnaConvPdf*>(this)->convVar();
   }
 
+  std::unique_ptr<RooAbsArg> compileForNormSet(RooArgSet const &normSet, RooFit::Detail::CompileContext & ctx) const override;
+
 protected:
   double getCoefNorm(Int_t coefIdx, const RooArgSet* nset, const TNamed* rangeName) const ;
 
@@ -102,8 +104,6 @@ protected:
 
   class CacheElem : public RooAbsCacheElement {
   public:
-    ~CacheElem() override {} ;
-
     RooArgList containedArgs(Action) override {
       RooArgList l(_coefVarList) ;
       l.add(_normList) ;

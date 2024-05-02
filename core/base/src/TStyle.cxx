@@ -54,7 +54,7 @@ This class includes functions to set some of the following object attributes.
 All objects that can be drawn in a pad inherit from one or more attribute classes
 like TAttLine, TAttFill, TAttText, TAttMarker. When the objects are created, their
 default attributes are taken from the current style. The current style is an object
-of the class[TStyle](https://root.cern.ch/doc/master/classTStyle.html) and can be
+of the class[TStyle](https://root.cern/doc/master/classTStyle.html) and can be
 referenced via the global variable `gStyle` (in TStyle.h).
 
 ROOT provides two styles called "Default" and "Plain". The "Default"
@@ -99,7 +99,7 @@ You can create additional styles with:
     st1->cd();  this becomes now the current style gStyle
 ```
 
-In your [rootlogon.C](https://root.cern.ch/doc/master/classexamples/startsession.log.html)
+In your [rootlogon.C](https://root.cern/doc/master/classexamples/startsession.log.html)
 file, you can redefine the default parameters via statements like:
 
 ```
@@ -668,6 +668,9 @@ void TStyle::Copy(TObject &obj) const
    ((TStyle&)obj).fCandleBoxRange     = fCandleBoxRange;
    ((TStyle&)obj).fCandleScaled       = fCandleScaled;
    ((TStyle&)obj).fViolinScaled       = fViolinScaled;
+
+   ((TStyle&)obj).fOrthoCamera        = fOrthoCamera;
+
    ((TStyle&)obj).fXAxisExpXOffset    = fXAxisExpXOffset;
    ((TStyle&)obj).fXAxisExpYOffset    = fXAxisExpYOffset;
    ((TStyle&)obj).fYAxisExpXOffset    = fYAxisExpXOffset;
@@ -824,6 +827,9 @@ void TStyle::Reset(Option_t *opt)
    fCandleBoxRange      = 0.5;
    fCandleScaled = kFALSE;
    fViolinScaled = kTRUE;
+
+   fOrthoCamera = kFALSE;
+
    fXAxisExpXOffset = 0;
    fXAxisExpYOffset = 0;
    fYAxisExpXOffset = 0;
@@ -1991,11 +1997,11 @@ void TStyle::SaveSource(const char *filename, Option_t *option)
    char quote = '"';
 
    // Writes include.
-   out << "#if !defined( __CINT__) || defined (__MAKECINT__)" << std::endl << std::endl;
+   out << std::endl << std::endl;
    out << "#ifndef ROOT_TStyle" << std::endl;
    out << "#include " << quote << "TStyle.h" << quote << std::endl;
    out << "#endif" << std::endl;
-   out << std::endl << "#endif" << std::endl;
+   out << std::endl << std::endl;
 
    // Writes the macro entry point equal to the fname
    out << std::endl;
@@ -2132,6 +2138,12 @@ void TStyle::SavePrimitive(std::ostream &out, Option_t * /*= ""*/)
    out<<pre<<"tmpStyle->SetPadGridY("        <<asBool(GetPadGridY())<<");" <<std::endl;
    out<<pre<<"tmpStyle->SetPadTickX("        <<GetPadTickX()         <<");"<<std::endl;
    out<<pre<<"tmpStyle->SetPadTickY("        <<GetPadTickY()         <<");"<<std::endl;
+   out<<pre<<"tmpStyle->SetOrthoCamera("     <<asBool(GetOrthoCamera())<<");" <<std::endl;
+
+   out<<pre<<"tmpStyle->SetCandleWhiskerRange("<<GetCandleWhiskerRange()<<");" <<std::endl;
+   out<<pre<<"tmpStyle->SetCandleBoxRange("  <<GetCandleBoxRange()<<");" <<std::endl;
+   out<<pre<<"tmpStyle->SetCandleScaled("    <<asBool(GetCandleScaled())<<");" <<std::endl;
+   out<<pre<<"tmpStyle->SetViolinScaled("    <<asBool(GetViolinScaled())<<");" <<std::endl;
 
    // fPaperSizeX, fPaperSizeY
    out<<pre<<"tmpStyle->SetPaperSize("      <<fPaperSizeX<<", "<<fPaperSizeY<<");"<<std::endl;

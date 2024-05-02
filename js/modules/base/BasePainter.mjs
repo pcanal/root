@@ -1,5 +1,8 @@
 import { select as d3_select } from '../d3.mjs';
-import { settings, internals, isNodeJs, isFunc, isStr, btoa_func } from '../core.mjs';
+import { settings, internals, isNodeJs, isFunc, isStr, isObject, btoa_func, getDocument, source_dir, loadScript, httpRequest } from '../core.mjs';
+import { detectFont, addCustomFont, getCustomFont, FontHandler } from './FontHandler.mjs';
+import { approximateLabelWidth, replaceSymbolsInTextNode } from './latex.mjs';
+import { getColor } from './colors.mjs';
 
 
 /** @summary Returns visible rect of element
@@ -14,7 +17,7 @@ function getElementRect(elem, sizearg) {
    if (!elem || elem.empty())
       return { x: 0, y: 0, width: 0, height: 0 };
 
-   if (isNodeJs() && (sizearg != 'bbox'))
+   if ((isNodeJs() && (sizearg !== 'bbox')) || elem.property('_batch_mode'))
       return { x: 0, y: 0, width: parseInt(elem.attr('width')), height: parseInt(elem.attr('height')) };
 
    const styleValue = name => {
@@ -25,10 +28,10 @@ function getElementRect(elem, sizearg) {
    };
 
    let rect = elem.node().getBoundingClientRect();
-   if ((sizearg == 'bbox') && (parseFloat(rect.width) > 0))
+   if ((sizearg === 'bbox') && (parseFloat(rect.width) > 0))
       rect = elem.node().getBBox();
 
-   let res = { x: 0, y: 0, width: parseInt(rect.width), height: parseInt(rect.height) };
+   const res = { x: 0, y: 0, width: parseInt(rect.width), height: parseInt(rect.height) };
    if (rect.left !== undefined) {
       res.x = parseInt(rect.left);
       res.y = parseInt(rect.top);
@@ -37,7 +40,7 @@ function getElementRect(elem, sizearg) {
       res.y = parseInt(rect.y);
    }
 
-   if ((sizearg === undefined) || (sizearg == 'nopadding')) {
+   if ((sizearg === undefined) || (sizearg === 'nopadding')) {
       // this is size exclude padding area
       res.width -= styleValue('padding-left') + styleValue('padding-right');
       res.height -= styleValue('padding-top') + styleValue('padding-bottom');
@@ -50,8 +53,10 @@ function getElementRect(elem, sizearg) {
 /** @summary Calculate absolute position of provided element in canvas
   * @private */
 function getAbsPosInCanvas(sel, pos) {
-   while (pos && !sel.empty() && !sel.classed('root_canvas')) {
-      let cl = sel.attr('class');
+   if (!pos) return pos;
+
+   while (!sel.empty() && !sel.classed('root_canvas')) {
+      const cl = sel.attr('class');
       if (cl && ((cl.indexOf('root_frame') >= 0) || (cl.indexOf('__root_pad_') >= 0))) {
          pos.x += sel.property('draw_x') || 0;
          pos.y += sel.property('draw_y') || 0;
@@ -72,24 +77,23 @@ function floatToString(value, fmt, ret_fmt) {
    if (!fmt) fmt = '6.4g';
 
    fmt = fmt.trim();
-   let len = fmt.length;
+   const len = fmt.length;
    if (len < 2)
       return ret_fmt ? [value.toFixed(4), '6.4f'] : value.toFixed(4);
-   let last = fmt[len-1];
-   fmt = fmt.slice(0,len-1);
+   const last = fmt[len-1];
+   fmt = fmt.slice(0, len-1);
    let isexp, prec = fmt.indexOf('.');
    prec = (prec < 0) ? 4 : parseInt(fmt.slice(prec+1));
    if (!Number.isInteger(prec) || (prec <= 0)) prec = 4;
 
    let significance = false;
-   if ((last == 'e') || (last == 'E')) { isexp = true; } else
-   if (last == 'Q') { isexp = true; significance = true; } else
-   if ((last == 'f') || (last == 'F')) { isexp = false; } else
-   if (last == 'W') { isexp = false; significance = true; } else
-   if ((last == 'g') || (last == 'G')) {
-      let se = floatToString(value, fmt+'Q', true),
-          sg = floatToString(value, fmt+'W', true);
-
+   if ((last === 'e') || (last === 'E')) isexp = true; else
+   if (last === 'Q') { isexp = true; significance = true; } else
+   if ((last === 'f') || (last === 'F')) isexp = false; else
+   if (last === 'W') { isexp = false; significance = true; } else
+   if ((last === 'g') || (last === 'G')) {
+      const se = floatToString(value, fmt+'Q', true);
+      let sg = floatToString(value, fmt+'W', true);
       if (se[0].length < sg[0].length) sg = se;
       return ret_fmt ? sg : sg[0];
    } else {
@@ -102,27 +106,25 @@ function floatToString(value, fmt, ret_fmt) {
       if (significance) prec--;
       if (prec < 0) prec = 0;
 
-      let se = value.toExponential(prec);
-
-      return ret_fmt ? [se, '5.'+prec+'e'] : se;
+      const se = value.toExponential(prec);
+      return ret_fmt ? [se, `5.${prec}e`] : se;
    }
 
    let sg = value.toFixed(prec);
 
    if (significance) {
-
-      // when using fixed representation, one could get 0.0
-      if (value && (Number(sg) === 0.) && (prec > 0)) {
+      // when using fixed representation, one could get 0
+      if ((value !== 0) && (Number(sg) === 0) && (prec > 0)) {
          prec = 20; sg = value.toFixed(prec);
       }
 
       let l = 0;
-      while ((l<sg.length) && (sg[l] == '0' || sg[l] == '-' || sg[l] == '.')) l++;
+      while ((l < sg.length) && (sg[l] === '0' || sg[l] === '-' || sg[l] === '.')) l++;
 
       let diff = sg.length - l - prec;
       if (sg.indexOf('.') > l) diff--;
 
-      if (diff != 0) {
+      if (diff !== 0) {
          prec -= diff;
          if (prec < 0)
             prec = 0;
@@ -148,7 +150,7 @@ class DrawOptions {
    /** @summary Returns true if remaining options are empty or contain only seperators symbols. */
    empty() {
       if (this.opt.length === 0) return true;
-      return this.opt.replace(/[ ;_,]/g, '').length == 0;
+      return this.opt.replace(/[ ;_,]/g, '').length === 0;
    }
 
    /** @summary Returns remaining part of the draw options. */
@@ -156,7 +158,7 @@ class DrawOptions {
 
    /** @summary Checks if given option exists */
    check(name, postpart) {
-      let pos = this.opt.indexOf(name);
+      const pos = this.opt.indexOf(name);
       if (pos < 0) return false;
       this.opt = this.opt.slice(0, pos) + this.opt.slice(pos + name.length);
       this.part = '';
@@ -168,14 +170,34 @@ class DrawOptions {
          this.part = this.opt.slice(pos, pos2);
          this.opt = this.opt.slice(0, pos) + this.opt.slice(pos2);
       }
-      return true;
+
+      if (postpart !== 'color')
+         return true;
+
+      this.color = this.partAsInt(1) - 1;
+      if (this.color >= 0) return true;
+      for (let col = 0; col < 8; ++col) {
+         if (getColor(col).toUpperCase() === this.part) {
+            this.color = col;
+            return true;
+         }
+      }
+      return false;
    }
 
    /** @summary Returns remaining part of found option as integer. */
    partAsInt(offset, dflt) {
+      let mult = 1;
+      const last = this.part ? this.part[this.part.length - 1] : '';
+      if (last === 'K')
+         mult = 1e3;
+      else if (last === 'M')
+         mult = 1e6;
+      else if (last === 'G')
+         mult = 1e9;
       let val = this.part.replace(/^\D+/g, '');
       val = val ? parseInt(val, 10) : Number.NaN;
-      return !Number.isInteger(val) ? (dflt || 0) : val + (offset || 0);
+      return !Number.isInteger(val) ? (dflt || 0) : mult*val + (offset || 0);
    }
 
    /** @summary Returns remaining part of found option as float. */
@@ -184,15 +206,18 @@ class DrawOptions {
       val = val ? parseFloat(val) : Number.NaN;
       return !Number.isFinite(val) ? (dflt || 0) : val + (offset || 0);
    }
+
 } // class DrawOptions
 
 
 /** @summary Simple random generator with controlled seed
   * @private */
 class TRandom {
+
    constructor(i) {
       if (i !== undefined) this.seed(i);
    }
+
    /** @summary Seed simple random generator */
    seed(i) {
       i = Math.abs(i);
@@ -203,6 +228,7 @@ class TRandom {
       this.m_w = Math.round(i);
       this.m_z = 987654321;
    }
+
    /** @summary Produce random value between 0 and 1 */
    random() {
       if (this.m_z === undefined) return Math.random();
@@ -212,6 +238,7 @@ class TRandom {
       result /= 4294967296;
       return result + 0.5;
    }
+
 } // class TRandom
 
 
@@ -219,8 +246,8 @@ class TRandom {
   * @desc Reuse code from https://stackoverflow.com/questions/62855310
   * @private */
 function buildSvgCurve(p, args) {
-
-   if (!args) args = { };
+   if (!args)
+      args = {};
    if (!args.line)
       args.calc = true;
    else if (args.ndig === undefined)
@@ -243,9 +270,9 @@ function buildSvgCurve(p, args) {
    }
 
    const end_point = (pnt1, pnt2, sign) => {
-      let len = Math.sqrt((pnt2.gry - pnt1.gry)**2 + (pnt2.grx - pnt1.grx)**2) * args.t,
-          a2 = Math.atan2(pnt2.dgry, pnt2.dgrx),
-          a1 = Math.atan2(sign*(pnt2.gry - pnt1.gry), sign*(pnt2.grx - pnt1.grx));
+      const len = Math.sqrt((pnt2.gry - pnt1.gry)**2 + (pnt2.grx - pnt1.grx)**2) * args.t,
+            a2 = Math.atan2(pnt2.dgry, pnt2.dgrx),
+            a1 = Math.atan2(sign*(pnt2.gry - pnt1.gry), sign*(pnt2.grx - pnt1.grx));
 
       pnt1.dgrx = len * Math.cos(2*a1 - a2);
       pnt1.dgry = len * Math.sin(2*a1 - a2);
@@ -253,10 +280,10 @@ function buildSvgCurve(p, args) {
       if (!args.ndig || (Math.round(val) === val))
          return val.toFixed(0);
       let s = val.toFixed(args.ndig), p = s.length-1;
-      while (s[p] == '0') p--;
-      if (s[p] == '.') p--;
+      while (s[p] === '0') p--;
+      if (s[p] === '.') p--;
       s = s.slice(0, p+1);
-      return (s == '-0') ? '0' : s;
+      return (s === '-0') ? '0' : s;
    };
 
    if (args.calc) {
@@ -266,9 +293,9 @@ function buildSvgCurve(p, args) {
       }
 
       if (npnts > 2) {
-         end_point(p[0], p[1], 1.);
+         end_point(p[0], p[1], 1);
          end_point(p[npnts - 1], p[npnts - 2], -1);
-      } else if (p.length == 2) {
+      } else if (p.length === 2) {
          p[0].dgrx = (p[1].grx - p[0].grx) * args.t;
          p[0].dgry = (p[1].gry - p[0].gry) * args.t;
          p[1].dgrx = -p[0].dgrx;
@@ -303,9 +330,9 @@ function buildSvgCurve(p, args) {
       };
 
       for (let n = 1; n < npnts; ++n) {
-         let bin = p[n],
-             dx = Math.round(bin.grx) - currx,
-             dy = Math.round(bin.gry) - curry;
+         const bin = p[n],
+               dx = Math.round(bin.grx) - currx,
+               dy = Math.round(bin.gry) - curry;
          if (dx && dy) {
             flush();
             path += `l${dx},${dy}`;
@@ -320,17 +347,16 @@ function buildSvgCurve(p, args) {
       }
 
       flush();
-
    } else {
       // build line with trying optimize many vertical moves
       let currx = Math.round(p[0].grx), curry = Math.round(p[0].gry),
           cminy = curry, cmaxy = curry, prevy = curry;
 
       for (let n = 1; n < npnts; ++n) {
-         let bin = p[n],
-             lastx = Math.round(bin.grx),
-             lasty = Math.round(bin.gry),
-             dx = lastx - currx;
+         const bin = p[n],
+               lastx = Math.round(bin.grx),
+               lasty = Math.round(bin.gry),
+               dx = lastx - currx;
          if (dx === 0) {
             // if X not change, just remember amplitude and
             cminy = Math.min(cminy, lasty);
@@ -340,14 +366,14 @@ function buildSvgCurve(p, args) {
          }
 
          if (cminy !== cmaxy) {
-            if (cminy != curry)
+            if (cminy !== curry)
                path += `v${cminy-curry}`;
             path += `v${cmaxy-cminy}`;
-            if (cmaxy != prevy)
+            if (cmaxy !== prevy)
                path += `v${prevy-cmaxy}`;
             curry = prevy;
          }
-         let dy = lasty - curry;
+         const dy = lasty - curry;
          if (dy)
             path += `l${dx},${dy}`;
          else
@@ -356,11 +382,11 @@ function buildSvgCurve(p, args) {
          prevy = cminy = cmaxy = lasty;
       }
 
-      if (cminy != cmaxy) {
-         if (cminy != curry)
+      if (cminy !== cmaxy) {
+         if (cminy !== curry)
             path += `v${cminy-curry}`;
          path += `v${cmaxy-cminy}`;
-         if (cmaxy != prevy)
+         if (cmaxy !== prevy)
             path += `v${prevy-cmaxy}`;
       }
    }
@@ -375,20 +401,16 @@ function buildSvgCurve(p, args) {
   * @desc removes extra info or empty elements
   * @private */
 function compressSVG(svg) {
-
-   svg = svg.replace(/url\(\&quot\;\#(\w+)\&quot\;\)/g, 'url(#$1)')        // decode all URL
-            .replace(/ class=\"\w*\"/g, '')                                // remove all classes
-            .replace(/ pad=\"\w*\"/g, '')                                  // remove all pad ids
-            .replace(/ title=\"\"/g, '')                                   // remove all empty titles
-            .replace(/<g objname=\"\w*\" objtype=\"\w*\"/g, '<g')          // remove object ids
-            .replace(/<g transform=\"translate\(\d+\,\d+\)\"><\/g>/g, '')  // remove all empty groups with transform
-            .replace(/<g><\/g>/g, '');                                     // remove all empty groups
+   svg = svg.replace(/url\(&quot;#(\w+)&quot;\)/g, 'url(#$1)')         // decode all URL
+            .replace(/ class="\w*"/g, '')                              // remove all classes
+            .replace(/ pad="\w*"/g, '')                                // remove all pad ids
+            .replace(/ title=""/g, '')                                 // remove all empty titles
+            .replace(/<g objname="\w*" objtype="\w*"/g, '<g')          // remove object ids
+            .replace(/<g transform="translate\(\d+,\d+\)"><\/g>/g, '') // remove all empty groups with transform
+            .replace(/<g><\/g>/g, '');                                 // remove all empty groups
 
    // remove all empty frame svgs, typically appears in 3D drawings, maybe should be improved in frame painter itself
-   svg = svg.replace(/<svg x=\"0\" y=\"0\" overflow=\"hidden\" width=\"\d+\" height=\"\d+\" viewBox=\"0 0 \d+ \d+\"><\/svg>/g, '')
-
-   if (svg.indexOf('xlink:href') < 0)
-      svg = svg.replace(/ xmlns:xlink=\"http:\/\/www.w3.org\/1999\/xlink\"/g, '');
+   svg = svg.replace(/<svg x="0" y="0" overflow="hidden" width="\d+" height="\d+" viewBox="0 0 \d+ \d+"><\/svg>/g, '');
 
    return svg;
 }
@@ -429,32 +451,32 @@ class BasePainter {
      * @param {string} [is_direct] - if 'origin' specified, returns original element even if actual drawing moved to some other place
      * @return {object} d3.select object for main element for drawing */
    selectDom(is_direct) {
-
       if (!this.divid) return d3_select(null);
 
       let res = this._selected_main;
       if (!res) {
          if (isStr(this.divid)) {
             let id = this.divid;
-            if (id[0] != '#') id = '#' + id;
+            if (id[0] !== '#') id = '#' + id;
             res = d3_select(id);
             if (!res.empty()) this.divid = res.node();
-         } else {
+         } else
             res = d3_select(this.divid);
-         }
          this._selected_main = res;
       }
 
       if (!res || res.empty() || (is_direct === 'origin')) return res;
 
-      let use_enlarge = res.property('use_enlarge'),
-          layout = res.property('layout') || 'simple',
-          layout_selector = (layout == 'simple') ? '' : res.property('layout_selector');
+      const use_enlarge = res.property('use_enlarge'),
+            layout = res.property('layout') || 'simple',
+            layout_selector = (layout === 'simple') ? '' : res.property('layout_selector');
 
-      if (layout_selector) res = res.select(layout_selector);
+      if (layout_selector)
+         res = res.select(layout_selector);
 
       // one could redirect here
-      if (!is_direct && !res.empty() && use_enlarge) res = d3_select('#jsroot_enlarge_div');
+      if (!is_direct && !res.empty() && use_enlarge)
+         res = d3_select(getDocument().getElementById('jsroot_enlarge_div'));
 
       return res;
    }
@@ -462,11 +484,11 @@ class BasePainter {
    /** @summary Access/change top painter
      * @private */
    _accessTopPainter(on) {
-      let chld = this.selectDom().node()?.firstChild;
+      const chld = this.selectDom().node()?.firstChild;
       if (!chld) return null;
-      if (on === true) {
+      if (on === true)
          chld.painter = this;
-      } else if (on === false)
+      else if (on === false)
          delete chld.painter;
       return chld.painter;
    }
@@ -494,7 +516,7 @@ class BasePainter {
      * @desc Removes all visible elements and all internal data */
    cleanup(keep_origin) {
       this.clearTopPainter();
-      let origin = this.selectDom('origin');
+      const origin = this.selectDom('origin');
       if (!origin.empty() && !keep_origin) origin.html('');
       this.divid = null;
       delete this._selected_main;
@@ -518,21 +540,21 @@ class BasePainter {
      * @return size of area when main div is drawn
      * @private */
    testMainResize(check_level, new_size, height_factor) {
+      const enlarge = this.enlargeMain('state'),
+            origin = this.selectDom('origin'),
+            main = this.selectDom(),
+            lmt = 5; // minimal size
 
-      let enlarge = this.enlargeMain('state'),
-          main_origin = this.selectDom('origin'),
-          main = this.selectDom(),
-          lmt = 5; // minimal size
+      if ((enlarge !== 'on') && new_size?.width && new_size?.height) {
+         origin.style('width', new_size.width + 'px')
+               .style('height', new_size.height + 'px');
+      }
 
-      if ((enlarge !== 'on') && new_size?.width && new_size?.height)
-         main_origin.style('width', new_size.width + 'px')
-                    .style('height', new_size.height + 'px');
+      const rect_origin = getElementRect(origin, true),
+            can_resize = origin.attr('can_resize');
+      let do_resize = false;
 
-      let rect_origin = getElementRect(main_origin, true),
-          can_resize = main_origin.attr('can_resize'),
-          do_resize = false;
-
-      if (can_resize == 'height')
+      if (can_resize === 'height')
          if (height_factor && Math.abs(rect_origin.width * height_factor - rect_origin.height) > 0.1 * rect_origin.width) do_resize = true;
 
       if (((rect_origin.height <= lmt) || (rect_origin.width <= lmt)) &&
@@ -543,32 +565,30 @@ class BasePainter {
 
          if (rect_origin.width > lmt) {
             height_factor = height_factor || 0.66;
-            main_origin.style('height', Math.round(rect_origin.width * height_factor) + 'px');
-         } else if (can_resize !== 'height') {
-            main_origin.style('width', '200px').style('height', '100px');
-         }
+            origin.style('height', Math.round(rect_origin.width * height_factor) + 'px');
+         } else if (can_resize !== 'height')
+            origin.style('width', '200px').style('height', '100px');
       }
 
-      let rect = getElementRect(main),
-          old_h = main.property('_jsroot_height'),
-          old_w = main.property('_jsroot_width');
+      const rect = getElementRect(main),
+            old_h = main.property('_jsroot_height'),
+            old_w = main.property('_jsroot_width');
 
       rect.changed = false;
 
       if (old_h && old_w && (old_h > 0) && (old_w > 0)) {
          if ((old_h !== rect.height) || (old_w !== rect.width))
             rect.changed = (check_level > 1) || (rect.width / old_w < 0.99) || (rect.width / old_w > 1.01) || (rect.height / old_h < 0.99) || (rect.height / old_h > 1.01);
-      } else {
+      } else
          rect.changed = true;
-      }
 
       if (rect.changed)
          main.property('_jsroot_height', rect.height).property('_jsroot_width', rect.width);
 
       // after change enlarge state always mark main element as resized
-      if (main_origin.property('did_enlarge')) {
+      if (origin.property('did_enlarge')) {
          rect.changed = true;
-         main_origin.property('did_enlarge', false);
+         origin.property('did_enlarge', false);
       }
 
       return rect;
@@ -585,41 +605,42 @@ class BasePainter {
      * if action not specified, just return possibility to enlarge main div
      * @protected */
    enlargeMain(action, skip_warning) {
-
-      let main = this.selectDom(true),
-          origin = this.selectDom('origin');
+      const main = this.selectDom(true),
+            origin = this.selectDom('origin'),
+            doc = getDocument();
 
       if (main.empty() || !settings.CanEnlarge || (origin.property('can_enlarge') === false)) return false;
 
       if ((action === undefined) || (action === 'verify')) return true;
 
-      let state = origin.property('use_enlarge') ? 'on' : 'off';
+      const state = origin.property('use_enlarge') ? 'on' : 'off';
 
       if (action === 'state') return state;
 
       if (action === 'toggle') action = (state === 'off');
 
-      let enlarge = d3_select('#jsroot_enlarge_div');
+      let enlarge = d3_select(doc.getElementById('jsroot_enlarge_div'));
 
       if ((action === true) && (state !== 'on')) {
          if (!enlarge.empty()) return false;
 
-         enlarge = d3_select(document.body)
+         enlarge = d3_select(doc.body)
             .append('div')
             .attr('id', 'jsroot_enlarge_div')
-            .attr('style', 'position: fixed; margin: 0px; border: 0px; padding: 0px; left: 1px; right: 1px; top: 1px; bottom: 1px; background: white; opacity: 0.95; z-index: 100; overflow: hidden;');
+            .attr('style', 'position: fixed; margin: 0px; border: 0px; padding: 0px; left: 1px; top: 1px; bottom: 1px; right: 1px; background: white; opacity: 0.95; z-index: 100; overflow: hidden;');
 
-         let rect1 = getElementRect(main),
-             rect2 = getElementRect(enlarge);
+         const rect1 = getElementRect(main),
+               rect2 = getElementRect(enlarge);
 
          // if new enlarge area not big enough, do not do it
-         if ((rect2.width <= rect1.width) || (rect2.height <= rect1.height))
+         if ((rect2.width <= rect1.width) || (rect2.height <= rect1.height)) {
             if (rect2.width * rect2.height < rect1.width * rect1.height) {
                if (!skip_warning)
                   console.log(`Enlarged area ${rect2.width} x ${rect2.height} smaller then original drawing ${rect1.width} x ${rect1.height}`);
                enlarge.remove();
                return false;
             }
+         }
 
          while (main.node().childNodes.length > 0)
             enlarge.node().appendChild(main.node().firstChild);
@@ -629,7 +650,6 @@ class BasePainter {
          return true;
       }
       if ((action === false) && (state !== 'off')) {
-
          while (enlarge.node() && enlarge.node().childNodes.length > 0)
             main.node().appendChild(enlarge.node().firstChild);
 
@@ -672,11 +692,10 @@ class BasePainter {
   * @private */
 async function _loadJSDOM() {
    return import('jsdom').then(handle => {
-
       if (!internals.nodejs_window) {
          internals.nodejs_window = (new handle.JSDOM('<!DOCTYPE html>hello')).window;
          internals.nodejs_document = internals.nodejs_window.document; // used with three.js
-         internals.nodejs_body = d3_select(internals.nodejs_document).select('body'); //get d3 handle for body
+         internals.nodejs_body = d3_select(internals.nodejs_document).select('body'); // get d3 handle for body
       }
 
       return { JSDOM: handle.JSDOM, doc: internals.nodejs_document, body: internals.nodejs_body };
@@ -686,67 +705,239 @@ async function _loadJSDOM() {
 /** @summary Return translate string for transform attribute of some svg element
   * @return string or null if x and y are zeros
   * @private */
-function makeTranslate(x,y)
-{
-   if (y) return `translate(${x},${y})`;
-   if (x) return `translate(${x})`;
-   return null;
+function makeTranslate(g, x, y) {
+   if (!isObject(g)) {
+      y = x; x = g; g = null;
+   }
+   const res = y ? `translate(${x},${y})` : (x ? `translate(${x})` : null);
+   return g ? g.attr('transform', res) : res;
 }
 
-/** @summary Create image based on SVG
-  * @return {Promise} with produced image in base64 form (or canvas when no image_format specified)
-  * @private */
-async function svgToImage(svg, image_format) {
 
-   if (image_format == 'svg')
+/** @summary Configure special style used for highlight or dragging elements
+  * @private */
+function addHighlightStyle(elem, drag) {
+   if (drag) {
+      elem.style('stroke', 'steelblue')
+          .style('fill-opacity', '0.1');
+   } else {
+      elem.style('stroke', '#4572A7')
+          .style('fill', '#4572A7')
+          .style('opacity', '0');
+   }
+}
+
+/** @summary Create pdf for existing SVG element
+  * @return {Promise} with produced PDF file as url string
+  * @private */
+async function svgToPDF(args, as_buffer) {
+   const nodejs = isNodeJs();
+   let _jspdf, _svg2pdf, need_symbols = false;
+
+   const pr = nodejs
+      ? import('../../scripts/jspdf.es.min.js').then(h1 => { _jspdf = h1; return import('../../scripts/svg2pdf.es.min.js'); }).then(h2 => { _svg2pdf = h2; })
+      : loadScript(source_dir + 'scripts/jspdf.umd.min.js').then(() => loadScript(source_dir + 'scripts/svg2pdf.umd.min.js')).then(() => { _jspdf = globalThis.jspdf; _svg2pdf = globalThis.svg2pdf; }),
+        restore_fonts = [], restore_dominant = [], restore_text = [],
+        node_transform = args.node.getAttribute('transform'), custom_fonts = {};
+
+   if (args.reset_tranform)
+      args.node.removeAttribute('transform');
+
+   return pr.then(() => {
+      d3_select(args.node).selectAll('g').each(function() {
+         if (this.hasAttribute('font-family')) {
+            const name = this.getAttribute('font-family');
+            if (name === 'Courier New') {
+               this.setAttribute('font-family', 'courier');
+               if (!args.can_modify) restore_fonts.push(this); // keep to restore it
+            }
+         }
+      });
+
+      d3_select(args.node).selectAll('text').each(function() {
+         if (this.hasAttribute('dominant-baseline')) {
+            this.setAttribute('dy', '.2em'); // slightly different as in plain text
+            this.removeAttribute('dominant-baseline');
+            if (!args.can_modify) restore_dominant.push(this); // keep to restore it
+         } else if (args.can_modify && nodejs && this.getAttribute('dy') === '.4em')
+            this.setAttribute('dy', '.2em'); // better allignment in PDF
+
+         if (replaceSymbolsInTextNode(this)) {
+            need_symbols = true;
+            if (!args.can_modify) restore_text.push(this); // keep to restore it
+         }
+      });
+
+      if (nodejs) {
+         const doc = internals.nodejs_document;
+         doc.oldFunc = doc.createElementNS;
+         globalThis.document = doc;
+         globalThis.CSSStyleSheet = internals.nodejs_window.CSSStyleSheet;
+         globalThis.CSSStyleRule = internals.nodejs_window.CSSStyleRule;
+         doc.createElementNS = function(ns, kind) {
+            const res = doc.oldFunc(ns, kind);
+            res.getBBox = function() {
+               let width = 50, height = 10;
+               if (this.tagName === 'text') {
+                  // TODO: use jsDOC fonts for label width estimation
+                  const font = detectFont(this);
+                  width = approximateLabelWidth(this.textContent, font);
+                  height = font.size;
+               }
+
+               return { x: 0, y: 0, width, height };
+            };
+            return res;
+         };
+      }
+
+      // eslint-disable-next-line new-cap
+      const doc = new _jspdf.jsPDF({
+         orientation: 'landscape',
+         unit: 'px',
+         format: [args.width + 10, args.height + 10]
+      });
+
+      // add custom fonts to PDF document, only TTF format supported
+      d3_select(args.node).selectAll('style').each(function() {
+         const fh = this.$fonthandler;
+         if (!fh || custom_fonts[fh.name] || (fh.format !== 'ttf')) return;
+         const filename = fh.name.toLowerCase().replace(/\s/g, '') + '.ttf';
+         doc.addFileToVFS(filename, fh.base64);
+         doc.addFont(filename, fh.name, 'normal', 'normal', (fh.name === 'symbol') ? 'StandardEncoding' : 'Identity-H');
+         custom_fonts[fh.name] = true;
+      });
+
+      let pr2 = Promise.resolve(true);
+
+      if (need_symbols && !custom_fonts.symbol) {
+         if (!getCustomFont('symbol')) {
+            pr2 = nodejs
+              ? import('fs').then(fs => {
+                 const base64 = fs.readFileSync('../../fonts/symbol.ttf').toString('base64');
+                 console.log('reading symbol.ttf', base64.length);
+                 addCustomFont(25, 'symbol', 'ttf', base64);
+              })
+              : httpRequest(source_dir+'fonts/symbol.ttf', 'bin').then(buf => {
+               const base64 = btoa_func(buf);
+               addCustomFont(25, 'symbol', 'ttf', base64);
+            });
+         }
+
+         pr2 = pr2.then(() => {
+            const fh = getCustomFont('symbol'),
+                  handler = new FontHandler(1242, 10);
+            handler.name = 'symbol';
+            handler.base64 = fh.base64;
+            handler.addCustomFontToSvg(d3_select(args.node));
+            doc.addFileToVFS('symbol.ttf', fh.base64);
+            doc.addFont('symbol.ttf', 'symbol', 'normal', 'normal', 'StandardEncoding' /* 'WinAnsiEncoding' */);
+         });
+      }
+
+      return pr2.then(() => _svg2pdf.svg2pdf(args.node, doc, { x: 5, y: 5, width: args.width, height: args.height }))
+         .then(() => {
+            if (args.reset_tranform && !args.can_modify && node_transform)
+               args.node.setAttribute('transform', node_transform);
+
+            restore_fonts.forEach(node => node.setAttribute('font-family', 'Courier New'));
+            restore_dominant.forEach(node => {
+               node.setAttribute('dominant-baseline', 'middle');
+               node.removeAttribute('dy');
+            });
+
+            restore_text.forEach(node => { node.innerHTML = node.$originalHTML; });
+
+            const res = as_buffer ? doc.output('arraybuffer') : doc.output('dataurlstring');
+            if (nodejs) {
+               globalThis.document = undefined;
+               globalThis.CSSStyleSheet = undefined;
+               globalThis.CSSStyleRule = undefined;
+               internals.nodejs_document.createElementNS = internals.nodejs_document.oldFunc;
+               if (as_buffer) return Buffer.from(res);
+            }
+             return res;
+         });
+   });
+}
+
+
+/** @summary Create image based on SVG
+  * @param {string} svg - svg code of the image
+  * @param {string} [image_format] - image format like 'png', 'jpeg' or 'webp'
+  * @param {boolean} [as_buffer] - return Buffer object for image
+  * @return {Promise} with produced image in base64 form or as Buffer (or canvas when no image_format specified)
+  * @private */
+async function svgToImage(svg, image_format, as_buffer) {
+   if (image_format === 'svg')
       return svg;
 
+   if (image_format === 'pdf')
+      return svgToPDF(svg, as_buffer);
+
+   // required with df104.py/df105.py example with RCanvas or any special symbols in TLatex
    const doctype = '<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">';
-
    svg = encodeURIComponent(doctype + svg);
-
    svg = svg.replace(/%([0-9A-F]{2})/g, (match, p1) => {
-       let c = String.fromCharCode('0x'+p1);
+       const c = String.fromCharCode('0x'+p1);
        return c === '%' ? '%25' : c;
    });
-
    svg = decodeURIComponent(svg);
 
    const img_src = 'data:image/svg+xml;base64,' + btoa_func(svg);
 
-   if (isNodeJs())
+   if (isNodeJs()) {
       return import('canvas').then(async handle => {
+         return handle.default.loadImage(img_src).then(img => {
+            const canvas = handle.default.createCanvas(img.width, img.height);
 
-         const img = await handle.default.loadImage(img_src);
+            canvas.getContext('2d').drawImage(img, 0, 0, img.width, img.height);
 
-         const canvas = handle.default.createCanvas(img.width, img.height);
+            if (as_buffer) return canvas.toBuffer('image/' + image_format);
 
-         canvas.getContext('2d').drawImage(img, 0, 0);
-
-         return image_format ? canvas.toDataURL('image/' + image_format) : canvas;
+            return image_format ? canvas.toDataURL('image/' + image_format) : canvas;
+         });
       });
+   }
 
    return new Promise(resolveFunc => {
       const image = document.createElement('img');
 
       image.onload = function() {
-         let canvas = document.createElement('canvas');
+         const canvas = document.createElement('canvas');
          canvas.width = image.width;
          canvas.height = image.height;
 
          canvas.getContext('2d').drawImage(image, 0, 0);
 
-         resolveFunc(image_format ? canvas.toDataURL('image/' + image_format) : canvas);
-      }
+         if (as_buffer && image_format)
+            canvas.toBlob(blob => blob.arrayBuffer().then(resolveFunc), 'image/' + image_format);
+         else
+            resolveFunc(image_format ? canvas.toDataURL('image/' + image_format) : canvas);
+      };
       image.onerror = function(arg) {
-         console.log('IMAGE ERROR', arg);
+         console.log(`IMAGE ERROR ${arg}`);
          resolveFunc(null);
-      }
+      };
 
       image.src = img_src;
    });
 }
 
-export { getElementRect, getAbsPosInCanvas,
+/** @summary Convert Date object into string used preconfigured time zone
+ * @desc Time zone stored in settings.TimeZone */
+function convertDate(dt) {
+   let res = '';
+   if (settings.TimeZone && isStr(settings.TimeZone)) {
+     try {
+        res = dt.toLocaleString('en-GB', { timeZone: settings.TimeZone });
+     } catch (err) {
+        res = '';
+     }
+   }
+   return res || dt.toLocaleString('en-GB');
+}
+
+export { getElementRect, getAbsPosInCanvas, convertDate,
          DrawOptions, TRandom, floatToString, buildSvgCurve, compressSVG,
-         BasePainter, _loadJSDOM, makeTranslate, svgToImage };
+         BasePainter, _loadJSDOM, makeTranslate, addHighlightStyle, svgToImage };

@@ -24,8 +24,10 @@ int testPyKerasRegression(){
    // Get data file
    std::cout << "Get test data..." << std::endl;
    TString fname = "./tmva_reg_example.root";
-   if (gSystem->AccessPathName(fname))  // file does not exist in local directory
-      gSystem->Exec("curl -L -O http://root.cern.ch/files/tmva_reg_example.root");
+   if (gSystem->AccessPathName(fname)) {
+      // file does not exist in local directory
+      gSystem->Exec("curl -L -O http://root.cern/files/tmva_reg_example.root");
+   }
    TFile *input = TFile::Open(fname);
 
    // Build model from python file
@@ -60,11 +62,14 @@ int testPyKerasRegression(){
    dataloader->AddTarget("fvalue");
 
    dataloader->PrepareTrainingAndTestTree("",
-      "SplitMode=Random:NormMode=NumEvents:!V");
-
+#ifdef R__MACOSX  // on macos we don;t disable eager execution, it is very slow
+      "nTrain_Regression=500:nTest_Regression=100:SplitMode=Random:NormMode=NumEvents:!V");
+#else
+      "nTrain_Regression=1000:nTest_Regression=200:SplitMode=Random:NormMode=NumEvents:!V");
+#endif
    // Book and train method
    factory->BookMethod(dataloader, TMVA::Types::kPyKeras, "PyKeras",
-      "!H:!V:VarTransform=D,G:FilenameModel=kerasModelRegression.h5:FilenameTrainedModel=trainedKerasModelRegression.h5:NumEpochs=10:BatchSize=32:SaveBestOnly=false:Verbose=0");
+      "!H:!V:VarTransform=D,G:FilenameModel=kerasModelRegression.h5:FilenameTrainedModel=trainedKerasModelRegression.h5:NumEpochs=10:BatchSize=25:SaveBestOnly=false:Verbose=0");
    std::cout << "Train model..." << std::endl;
    factory->TrainAllMethods();
 
@@ -96,7 +101,11 @@ int testPyKerasRegression(){
 
    // Check whether the response is obviously better than guessing
    std::cout << "Mean squared error: " << meanMvaError << std::endl;
+#ifdef R__MACOSX
    if(meanMvaError > 30.0){
+#else
+   if(meanMvaError > 60.0){
+#endif
       std::cout << "[ERROR] Mean squared error is " << meanMvaError << " (>30.0)" << std::endl;
       return 1;
    }

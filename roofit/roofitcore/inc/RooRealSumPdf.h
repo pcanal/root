@@ -31,12 +31,11 @@ public:
          RooAbsReal& func1, RooAbsReal& func2, RooAbsReal& coef1) ;
   RooRealSumPdf(const RooRealSumPdf& other, const char* name=nullptr) ;
   TObject* clone(const char* newname) const override { return new RooRealSumPdf(*this,newname) ; }
-  ~RooRealSumPdf() override ;
 
   double evaluate() const override ;
   bool checkObservables(const RooArgSet* nset) const override ;
 
-  void computeBatch(cudaStream_t*, double* output, size_t size, RooFit::Detail::DataMap const&) const override;
+  void doEval(RooFit::EvalContext &) const override;
 
   bool forceAnalyticalInt(const RooAbsArg& arg) const override { return arg.isFundamental() ; }
   Int_t getAnalyticalIntegralWN(RooArgSet& allVars, RooArgSet& numVars, const RooArgSet* normSet, const char* rangeName=nullptr) const override ;
@@ -70,12 +69,15 @@ public:
 
   std::unique_ptr<RooAbsArg> compileForNormSet(RooArgSet const &normSet, RooFit::Detail::CompileContext & ctx) const override;
 
+  std::unique_ptr<RooAbsReal> createExpectedEventsFunc(const RooArgSet* nset) const override;
+
+  void translate(RooFit::Detail::CodeSquashContext &ctx) const override;
+
 protected:
 
   class CacheElem : public RooAbsCacheElement {
   public:
     CacheElem()  {} ;
-    ~CacheElem() override {} ;
     RooArgList containedArgs(Action) override { RooArgList ret(_funcIntList) ; ret.add(_funcNormList) ; return ret ; }
     RooArgList _funcIntList ;
     RooArgList _funcNormList ;
@@ -107,8 +109,11 @@ private:
                          bool doFloor,
                          bool & hasWarnedBefore);
 
-  static bool checkObservables(RooAbsReal const& caller, RooArgSet const* nset,
-                               RooArgList const& funcList, RooArgList const& coefList);
+  static void translateImpl(RooFit::Detail::CodeSquashContext &ctx, RooAbsArg const *klass, RooArgList const &funcList,
+                            RooArgList const &coefList);
+
+  static bool checkObservables(RooAbsReal const &caller, RooArgSet const *nset, RooArgList const &funcList,
+                               RooArgList const &coefList);
 
   static Int_t getAnalyticalIntegralWN(RooAbsReal const& caller, RooObjCacheManager & normIntMgr,
                                        RooArgList const& funcList, RooArgList const& coefList,
@@ -127,6 +132,8 @@ private:
   static void printMetaArgs(RooArgList const& funcList, RooArgList const& coefList, std::ostream& os);
 
   static void setCacheAndTrackHints(RooArgList const& funcList, RooArgSet& trackNodes);
+
+  inline void setExtended(bool extended) { _extended = extended; }
 
   ClassDefOverride(RooRealSumPdf, 5) // PDF constructed from a sum of (non-pdf) functions
 };

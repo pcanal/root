@@ -32,7 +32,6 @@ Function taken from H. Ikeda et al. NIM A441 (2000), p. 401 (Belle Collaboration
 #include "TMath.h"
 
 #include <cmath>
-using namespace std;
 
 ClassImp(RooNovosibirsk);
 
@@ -89,11 +88,10 @@ double RooNovosibirsk::evaluate() const
 }
 ////////////////////////////////////////////////////////////////////////////////
 /// Compute multiple values of Novosibirsk distribution.
-void RooNovosibirsk::computeBatch(cudaStream_t* stream, double* output, size_t nEvents, RooFit::Detail::DataMap const& dataMap) const
+void RooNovosibirsk::doEval(RooFit::EvalContext & ctx) const
 {
-  auto dispatch = stream ? RooBatchCompute::dispatchCUDA : RooBatchCompute::dispatchCPU;
-  dispatch->compute(stream, RooBatchCompute::Novosibirsk, output, nEvents,
-          {dataMap.at(x), dataMap.at(peak), dataMap.at(width), dataMap.at(tail)});
+  RooBatchCompute::compute(ctx.config(this), RooBatchCompute::Novosibirsk, ctx.output(),
+          {ctx.at(x), ctx.at(peak), ctx.at(width), ctx.at(tail)});
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -18,7 +18,7 @@ from functools import singledispatch
 from typing import Iterable, Set, Tuple
 
 import ROOT
-from ROOT._pythonization._rdataframe import AsNumpyResult
+from ROOT._pythonization._rdataframe import AsNumpyResult, _clone_asnumpyresult
 
 from DistRDF.PythonMergeables import SnapshotResult
 
@@ -186,7 +186,7 @@ def _(resultptr):
     of the dataset and the path to the partial snapshot. We can directly return
     the object, no extra work needed.
     """
-    return resultptr
+    return SnapshotResult(resultptr.treename, resultptr.filenames)
 
 
 @singledispatch
@@ -236,8 +236,39 @@ def _(mergeable: ROOT.Detail.RDF.RMergeableVariationsBase, node, backend):
     Connects the final value after distributed computation to the corresponding
     DistRDF node.
     In this overload, the node stores the reference to the mergeable variations
-    directly. It is then responsibility of the VariationsProxy object to access
+    directly. It is then responsibility of the ResultMapProxy object to access
     the specific varied object asked by the user, calling the right method of
     the RMergeableVariations class.
     """
     node.value = mergeable
+
+
+@singledispatch
+def clone_action(result_promise, _):
+    """
+    Clone the action held by an RResultPtr or RResultMap, registering it with
+    its RLoopManager.
+    """
+    return ROOT.Internal.RDF.CloneResultAndAction(result_promise)
+
+
+@clone_action.register(AsNumpyResult)
+def _(asnumpyres, _):
+    return _clone_asnumpyresult(asnumpyres)
+
+
+@clone_action.register(SnapshotResult)
+def _(snap, range_id: int):
+    # Create output file name for the cloned Snapshot
+    if snap.filenames[0].endswith(".root"):
+        name_with_old_id = snap.filenames[0][:-5]
+    else:
+        name_with_old_id = snap.filenames[0]
+    last_underscore = name_with_old_id.rfind("_")
+    basename = name_with_old_id[:last_underscore]
+    path_with_range = f"{basename}_{range_id}.root"
+
+    # Actually clone the RDF C++ Snapshot node with the new file name
+    resptr = ROOT.Internal.RDF.CloneResultAndAction(snap._resultptr, path_with_range)
+
+    return SnapshotResult(snap.treename, [path_with_range], resptr)

@@ -6,7 +6,7 @@
     \brief Advanced 1-dimensional orthogonal transform functions
     \author Miroslav Morhac
 
- \legacy{TSpectrumTransform}
+ \legacy{TSpectrumTransform, For modeling a spectrum fitting and estimating the background one can use RooFit while for deconvolution and unfolding one can use TUnfold.}
 
 
  Class to carry out transforms of 1D spectra, its filtering and
@@ -743,7 +743,7 @@ void TSpectrumTransform::Transform(const Double_t *source, Double_t *destVector)
    int i, j=0, k = 1, m, l;
    Double_t val;
    Double_t a, b, pi = 3.14159265358979323846;
-   Double_t *working_space = 0;
+   Double_t *working_space = nullptr;
    if (fTransformType >= kTransformFourierWalsh && fTransformType <= kTransformSinHaar) {
       if (fTransformType >= kTransformCosWalsh)
          fDegree += 1;
@@ -1270,7 +1270,7 @@ void TSpectrumTransform::FilterZonal(const Double_t *source, Double_t *destVecto
 {
    int i, j=0, k = 1, m, l;
    Double_t val;
-   Double_t *working_space = 0;
+   Double_t *working_space = nullptr;
    Double_t a, b, pi = 3.14159265358979323846, old_area, new_area;
    if (fTransformType >= kTransformFourierWalsh && fTransformType <= kTransformSinHaar) {
       if (fTransformType >= kTransformCosWalsh)
@@ -1780,7 +1780,7 @@ void TSpectrumTransform::Enhance(const Double_t *source, Double_t *destVector)
 {
    int i, j=0, k = 1, m, l;
    Double_t val;
-   Double_t *working_space = 0;
+   Double_t *working_space = nullptr;
    Double_t a, b, pi = 3.14159265358979323846, old_area, new_area;
    if (fTransformType >= kTransformFourierWalsh && fTransformType <= kTransformSinHaar) {
       if (fTransformType >= kTransformCosWalsh)

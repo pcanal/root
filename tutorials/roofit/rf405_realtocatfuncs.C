@@ -4,8 +4,8 @@
 /// Data and categories: demonstration of real-->discrete mapping functions
 ///
 /// \macro_image
-/// \macro_output
 /// \macro_code
+/// \macro_output
 ///
 /// \date July 2008
 /// \author Wouter Verkerke
@@ -34,7 +34,7 @@ void rf405_realtocatfuncs()
    RooArgusBG a("a", "argus(x)", x, 10.0, -1.0);
 
    // Generate a dummy dataset
-   RooDataSet *data = a.generate(x, 10000);
+   std::unique_ptr<RooDataSet> data{a.generate(x, 10000)};
 
    // C r e a t e   a   t h r e s h o l d   r e a l - > c a t   f u n c t i o n
    // --------------------------------------------------------------------------
@@ -96,7 +96,7 @@ void rf405_realtocatfuncs()
    xb->setRange("alt", "x_coarse_bin1,x_coarse_bin3,x_coarse_bin5,x_coarse_bin7,x_coarse_bin9");
 
    // Construct subset of data matching range "alt" but only for the first 5000 events and plot it on the frame
-   RooDataSet *dataSel = (RooDataSet *)data->reduce(CutRange("alt"), EventRange(0, 5000));
+   std::unique_ptr<RooAbsData> dataSel{data->reduce(CutRange("alt"), EventRange(0, 5000))};
    dataSel->plotOn(xframe, MarkerColor(kGreen), LineColor(kGreen));
 
    new TCanvas("rf405_realtocatfuncs", "rf405_realtocatfuncs", 600, 600);

@@ -8,13 +8,14 @@
  * For the list of contributors see $ROOTSYS/README/CREDITS.             *
  *************************************************************************/
 
+#include "ROOT/InternalTreeUtils.hxx"
 #include "ROOT/RDataFrame.hxx"
 #include "ROOT/RDataSource.hxx"
 #include "ROOT/RDF/RDatasetSpec.hxx"
 #include "ROOT/RDF/RInterface.hxx"
 #include "ROOT/RDF/RLoopManager.hxx"
 #include "ROOT/RDF/Utils.hxx"
-#include "ROOT/RStringView.hxx"
+#include <string_view>
 #include "TChain.h"
 #include "TDirectory.h"
 #include "RtypesCore.h" // for ULong64_t
@@ -56,7 +57,7 @@ alt="DOI"></a>
 \endhtmlonly
 
 ## For the impatient user
-You can directly see RDataFrame in action in our [tutorials](https://root.cern.ch/doc/master/group__tutorial__dataframe.html), in C++ or Python.
+You can directly see RDataFrame in action in our [tutorials](https://root.cern/doc/master/group__tutorial__dataframe.html), in C++ or Python.
 
 ## Table of Contents
 - [Cheat sheet](\ref cheatsheet)
@@ -76,11 +77,13 @@ You can directly see RDataFrame in action in our [tutorials](https://root.cern.c
    - [Special helper columns: `rdfentry_` and `rdfslot_`](\ref helper-cols)
    - [Just-in-time compilation: column type inference and explicit declaration of column types](\ref jitting)
    - [User-defined custom actions](\ref generic-actions)
-   - [Friend trees](\ref friends)
+   - [Dataset joins with friend trees](\ref friends)
    - [Reading data formats other than ROOT trees](\ref other-file-formats)
    - [Computation graphs (storing and reusing sets of transformations)](\ref callgraphs)
    - [Visualizing the computation graph](\ref representgraph)
    - [Activating RDataFrame execution logs](\ref rdf-logging)
+   - [Creating an RDataFrame from a dataset specification file](\ref rdf-from-spec)
+   - [Adding a progress bar](\ref progressbar)
 - [Efficient analysis in Python](\ref python)
 - <a class="el" href="classROOT_1_1RDataFrame.html#reference" onclick="javascript:toggleInherit('pub_methods_classROOT_1_1RDF_1_1RInterface')">Class reference</a>
 
@@ -664,10 +667,7 @@ parts of the RDataFrame API currently work with this package. The subset that is
 with support for more operations coming in the future. Data sources other than TTree and TChain (e.g. CSV, RNTuple) are
 currently not supported.
 
-**Note** that the distributed RDataFrame module is available in a ROOT installation if the following criteria are met:
-- PyROOT is available
-- RDataFrame is available
-- The version of the Python interpreter used to build ROOT is greater or equal than 3.7
+\note The distributed RDataFrame module requires at least Python version 3.8.
 
 ### Connecting to a Spark cluster
 
@@ -814,6 +814,66 @@ Without this, two partial histograms resulting from two distributed tasks would 
 to errors when merging them. Failing to pass a histogram model will raise an error on the client side, before starting
 the distributed execution.
 
+### Live visualization in distributed mode with dask
+
+The live visualization feature allows real-time data representation of plots generated during the execution 
+of a distributed RDataFrame application. 
+It enables visualizing intermediate results as they are computed across multiple nodes of a Dask cluster
+by creating a canvas and continuously updating it as partial results become available. 
+
+The LiveVisualize() function can be imported from the Python package **ROOT.RDF.Experimental.Distributed**:
+
+~~~{.py}
+import ROOT
+
+LiveVisualize = ROOT.RDF.Experimental.Distributed.LiveVisualize
+~~~
+
+The function takes drawable objects (e.g. histograms) and optional callback functions as argument, it accepts 4 different input formats:
+
+- Passing a list or tuple of drawables: 
+You can pass a list or tuple containing the plots you want to visualize. For example:
+
+~~~{.py}
+LiveVisualize([h_gaus, h_exp, h_random])
+~~~
+
+- Passing a list or tuple of drawables with a global callback function: 
+You can also include a global callback function that will be applied to all plots. For example:
+
+~~~{.py}
+def set_fill_color(hist):
+    hist.SetFillColor(ROOT.kBlue)
+
+LiveVisualize([h_gaus, h_exp, h_random], set_fill_color)
+~~~
+
+- Passing a Dictionary of drawables and callback functions: 
+For more control, you can create a dictionary where keys are plots and values are corresponding (optional) callback functions. For example:
+
+~~~{.py}
+plot_callback_dict = {
+    graph: set_marker,
+    h_exp: fit_exp,
+    tprofile_2d: None
+}
+
+LiveVisualize(plot_callback_dict)
+~~~
+
+- Passing a Dictionary of drawables and callback functions with a global callback function: 
+You can also combine a dictionary of plots and callbacks with a global callback function:
+
+~~~{.py}
+LiveVisualize(plot_callback_dict, write_to_tfile)
+~~~
+
+\note The allowed operations to pass to LiveVisualize are:
+      - Histo1D(), Histo2D(), Histo3D()
+      - Graph()
+      - Profile1D(), Profile2D()
+
+\warning The Live Visualization feature is only supported for the Dask backend.
 
 \anchor parallel-execution
 ## Performance tips and parallel execution
@@ -917,14 +977,14 @@ You don't need to read all these to start using RDataFrame, but they are useful 
 ### Systematic variations
 
 Starting from ROOT v6.26, RDataFrame provides a flexible syntax to define systematic variations.
-This is done in two steps: a) variations for one or more existing columns are registered via Vary() and b) variations
-of normal RDataFrame results are extracted with a call to VariationsFor(). In between these steps, no other change
+This is done in two steps: a) register variations for one or more existing columns using Vary() and b) extract variations
+of normal RDataFrame results using \ref ROOT::RDF::Experimental::VariationsFor "VariationsFor()". In between these steps, no other change
 to the analysis code is required: the presence of systematic variations for certain columns is automatically propagated
 through filters, defines and actions, and RDataFrame will take these dependencies into account when producing varied
-results. VariationsFor() is included in header `ROOT/RDFHelpers.hxx`, which compiled C++ programs must include
-explicitly.
+results. \ref ROOT::RDF::Experimental::VariationsFor "VariationsFor()" is included in header `ROOT/RDFHelpers.hxx`. The compiled C++ programs must include this header
+explicitly, this is not required for ROOT macros. 
 
-An example usage of Vary() and VariationsFor() in C++:
+An example usage of Vary() and \ref ROOT::RDF::Experimental::VariationsFor "VariationsFor()" in C++:
 
 ~~~{.cpp}
 auto nominal_hx =
@@ -933,7 +993,7 @@ auto nominal_hx =
      .Define("x", someFunc, {"pt"})
      .Histo1D<float>("x");
 
-// request the generation of varied results from the nominal
+// request the generation of varied results from the nominal_hx
 ROOT::RDF::Experimental::RResultMap<TH1D> hx = ROOT::RDF::Experimental::VariationsFor(nominal_hx);
 
 // the event loop runs here, upon first access to any of the results or varied results:
@@ -942,22 +1002,22 @@ hx["pt:down"].Draw("SAME");
 hx["pt:up"].Draw("SAME");
 ~~~
 
-A list of variation "tags" is passed as last argument to Vary(): they give a name to the varied values that are returned
-as elements of an RVec of the appropriate type. The number of variation tags must correspond to the number of elements
-the RVec returned by the expression (2 in the example above: the first element will correspond to tag "down", the second
-to tag "up"). The _full_ variation name will be composed of the varied column name and the variation tags (e.g.
+A list of variation "tags" is passed as the last argument to Vary(). The tags give names to the varied values that are returned
+as elements of an RVec of the appropriate C++ type. The number of variation tags must correspond to the number of elements of
+this RVec (2 in the example above: the first element will correspond to the tag "down", the second
+to the tag "up"). The _full_ variation name will be composed of the varied column name and the variation tags (e.g.
 "pt:down", "pt:up" in this example). Python usage looks similar.
 
 Note how we use the "pt" column as usual in the Filter() and Define() calls and we simply use "x" as the value to fill
 the resulting histogram. To produce the varied results, RDataFrame will automatically execute the Filter and Define
 calls for each variation and fill the histogram with values and cuts that depend on the variation.
 
-There is no limitation to the complexity of a Vary() expression, and just like for Define() and Filter() calls users are
+There is no limitation to the complexity of a Vary() expression. Just like for the Define() and Filter() calls, users are
 not limited to string expressions but they can also pass any valid C++ callable, including lambda functions and
 complex functors. The callable can be applied to zero or more existing columns and it will always receive their
-_nominal_ values in input.
+_nominal_ value in input.
 
-**Varying multiple columns in lockstep**
+#### Varying multiple columns in lockstep
 
 In the following Python snippet we use the Vary() signature that allows varying multiple columns simultaneously or
 "in lockstep":
@@ -969,15 +1029,15 @@ df.Vary(["pt", "eta"],
         variationName="ptAndEta")
 ~~~
 
-The expression returns an RVec of two RVecs: each inner vector contains the varied values for one column, and the
-inner vectors follow the same ordering as the column names passed as first argument. Besides the variation tags, in
-this case we also have to explicitly pass a variation name as there is no one column name that can be used as default.
+The expression returns an RVec of two RVecs: each inner vector contains the varied values for one column. The
+inner vectors follow the same ordering as the column names that are passed as the first argument. Besides the variation tags, in
+this case we also have to explicitly pass the variation name (here: "ptAndEta") as the default column name does not exist.
 
-The call above will produce variations "ptAndEta:down" and "ptAndEta:up".
+The above call will produce variations "ptAndEta:down" and "ptAndEta:up".
 
-**Combining multiple variations**
+#### Combining multiple variations
 
-Even if a result depends on multiple variations, only one is applied at a time, i.e. there will be no result produced
+Even if a result depends on multiple variations, only one variation is applied at a time, i.e. there will be no result produced
 by applying multiple systematic variations at the same time.
 For example, in the following example snippet, the RResultMap instance `all_h` will contain keys "nominal", "pt:down",
 "pt:up", "eta:0", "eta:1", but no "pt:up&&eta:0" or similar:
@@ -999,12 +1059,15 @@ all_hs.GetKeys(); // returns {"nominal", "pt:down", "pt:up", "eta:0", "eta:1"}
 Note how we passed the integer `2` instead of a list of variation tags to the second Vary() invocation: this is a
 shorthand that automatically generates tags 0 to N-1 (in this case 0 and 1).
 
-\note As of v6.26, VariationsFor() and RResultMap are in the `ROOT::RDF::Experimental` namespace, to indicate that these
+\note Currently, VariationsFor() and RResultMap are in the `ROOT::RDF::Experimental` namespace, to indicate that these
       interfaces might still evolve and improve based on user feedback. We expect that some aspects of the related
       programming model will be streamlined in future versions.
 
-\note As of v6.26, the results of a Snapshot(), Report() or Display() call cannot be varied (i.e. it is not possible to
-      call VariationsFor() on them. These limitations will be lifted in future releases.
+\note Currently, the results of a Snapshot(), Report() or Display() call cannot be varied (i.e. it is not possible to
+      call \ref ROOT::RDF::Experimental::VariationsFor "VariationsFor()" on them. These limitations will be lifted in future releases.
+
+See the Vary() method for more information and [this tutorial](https://root.cern/doc/master/df106__HiggsToFourLeptons_8C.html) 
+for an example usage of Vary and \ref ROOT::RDF::Experimental::VariationsFor "VariationsFor()" in the analysis.
 
 \anchor rnode
 ### RDataFrame objects as function arguments and return values
@@ -1233,26 +1296,56 @@ Notice how we created one `double` variable for each processing slot and later m
 
 
 \anchor friends
-### Friend trees
-Friend TTrees are supported by RDataFrame.
-Friend TTrees with a TTreeIndex are supported starting from ROOT v6.24.
+### Dataset joins with friend trees
 
-To use friend trees in RDataFrame, it is necessary to add the friends directly to
-the tree and instantiate an RDataFrame with the main tree:
+Vertically concatenating multiple trees that have the same columns (creating a logical dataset with the same columns and
+more rows) is trivial in RDataFrame: just pass the tree name and a list of file names to RDataFrame's constructor, or create a TChain
+out of the desired trees and pass that to RDataFrame.
+
+Horizontal concatenations of trees or chains (creating a logical dataset with the same number of rows and the union of the
+columns of multiple trees) leverages TTree's "friend" mechanism.
+
+Simple joins of trees that do not have the same number of rows are also possible with indexed friend trees (see below).
+
+To use friend trees in RDataFrame, set up trees with the appropriate relationships and then instantiate an RDataFrame
+with the main tree:
 
 ~~~{.cpp}
-TTree t([...]);
-TTree ft([...]);
-t.AddFriend(&ft, "myFriend");
+TTree main([...]);
+TTree friend([...]);
+main.AddFriend(&friend, "myFriend");
 
-RDataFrame d(t);
-auto f = d.Filter("myFriend.MyCol == 42");
+RDataFrame df(main);
+auto df2 = df.Filter("myFriend.MyCol == 42");
 ~~~
 
-Columns coming from the friend trees can be referred to by their full name, like in the example above,
+The same applies for TChains. Columns coming from the friend trees can be referred to by their full name, like in the example above,
 or the friend tree name can be omitted in case the column name is not ambiguous (e.g. "MyCol" could be used instead of
-      "myFriend.MyCol" in the example above).
+"myFriend.MyCol" in the example above if there is no column "MyCol" in the main tree).
 
+\note A common source of confusion is that trees that are written out from a multi-thread Snapshot() call will have their
+      entries (block-wise) shuffled with respect to the original tree. Such trees cannot be used as friends of the original
+      one: rows will be mismatched.
+
+Indexed friend trees provide a way to perform simple joins of multiple trees over a common column.
+When a certain entry in the main tree (or chain) is loaded, the friend trees (or chains) will then load an entry where the
+"index" columns have a value identical to the one in the main one. For example, in Python:
+
+~~~{.py}
+main_tree = ...
+aux_tree = ...
+
+# If a friend tree has an index on `commonColumn`, when the main tree loads
+# a given row, it also loads the row of the friend tree that has the same
+# value of `commonColumn`
+aux_tree.BuildIndex("commonColumn")
+
+mainTree.AddFriend(aux_tree)
+
+df = ROOT.RDataFrame(mainTree)
+~~~
+
+RDataFrame supports indexed friend TTrees from ROOT v6.24 in single-thread mode and from v6.28/02 in multi-thread mode.
 
 \anchor other-file-formats
 ### Reading data formats other than ROOT trees
@@ -1337,6 +1430,97 @@ verbosity = ROOT.Experimental.RLogScopedVerbosity(ROOT.Detail.RDF.RDFLogChannel(
 
 More information (e.g. start and end of each multi-thread task) is printed using `ELogLevel.kDebug` and even more
 (e.g. a full dump of the generated code that RDataFrame just-in-time-compiles) using `ELogLevel.kDebug+10`.
+
+\anchor rdf-from-spec
+### Creating an RDataFrame from a dataset specification file
+
+RDataFrame can be created using a dataset specification JSON file: 
+
+~~~{.python}
+import ROOT
+
+df = ROOT.RDF.Experimental.FromSpec("spec.json")
+~~~
+
+The input dataset specification JSON file needs to be provided by the user and it describes all necessary samples and
+their associated metadata information. The main required key is the "samples" (at least one sample is needed) and the
+required sub-keys for each sample are "trees" and "files". Additionally, one can specify a metadata dictionary for each
+sample in the "metadata" key.
+
+A simple example for the formatting of the specification in the JSON file is the following:
+
+~~~{.cpp}
+{
+   "samples": {
+      "sampleA": {
+         "trees": ["tree1", "tree2"],
+         "files": ["file1.root", "file2.root"],
+         "metadata": {
+            "lumi": 10000.0, 
+            "xsec": 1.0,
+            "sample_category" = "data"
+            }
+      },
+      "sampleB": {
+         "trees": ["tree3", "tree4"],
+         "files": ["file3.root", "file4.root"],
+         "metadata": {
+            "lumi": 0.5, 
+            "xsec": 1.5,
+            "sample_category" = "MC_background"
+            }
+      }
+   }
+}
+~~~
+
+The metadata information from the specification file can be then accessed using the DefinePerSample function.
+For example, to access luminosity information (stored as a double):
+
+~~~{.python}
+df.DefinePerSample("lumi", 'rdfsampleinfo_.GetD("lumi")')
+~~~
+
+or sample_category information (stored as a string):
+
+~~~{.python}
+df.DefinePerSample("sample_category", 'rdfsampleinfo_.GetS("sample_category")')
+~~~
+
+or directly the filename:
+
+~~~{.python}
+df.DefinePerSample("name", "rdfsampleinfo_.GetSampleName()")
+~~~
+
+An example implementation of the "FromSpec" method is available in tutorial: df106_HiggstoFourLeptons.py, which also
+provides a corresponding exemplary JSON file for the dataset specification.
+
+\anchor progressbar
+### Adding a progress bar 
+
+A progress bar showing the processed event statistics can be added to any RDataFrame program.
+The event statistics include elapsed time, currently processed file, currently processed events, the rate of event processing 
+and an estimated remaining time (per file being processed). It is recorded and printed in the terminal every m events and every 
+n seconds (by default m = 1000 and n = 1). The ProgressBar can be also added when the multithread (MT) mode is enabled. 
+
+ProgressBar is added after creating the dataframe object (df):
+~~~{.cpp}
+ROOT::RDataFrame df("tree", "file.root");
+ROOT::RDF::Experimental::AddProgressBar(df);
+~~~
+
+Alternatively, RDataFrame can be cast to an RNode first, giving the user more flexibility 
+For example, it can be called at any computational node, such as Filter or Define, not only the head node,
+with no change to the ProgressBar function itself (please see the [Efficient analysis in Python](#python) 
+section for appropriate usage in Python): 
+~~~{.cpp}
+ROOT::RDataFrame df("tree", "file.root");
+auto df_1 = ROOT::RDF::RNode(df.Filter("x>1"));
+ROOT::RDF::Experimental::AddProgressBar(df_1);
+~~~
+Examples of implemented progress bars can be seen by running [Higgs to Four Lepton tutorial](https://root.cern/doc/master/df106__HiggsToFourLeptons_8py_source.html) and [Dimuon tutorial](https://root.cern/doc/master/df102__NanoAODDimuonAnalysis_8C.html). 
+
 */
 // clang-format on
 
@@ -1382,15 +1566,17 @@ RDataFrame::RDataFrame(std::string_view treeName, TDirectory *dirPtr, const Colu
 /// The default columns are looked at in case no column is specified in the
 /// booking of actions or transformations.
 /// \see ROOT::RDF::RInterface for the documentation of the methods available.
-RDataFrame::RDataFrame(std::string_view treeName, std::string_view filenameglob, const ColumnNames_t &defaultColumns)
-   : RInterface(std::make_shared<RDFDetail::RLoopManager>(nullptr, defaultColumns))
+#ifdef R__HAS_ROOT7
+RDataFrame::RDataFrame(std::string_view treeName, std::string_view fileNameGlob, const ColumnNames_t &defaultColumns)
+   : RInterface(ROOT::Detail::RDF::CreateLMFromFile(treeName, fileNameGlob, defaultColumns))
 {
-   const std::string treeNameInt(treeName);
-   const std::string filenameglobInt(filenameglob);
-   auto chain = std::make_shared<TChain>(treeNameInt.c_str(), "", TChain::kWithoutGlobalRegistration);
-   chain->Add(filenameglobInt.c_str());
-   GetProxiedPtr()->SetTree(std::move(chain));
 }
+#else
+RDataFrame::RDataFrame(std::string_view treeName, std::string_view fileNameGlob, const ColumnNames_t &defaultColumns)
+   : RInterface(ROOT::Detail::RDF::CreateLMFromTTree(treeName, fileNameGlob, defaultColumns))
+{
+}
+#endif
 
 ////////////////////////////////////////////////////////////////////////////
 /// \brief Build the dataframe.
@@ -1403,16 +1589,19 @@ RDataFrame::RDataFrame(std::string_view treeName, std::string_view filenameglob,
 ///
 /// The default columns are looked at in case no column is specified in the booking of actions or transformations.
 /// \see ROOT::RDF::RInterface for the documentation of the methods available.
-RDataFrame::RDataFrame(std::string_view treeName, const std::vector<std::string> &fileglobs,
+#ifdef R__HAS_ROOT7
+RDataFrame::RDataFrame(std::string_view datasetName, const std::vector<std::string> &fileNameGlobs,
                        const ColumnNames_t &defaultColumns)
-   : RInterface(std::make_shared<RDFDetail::RLoopManager>(nullptr, defaultColumns))
+   : RInterface(ROOT::Detail::RDF::CreateLMFromFile(datasetName, fileNameGlobs, defaultColumns))
 {
-   std::string treeNameInt(treeName);
-   auto chain = std::make_shared<TChain>(treeNameInt.c_str(), "", TChain::kWithoutGlobalRegistration);
-   for (auto &f : fileglobs)
-      chain->Add(f.c_str());
-   GetProxiedPtr()->SetTree(std::move(chain));
 }
+#else
+RDataFrame::RDataFrame(std::string_view datasetName, const std::vector<std::string> &fileNameGlobs,
+                       const ColumnNames_t &defaultColumns)
+   : RInterface(ROOT::Detail::RDF::CreateLMFromTTree(datasetName, fileNameGlobs, defaultColumns))
+{
+}
+#endif
 
 ////////////////////////////////////////////////////////////////////////////
 /// \brief Build the dataframe.
@@ -1460,24 +1649,71 @@ RDataFrame::RDataFrame(std::unique_ptr<ROOT::RDF::RDataSource> ds, const ColumnN
 /// A dataset specification includes trees and file names,
 /// as well as an optional friend list and/or entry range.
 ///
-/// ### Example usage:
+/// ### Example usage from Python:
 /// ~~~{.py}
-/// spec = ROOT.RDF.Experimental.RDatasetSpec("tree", "file.root", (3, 5))
-/// spec.AddFriend([("tree1", "a.root"), ("tree2", "b.root")], "alias")
+/// spec = (
+///     ROOT.RDF.Experimental.RDatasetSpec()
+///     .AddSample(("data", "tree", "file.root"))
+///     .WithGlobalFriends("friendTree", "friend.root", "alias")
+///     .WithGlobalRange((100, 200))
+/// )
 /// df = ROOT.RDataFrame(spec)
 /// ~~~
+///
+/// See also ROOT::RDataFrame::FromSpec().
 RDataFrame::RDataFrame(ROOT::RDF::Experimental::RDatasetSpec spec)
    : RInterface(std::make_shared<RDFDetail::RLoopManager>(std::move(spec)))
 {
 }
 
+RDataFrame::~RDataFrame()
+{
+   // If any node of the computation graph associated with this RDataFrame
+   // declared code to jit, we need to make sure the compilation actually
+   // happens. For example, a jitted Define could have been booked but
+   // if the computation graph is not actually run then the code of the
+   // Define node is not jitted. This in turn would cause memory leaks.
+   // See https://github.com/root-project/root/issues/15399
+   fLoopManager->Jit();
+}
+
 namespace RDF {
 namespace Experimental {
 
+////////////////////////////////////////////////////////////////////////////
+/// \brief Create the RDataFrame from the dataset specification file.
+/// \param[in] jsonFile Path to the dataset specification JSON file. 
+///
+/// The input dataset specification JSON file must include a number of keys that
+/// describe all the necessary samples and their associated metadata information.
+/// The main key, "samples", is required and at least one sample is needed. Each
+/// sample must have at least one key "trees" and at least one key "files" from
+/// which the data is read. Optionally, one or more metadata information can be
+/// added, as well as the friend list information.
+///
+/// ### Example specification file JSON:
+/// The following is an example of the dataset specification JSON file formatting: 
+///~~~{.cpp}
+/// {
+///    "samples": {
+///       "sampleA": {
+///          "trees": ["tree1", "tree2"],
+///          "files": ["file1.root", "file2.root"],
+///          "metadata": {"lumi": 1.0, }
+///       },
+///       "sampleB": {
+///          "trees": ["tree3", "tree4"],
+///          "files": ["file3.root", "file4.root"],
+///          "metadata": {"lumi": 0.5, }
+///       },
+///       ...
+///     },
+/// }
+///~~~
 ROOT::RDataFrame FromSpec(const std::string &jsonFile)
 {
-   const nlohmann::json fullData = nlohmann::json::parse(std::ifstream(jsonFile));
-   if (!fullData.contains("samples") || fullData["samples"].size() == 0) {
+   const nlohmann::ordered_json fullData = nlohmann::ordered_json::parse(std::ifstream(jsonFile));
+   if (!fullData.contains("samples") || fullData["samples"].empty()) {
       throw std::runtime_error(
          R"(The input specification does not contain any samples. Please provide the samples in the specification like:
 {
@@ -1493,7 +1729,7 @@ ROOT::RDataFrame FromSpec(const std::string &jsonFile)
          "metadata": {"lumi": 0.5, }
       },
       ...
-    },
+   },
 })");
    }
 
@@ -1559,11 +1795,22 @@ ROOT::RDataFrame FromSpec(const std::string &jsonFile)
 namespace cling {
 //////////////////////////////////////////////////////////////////////////
 /// Print an RDataFrame at the prompt
-std::string printValue(ROOT::RDataFrame *tdf)
+std::string printValue(ROOT::RDataFrame *df)
 {
-   auto &df = *tdf->GetLoopManager();
-   auto *tree = df.GetTree();
-   auto defCols = df.GetDefaultColumnNames();
+   // The loop manager is never null, except when its construction failed.
+   // This can happen e.g. if the constructor of RLoopManager that expects
+   // a file name is used and that file doesn't exist. This point is usually
+   // not even reached in that situation, since the exception thrown by the
+   // constructor will also stop execution of the program. But it can still
+   // be reached at the prompt, if the user tries to print the RDataFrame
+   // variable after an incomplete initialization.
+   auto *lm = df->GetLoopManager();
+   if (!lm) {
+      throw std::runtime_error("Cannot print information about this RDataFrame, "
+                               "it was not properly created. It must be discarded.");
+   }
+   auto *tree = lm->GetTree();
+   auto defCols = lm->GetDefaultColumnNames();
 
    std::ostringstream ret;
    if (tree) {
@@ -1578,10 +1825,10 @@ std::string printValue(ROOT::RDataFrame *tdf)
             }
          }
       }
-   } else if (auto ds = tdf->fDataSource) {
+   } else if (auto ds = df->fDataSource) {
       ret << "A data frame associated to the data source \"" << cling::printValue(ds) << "\"";
    } else {
-      ret << "An empty data frame that will create " << df.GetNEmptyEntries() << " entries\n";
+      ret << "An empty data frame that will create " << lm->GetNEmptyEntries() << " entries\n";
    }
 
    return ret.str();

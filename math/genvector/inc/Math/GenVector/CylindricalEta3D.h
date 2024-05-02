@@ -50,6 +50,7 @@ class CylindricalEta3D {
 public :
 
   typedef T Scalar;
+  static constexpr unsigned int Dimension = 3U;
 
   /**
      Default constructor with rho=eta=phi=0
@@ -231,7 +232,7 @@ public:
 
    /**
       Exact component-by-component equality
-      Note: Peculiar representaions of the zero vector such as (0,1,0) will
+      Note: Peculiar representations of the zero vector such as (0,1,0) will
       not test as equal to one another.
    */
    bool operator==(const CylindricalEta3D & rhs) const {

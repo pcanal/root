@@ -18,9 +18,14 @@
 #include <chrono>
 #include <thread>
 
-using namespace std;
+using std::list;
+namespace chrono = std::chrono; // alias
 
-TEST(TestMPProcessTimer, Timings)
+/// It's not easy to guarantee that this test always passes. It is not
+/// deterministic because we time something across multiple processes and
+/// sometimes some processes might be doing something else during the running
+/// of these tests. That's why the test is disabled for now.
+TEST(TestMPProcessTimer, DISABLED_Timings)
 {
    RooFit::MultiProcess::ProcessManager pm(1);
 

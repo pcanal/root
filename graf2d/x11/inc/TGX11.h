@@ -14,8 +14,6 @@
 
 #include "TVirtualX.h"
 
-#if !defined(__CINT__)
-
 #ifdef Status
 // Convert Status from a CPP macro to a typedef:
 typedef Status X11Status_t;
@@ -30,7 +28,6 @@ static const unsigned long gX11None = None;
 static const unsigned long None = gX11None;
 #endif
 
-#endif
 
 typedef unsigned long XID;
 typedef XID Drawable;
@@ -159,7 +156,7 @@ public:
    TGX11();
    TGX11(const TGX11 &org);
    TGX11(const char *name, const char *title);
-   virtual ~TGX11();
+   ~TGX11() override;
 
    Bool_t    Init(void *display) override;
    void      ClearWindow() override;

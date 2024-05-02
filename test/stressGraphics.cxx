@@ -1991,7 +1991,7 @@ void th2poly()
    TH2Poly *p = new TH2Poly("USA","USA Population",lon1,lon2,lat1,lat2);
    gErrorIgnoreLevel = 9999;
    TFile::SetCacheFileDir(".");
-   TFile *f = TFile::Open("http://root.cern.ch/files/usa.root", "CACHEREAD");
+   TFile *f = TFile::Open("http://root.cern/files/usa.root", "CACHEREAD");
 
    if (!f) {
       printf("Cannot access usa.root. Is internet working ?\n");
@@ -2202,7 +2202,7 @@ void options2d1()
    C->Divide(2,2);
    C->SetFillColor(17);
    C->cd(1);
-   gH2->Draw();       pl1.DrawPaveLabel(x1,y1,x2,y2,"SCAT","brNDC");
+   gH2->Draw("text"); pl1.DrawPaveLabel(x1,y1,x2,y2,"TEXT","brNDC");
    C->cd(2);
    gH2->Draw("box");  pl1.DrawPaveLabel(x1,y1,x2,y2,"BOX","brNDC");
    C->cd(3);

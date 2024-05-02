@@ -10,9 +10,11 @@
 #---------------------------------------------------------------------------------------------------
 
 #---------------------------------------------------------------------------------------------------
-# Package up needed system libraries - only for WIN32?
+# Package up needed system libraries - except for WIN32
 #
-include(InstallRequiredSystemLibraries)
+if(NOT WIN32)
+  include(InstallRequiredSystemLibraries)
+endif()
 
 #----------------------------------------------------------------------------------------------------
 # General packaging setup - variable relavant to all package formats
@@ -111,26 +113,18 @@ else()
     file(STRINGS /etc/os-release osid REGEX "^NAME=")
     string(REGEX REPLACE "NAME=\"(.*)\"" "\\1" osid "${osid}")
     file(STRINGS /etc/os-release osvers REGEX "^VERSION_ID=")
-    string(REGEX REPLACE "VERSION_ID=\"(.*)\"" "\\1" osvers "${osvers}")
+    string(REGEX REPLACE "VERSION_ID=\"?([^\"]*)\"?" "\\1" osvers "${osvers}")
   else()
     execute_process(COMMAND lsb_release -is OUTPUT_VARIABLE osid OUTPUT_STRIP_TRAILING_WHITESPACE)
     execute_process(COMMAND lsb_release -rs OUTPUT_VARIABLE osvers OUTPUT_STRIP_TRAILING_WHITESPACE)
   endif()
-  if(osid MATCHES Ubuntu)
-    string(REGEX REPLACE "([0-9]+)[.].*" "\\1" osvers "${osvers}")
-    set(OS_NAME_VERSION Linux-ubuntu${osvers}-${arch})
-  elseif(osid MATCHES Scientific)
-    string(REGEX REPLACE "([0-9]+)[.].*" "\\1" osvers "${osvers}")
-    set(OS_NAME_VERSION Linux-slc${osvers}-${arch})
-  elseif(osid MATCHES Fedora)
-    string(REGEX REPLACE "([0-9]+)" "\\1" osvers "${osvers}")
-    set(OS_NAME_VERSION Linux-fedora${osvers}-${arch})
-  elseif(osid MATCHES CentOS)
-    string(REGEX REPLACE "([0-9]+)[.].*" "\\1" osvers "${osvers}")
-    set(OS_NAME_VERSION Linux-centos${osvers}-${arch})
-  else()
-    set(OS_NAME_VERSION Linux-${osid}${osvers}${arch})
+  string(TOLOWER "${osid}" osid)
+  # "fedora linux" => "fedora"
+  string(REGEX REPLACE " linux$" "" osid "${osid}")
+  if(osid MATCHES ubuntu)
+    string(REGEX REPLACE "([0-9]+[.][0-9]+)[.].*" "\\1" osvers "${osvers}")
   endif()
+  set(OS_NAME_VERSION Linux-${osid}${osvers}-${arch})
 endif()
 
 #---Build type---------------------------------------------------------------------------------------

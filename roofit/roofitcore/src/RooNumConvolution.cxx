@@ -69,7 +69,7 @@ convolution precision.
 #include "RooMsgService.h"
 
 
-using namespace std;
+using std::endl, std::ostream;
 
 ClassImp(RooNumConvolution);
 
@@ -79,16 +79,15 @@ ClassImp(RooNumConvolution);
 
 RooNumConvolution::RooNumConvolution() :
   _init(false),
-  _integrand(0),
-  _integrator(0),
-  _cloneVar(0),
-  _clonePdf(0),
-  _cloneModel(0),
+  _integrand(nullptr),
+  _cloneVar(nullptr),
+  _clonePdf(nullptr),
+  _cloneModel(nullptr),
   _useWindow(false),
   _windowScale(1),
   _verboseThresh(2000),
   _doProf(false),
-  _callHist(0)
+  _callHist(nullptr)
 {
 }
 
@@ -99,7 +98,7 @@ RooNumConvolution::RooNumConvolution() :
 ///
 /// convVar  :  convolution variable (on which both pdf and resmodel should depend)
 /// pdf      :  input 'physics' pdf
-/// resmodel :  input 'resultion' pdf
+/// resmodel :  input 'resolution' pdf
 ///
 /// output is pdf(x) (X) resmodel(x) = Int [ pdf(x') resmodel (x-x') ] dx'
 ///
@@ -108,22 +107,21 @@ RooNumConvolution::RooNumConvolution(const char *name, const char *title, RooRea
   RooAbsReal(name,title),
   _init(false),
   _convIntConfig(RooNumIntConfig::defaultConfig()),
-  _integrand(0),
-  _integrator(0),
+  _integrand(nullptr),
   _origVar("origVar","Original Convolution variable",this,convVar),
   _origPdf("origPdf","Original Input PDF",this,inPdf),
   _origModel("origModel","Original Resolution model",this,resmodel),
   _ownedClonedPdfSet("ownedClonePdfSet"),
   _ownedClonedModelSet("ownedCloneModelSet"),
-  _cloneVar(0),
-  _clonePdf(0),
-  _cloneModel(0),
+  _cloneVar(nullptr),
+  _clonePdf(nullptr),
+  _cloneModel(nullptr),
   _useWindow(false),
   _windowScale(1),
   _windowParam("windowParam","Convolution window parameter",this,false),
   _verboseThresh(2000),
   _doProf(false),
-  _callHist(0)
+  _callHist(nullptr)
 {
   // Use Adaptive Gauss-Kronrod integration by default for the convolution integral
   _convIntConfig.method1D().setLabel("RooAdaptiveGaussKronrodIntegrator1D") ;
@@ -132,7 +130,7 @@ RooNumConvolution::RooNumConvolution(const char *name, const char *title, RooRea
   if (proto) {
     convIntConfig() = proto->convIntConfig() ;
     if (proto->_useWindow) {
-      setConvolutionWindow((RooAbsReal&)*proto->_windowParam.at(0),(RooAbsReal&)*proto->_windowParam.at(1),proto->_windowScale) ;
+      setConvolutionWindow(static_cast<RooAbsReal&>(*proto->_windowParam.at(0)),static_cast<RooAbsReal&>(*proto->_windowParam.at(1)),proto->_windowScale) ;
     }
   }
 }
@@ -146,16 +144,15 @@ RooNumConvolution::RooNumConvolution(const RooNumConvolution& other, const char*
   RooAbsReal(other,name),
   _init(false),
   _convIntConfig(other._convIntConfig),
-  _integrand(0),
-  _integrator(0),
+  _integrand(nullptr),
   _origVar("origVar",this,other._origVar),
   _origPdf("origPdf",this,other._origPdf),
   _origModel("origModel",this,other._origModel),
   _ownedClonedPdfSet("ownedClonePdfSet"),
   _ownedClonedModelSet("ownedCloneModelSet"),
-  _cloneVar(0),
-  _clonePdf(0),
-  _cloneModel(0),
+  _cloneVar(nullptr),
+  _clonePdf(nullptr),
+  _cloneModel(nullptr),
   _useWindow(other._useWindow),
   _windowScale(other._windowScale),
   _windowParam("windowParam",this,other._windowParam),
@@ -188,21 +185,21 @@ void RooNumConvolution::initialize() const
   RooCustomizer mgr1(pdf(),"NumConv_PdfClone") ;
   mgr1.setCloneBranchSet(_ownedClonedPdfSet) ;
   mgr1.replaceArg(var(),*_cloneVar) ;
-  _clonePdf = (RooAbsReal*) mgr1.build() ;
+  _clonePdf = static_cast<RooAbsReal*>(mgr1.build()) ;
 
   RooCustomizer mgr2(model(),"NumConv_ModelClone") ;
   mgr2.setCloneBranchSet(_ownedClonedModelSet) ;
   mgr2.replaceArg(var(),*_cloneVar) ;
-  _cloneModel = (RooAbsReal*) mgr2.build() ;
+  _cloneModel = static_cast<RooAbsReal*>(mgr2.build()) ;
 
   // Change name back to original name
   _cloneVar->SetName(var().GetName()) ;
 
   // Create Convolution integrand
-  _integrand = new RooConvIntegrandBinding(*_clonePdf,*_cloneModel,*_cloneVar,var(),0) ;
+  _integrand = new RooConvIntegrandBinding(*_clonePdf,*_cloneModel,*_cloneVar,var(),nullptr) ;
 
   // Instantiate integrator for convolution integrand
-  _integrator = RooNumIntFactory::instance().createIntegrator(*_integrand,_convIntConfig,1) ;
+  _integrator = RooNumIntFactory::instance().createIntegrator(*_integrand,_convIntConfig,1);
   _integrator->setUseIntegrandLimits(false) ;
 
   _init = true ;
@@ -236,8 +233,8 @@ double RooNumConvolution::evaluate() const
 
   // Adjust convolution integration window
   if (_useWindow) {
-    double center = ((RooAbsReal*)_windowParam.at(0))->getVal() ;
-    double width = _windowScale * ((RooAbsReal*)_windowParam.at(1))->getVal() ;
+    double center = (static_cast<RooAbsReal*>(_windowParam.at(0)))->getVal() ;
+    double width = _windowScale * (static_cast<RooAbsReal*>(_windowParam.at(1)))->getVal() ;
     _integrator->setLimits(x-center-width,x-center+width) ;
   } else {
     _integrator->setLimits(-RooNumber::infinity(),RooNumber::infinity()) ;
@@ -249,7 +246,7 @@ double RooNumConvolution::evaluate() const
   if (_doProf) {
     _callHist->Fill(x,_integrand->numCall()) ;
     if (_integrand->numCall()>_verboseThresh) {
-      coutW(Integration) << "RooNumConvolution::eveluate(" << GetName() << ") WARNING convolution integral at x=" << x
+      coutW(Integration) << "RooNumConvolution::evaluate(" << GetName() << ") WARNING convolution integral at x=" << x
           << " required " << _integrand->numCall() << " function evaluations" << endl ;
     }
   }
@@ -338,7 +335,7 @@ void RooNumConvolution::setCallProfiling(bool flag, Int_t nbinX, Int_t nbinCall,
   } else if (_doProf) {
 
     delete _callHist ;
-    _callHist = 0 ;
+    _callHist = nullptr ;
     _doProf = false ;
   }
 

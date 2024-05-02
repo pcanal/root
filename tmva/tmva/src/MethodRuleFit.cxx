@@ -5,7 +5,7 @@
  * Project: TMVA - a Root-integrated toolkit for multivariate data analysis       *
  * Package: TMVA                                                                  *
  * Class  : MethodRuleFit                                                         *
- * Web    : http://tmva.sourceforge.net                                           *
+ *                                             *
  *                                                                                *
  * Description:                                                                   *
  *      Implementation (see header file for description)                          *
@@ -20,7 +20,7 @@
  *                                                                                *
  * Redistribution and use in source and binary forms, with or without             *
  * modification, are permitted according to the terms listed in LICENSE           *
- * (http://tmva.sourceforge.net/LICENSE)                                          *
+ * (see tmva/doc/LICENSE)                                          *
  **********************************************************************************/
 
 /*! \class TMVA::MethodRuleFit
@@ -704,7 +704,7 @@ void TMVA::MethodRuleFit::MakeClassRuleCuts( std::ostream& fout ) const
          }
       }
       fout << ") rval+=" << std::setprecision(10) << (*rules)[ir]->GetCoefficient() << ";" << std::flush;
-      fout << "   // importance = " << Form("%3.3f",impr) << std::endl;
+      fout << "   // importance = " << TString::Format("%3.3f",impr) << std::endl;
    }
    fout << std::setprecision(dp);
 }
@@ -737,7 +737,7 @@ void TMVA::MethodRuleFit::MakeClassLinear( std::ostream& fout ) const
               << "*std::min( double(" << std::setprecision(10) << rens->GetLinDP(il)
               << "), std::max( double(inputValues[" << il << "]), double(" << std::setprecision(10) << rens->GetLinDM(il) << ")));"
               << std::flush;
-         fout << "   // importance = " << Form("%3.3f",imp) << std::endl;
+         fout << "   // importance = " << TString::Format("%3.3f",imp) << std::endl;
       }
    }
 }

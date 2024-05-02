@@ -45,13 +45,18 @@ namespace ROOT {
       class UnBinData;
       class SparseData;
 
-      enum EFitObjectType {
+      enum class EFitObjectType {
          kHistogram,
          kGraph
       };
 
+      enum class EChisquareType {
+         kNeyman = 0,
+         kPLikeRatio,
+         kPearson
+      };
 
-      //#ifndef __CINT__  // does not link on Windows (why ??)
+
 
       /**
          Decode list of options into fitOption
@@ -166,7 +171,7 @@ namespace ROOT {
       /**
          compute the chi2 value for an histogram given a function  (see TH1::Chisquare for the documentation)
       */
-      double Chisquare(const TH1 & h1, TF1 & f1, bool useRange, bool usePL = false);
+      double Chisquare(const TH1 & h1, TF1 & f1, bool useRange, EChisquareType type);
 
       /**
          compute the chi2 value for a graph given a function (see TGraph::Chisquare)
@@ -180,6 +185,3 @@ namespace ROOT {
 
 
 #endif /* ROOT_Fit_TH1Interface */
-
-
-//#endif  /* not CINT OR MAKE_CINT */

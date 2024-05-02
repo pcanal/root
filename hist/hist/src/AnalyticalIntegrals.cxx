@@ -23,9 +23,7 @@
 #include "TMath.h"
 #include "Math/DistFuncMathCore.h" //for cdf
 
-#include <stdio.h>
-
-using namespace std;
+#include <cstdio>
 
 Double_t AnalyticalIntegral(TF1 *f, Double_t a, Double_t b)
 {

@@ -28,27 +28,15 @@ Note that in contrast to RooParametricStepFunction, a RooStepFunction is NOT a P
 but a not-normalized function (RooAbsReal)
 **/
 
-#include "Riostream.h"
-#include "TArrayD.h"
-#include <math.h>
+#include <RooStepFunction.h>
 
-#include "RooStepFunction.h"
-#include "RooRealVar.h"
-#include "RooArgList.h"
-#include "RooMsgService.h"
-#include "RooMath.h"
-
-using namespace std;
+#include <RooArgList.h>
+#include <RooCurve.h>
+#include <RooMsgService.h>
+#include <RooMath.h>
+#include <RooRealVar.h>
 
 ClassImp(RooStepFunction);
-
-////////////////////////////////////////////////////////////////////////////////
-/// Constructor
-
-RooStepFunction::RooStepFunction()
-{
-  _interpolate = false ;
-}
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Constructor
@@ -61,27 +49,12 @@ RooStepFunction::RooStepFunction(const char* name, const char* title,
   _boundaryList("boundaryList","List of boundaries",this),
   _interpolate(interpolate)
 {
-  for (auto *coef : coefList) {
-    if (!dynamic_cast<RooAbsReal*>(coef)) {
-      cout << "RooStepFunction::ctor(" << GetName() << ") ERROR: coefficient " << coef->GetName()
-      << " is not of type RooAbsReal" << endl ;
-      assert(0) ;
-    }
-    _coefList.add(*coef) ;
-  }
+  _coefList.addTyped<RooAbsReal>(coefList);
+  _boundaryList.addTyped<RooAbsReal>(boundaryList);
 
-  for (auto *boundary : boundaryList) {
-    if (!dynamic_cast<RooAbsReal*>(boundary)) {
-      cout << "RooStepFunction::ctor(" << GetName() << ") ERROR: boundary " << boundary->GetName()
-      << " is not of type RooAbsReal" << endl ;
-      assert(0) ;
-    }
-    _boundaryList.add(*boundary) ;
-  }
-
-  if (_boundaryList.getSize()!=_coefList.getSize()+1) {
-    coutE(InputArguments) << "RooStepFunction::ctor(" << GetName() << ") ERROR: Number of boundaries must be number of coefficients plus 1" << endl ;
-    throw string("RooStepFunction::ctor() ERROR: Number of boundaries must be number of coefficients plus 1") ;
+  if (_boundaryList.size()!=_coefList.size()+1) {
+    coutE(InputArguments) << "RooStepFunction::ctor(" << GetName() << ") ERROR: Number of boundaries must be number of coefficients plus 1" << std::endl ;
+    throw std::invalid_argument("RooStepFunction::ctor() ERROR: Number of boundaries must be number of coefficients plus 1") ;
   }
 
 }
@@ -100,12 +73,12 @@ RooStepFunction::RooStepFunction(const RooStepFunction& other, const char* name)
 
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Transfer contents to vector for use below
+/// Transfer contents to std::vector for use below
 
 double RooStepFunction::evaluate() const
 {
-  vector<double> b(_boundaryList.getSize()) ;
-  vector<double> c(_coefList.getSize()+3) ;
+  std::vector<double> b(_boundaryList.size()) ;
+  std::vector<double> c(_coefList.size()+3) ;
   Int_t nb(0) ;
   for (auto * boundary : static_range_cast<RooAbsReal*>(_boundaryList)) {
     b[nb++] = boundary->getVal() ;
@@ -119,7 +92,7 @@ double RooStepFunction::evaluate() const
     // No interpolation -- Return values bin-by-bin
     for (Int_t i=0;i<nb-1;i++){
       if (_x>b[i]&&_x<=b[i+1]) {
-   return ((RooAbsReal*)_coefList.at(i))->getVal() ;
+   return (static_cast<RooAbsReal*>(_coefList.at(i)))->getVal() ;
       }
     }
     return 0 ;
@@ -136,7 +109,7 @@ double RooStepFunction::evaluate() const
 
     // Make array of (0,coefficient values,0)
     Int_t nc(0) ;
-    vector<double> y(_coefList.size()+3) ;
+    std::vector<double> y(_coefList.size()+3) ;
     y[nc++] = 0 ;
     for(auto * coef : static_range_cast<RooAbsReal*>(_coefList)) {
       y[nc++] = coef->getVal() ;
@@ -152,4 +125,23 @@ double RooStepFunction::evaluate() const
     }
     return 0;
   }
+}
+
+
+std::list<double> *RooStepFunction::plotSamplingHint(RooAbsRealLValue &obs, double xlo, double xhi) const
+{
+   if (obs.namePtr() != _x->namePtr()) {
+      return nullptr;
+   }
+
+   // Retrieve position of all bin boundaries
+   std::vector<double> boundaries;
+   boundaries.reserve(_boundaryList.size());
+   for (auto *boundary : static_range_cast<RooAbsReal *>(_boundaryList)) {
+      boundaries.push_back(boundary->getVal());
+   }
+
+   // Use the helper function from RooCurve to make sure to get sampling hints
+   // that work with the RooFitPlotting.
+   return RooCurve::plotSamplingHintForBinBoundaries(boundaries, xlo, xhi);
 }

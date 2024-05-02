@@ -98,13 +98,14 @@ protected:
   mutable RooDataHist _dataSet;
 
   Int_t getCurrentBin() const;
-  Int_t addVarSet( const RooArgList& vars );
   Int_t addParamSet( const RooArgList& params );
   static Int_t GetNumBins( const RooArgSet& vars );
   double evaluate() const override;
-  void computeBatch(cudaStream_t*, double* output, size_t size, RooFit::Detail::DataMap const&) const override;
+  void doEval(RooFit::EvalContext &) const override;
 
-private:
+  void translate(RooFit::Detail::CodeSquashContext &ctx) const override;
+
+  private:
   static NumBins getNumBinsPerDim(RooArgSet const& vars);
 
   ClassDefOverride(ParamHistFunc, 7)

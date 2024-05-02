@@ -42,12 +42,12 @@ class RooDataSet;
 
 class RooMinimizer : public TObject {
 public:
-   /// Config argument to RooMinimizer ctor
+   /// Config argument to RooMinimizer constructor.
    struct Config {
 
       Config() {}
 
-      std::function<void(double *)> gradFunc;
+      bool useGradient = true; // Use the gradient provided by the RooAbsReal, if there is one.
 
       double recoverFromNaN = 10.; // RooAbsMinimizerFcn config
       int printEvalErrors = 10;    // RooAbsMinimizerFcn config
@@ -55,23 +55,23 @@ public:
       int offsetting = -1;         // RooAbsMinimizerFcn config
       const char *logf = nullptr;  // RooAbsMinimizerFcn config
 
-      // RooAbsMinimizerFcn config that can only be set in ctor, 0 means no parallelization (default),
+      // RooAbsMinimizerFcn config that can only be set in constructor, 0 means no parallelization (default),
       // -1 is parallelization with the number of workers controlled by RooFit::MultiProcess which
       // defaults to the number of available processors, n means parallelization with n CPU's
       int parallelize = 0;
 
-      // Experimental: RooAbsMinimizerFcn config that can only be set in ctor
+      // Experimental: RooAbsMinimizerFcn config that can only be set in constructor
       // argument is ignored when parallelize is 0
       bool enableParallelGradient = true;
 
-      // Experimental: RooAbsMinimizerFcn config that can only be set in ctor
+      // Experimental: RooAbsMinimizerFcn config that can only be set in constructor
       // argument is ignored when parallelize is 0
       bool enableParallelDescent = false;
 
       bool verbose = false;           // local config
       bool profile = false;           // local config
       bool timingAnalysis = false;    // local config
-      std::string minimizerType = ""; // local config
+      std::string minimizerType;      // local config
    private:
       int getDefaultWorkers();
    };
@@ -84,7 +84,7 @@ public:
    enum PrintLevel { None = -1, Reduced = 0, Normal = 1, ExtraForProblem = 2, Maximum = 3 };
 
    // Setters on _theFitter
-   void setStrategy(int strat);
+   void setStrategy(int istrat);
    void setErrorLevel(double level);
    void setEps(double eps);
    void setMaxIterations(int n);
@@ -110,7 +110,7 @@ public:
 
    int minimize(const char *type, const char *alg = nullptr);
 
-   RooFitResult *save(const char *name = nullptr, const char *title = nullptr);
+   RooFit::OwningPtr<RooFitResult> save(const char *name = nullptr, const char *title = nullptr);
    RooPlot *contour(RooRealVar &var1, RooRealVar &var2, double n1 = 1.0, double n2 = 2.0, double n3 = 0.0,
                     double n4 = 0.0, double n5 = 0.0, double n6 = 0.0, unsigned int npoints = 50);
 
@@ -133,12 +133,18 @@ public:
    std::string const &minimizerType() const { return _cfg.minimizerType; }
 
    static void cleanup();
-   static RooFitResult *lastMinuitFit();
-   static RooFitResult *lastMinuitFit(const RooArgList &varList);
+   static RooFit::OwningPtr<RooFitResult> lastMinuitFit();
+   static RooFit::OwningPtr<RooFitResult> lastMinuitFit(const RooArgList &varList);
 
    void saveStatus(const char *label, int status)
    {
-      _statusHistory.push_back(std::pair<std::string, int>(label, status));
+      _statusHistory.emplace_back(label, status);
+   }
+
+   /// Clears the Minuit status history.
+   void clearStatusHistory()
+   {
+      _statusHistory.clear();
    }
 
    int evalCounter() const;

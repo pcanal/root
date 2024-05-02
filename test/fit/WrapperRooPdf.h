@@ -22,8 +22,7 @@ public:
     */
    WrapperRooPdf(RooAbsPdf * pdf, const std::string xvar = "x", bool norm = true) :
       fNorm(norm),
-      fPdf(pdf),
-      fX(0)
+      fPdf(pdf)
    {
       assert(fPdf != nullptr);
 
@@ -33,7 +32,7 @@ public:
       assert(arg != nullptr);
       RooArgSet obsList(*arg);
       //arg.setDirtyInhibit(true); // do have faster setter of values
-      fX = fPdf->getObservables(obsList);
+      fX = std::unique_ptr<RooArgSet>{fPdf->getObservables(obsList)};
       fParams = std::unique_ptr<RooArgSet>{fPdf->getParameters(obsList)};
       assert(fX != nullptr);
       assert(fParams != nullptr);
@@ -51,12 +50,11 @@ public:
     */
    WrapperRooPdf(RooAbsPdf * pdf, const RooArgSet & obsList, bool norm = true ) :
       fNorm(norm),
-      fPdf(pdf),
-      fX(nullptr)
+      fPdf(pdf)
    {
       assert(fPdf != nullptr);
 
-      fX = fPdf->getObservables(obsList);
+      fX = std::unique_ptr<RooArgSet>{fPdf->getObservables(obsList)};
       fParams = std::unique_ptr<RooArgSet>{fPdf->getParameters(obsList)};
       assert(fX != nullptr);
       assert(fParams != nullptr);
@@ -75,11 +73,6 @@ public:
    }
 
 
-   ~WrapperRooPdf() override {
-      // need to delete observables and parameter list
-      if (fX) delete fX;
-   }
-
    /**
       clone the function
     */
@@ -94,38 +87,23 @@ public:
    }
 
    unsigned int NPar() const override {
-      return fParams->getSize();
+      return fParams->size();
    }
    unsigned int NDim() const override {
-      return fX->getSize();
+      return fX->size();
    }
    const double * Parameters() const override {
-      if (fParamValues.size() != NPar() )
-         fParamValues.resize(NPar() );
-
+      fParamValues.resize(0);
       // iterate on parameters and set values
-      TIter itr = fParams->createIterator() ;
-      std::vector<double>::iterator vpitr = fParamValues.begin();
-
-      RooRealVar* var = nullptr;
-      while( ( var = dynamic_cast<RooRealVar*>(itr.Next() ) ) ) {
+      for (auto * var : dynamic_range_cast<RooRealVar *>(*fParams)) {
          assert(var != nullptr);
-         *vpitr++ = var->getVal();
+         fParamValues.push_back(var->getVal());
       }
-      return &fParamValues.front();
+      return fParamValues.data();
    }
 
    std::string ParameterName(unsigned int i) const override {
-      // iterate on parameters and set values
-      TIter itr = fParams->createIterator() ;
-      RooRealVar* var = nullptr;
-      unsigned int index = 0;
-      while( ( var = dynamic_cast<RooRealVar*>(itr.Next() ) ) ) {
-         assert(var != nullptr);
-         if (index == i) return std::string(var->GetName() );
-         index++;
-      }
-      return "not_found";
+      return i < fParams->size() ? (*fParams)[i]->GetName() : "not_found";
    }
 
 
@@ -164,20 +142,16 @@ private:
       DoSetParameters(p);
 
       // iterate on observables
-      TIter itr = fX->createIterator() ;
-      RooRealVar* var = nullptr;
-      while( ( var = dynamic_cast<RooRealVar*>(itr.Next() ) ) ) {
+      for (auto *var : dynamic_range_cast<RooRealVar *>(*fX)) {
          assert(var != nullptr);
 #ifndef _WIN32
          var->setDirtyInhibit(true);
 #endif
          var->setVal(*x++);
       }
-      // debug
-      //fX->Print("v");
 
       if (fNorm)
-         return fPdf->getVal(fX);
+         return fPdf->getVal(fX.get());
       else
          return fPdf->getVal();  // get unnormalized value
 
@@ -186,20 +160,16 @@ private:
 
    void DoSetParameters(const double * p) const {
       // iterate on parameters and set values
-      TIter itr = fParams->createIterator() ;
-      RooRealVar* var = nullptr;
-      while( ( var = dynamic_cast<RooRealVar*>(itr.Next() ) ) ) {
+      for (auto *var : dynamic_range_cast<RooRealVar *>(*fParams)) {
          assert(var != nullptr);
          var->setVal(*p++);
       }
-      // debug
-      //fParams->Print("v");
    }
 
 
    bool fNorm;
    mutable RooAbsPdf * fPdf;
-   mutable RooArgSet * fX;
+   mutable std::unique_ptr<RooArgSet> fX;
    mutable std::unique_ptr<RooArgSet> fParams;
    mutable std::vector<double> fParamValues;
 

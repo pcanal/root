@@ -57,9 +57,6 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Support/FileSystem.h"
 
-// Intentionally access non-public header ...
-#include "../../../interpreter/llvm/src/tools/clang/lib/Sema/HackForDefaultTemplateArg.h"
-
 #include "TClingUtils.h"
 
 #ifdef _WIN32
@@ -1576,15 +1573,9 @@ bool ROOT::TMetaUtils::hasOpaqueTypedef(clang::QualType instanceType, const ROOT
    //         fprintf(stderr,"ERROR: Could not findS TST for %s\n",type_name.c_str());
          return false;
       }
-      for(clang::TemplateSpecializationType::iterator
-          I = TST->begin(), E = TST->end();
-          I!=E; ++I)
-      {
-         if (I->getKind() == clang::TemplateArgument::Type) {
-   //            std::string arg;
-   //            arg = GetQualifiedName( I->getAsType(), *clxx );
-   //            fprintf(stderr,"DEBUG: looking at %s\n", arg.c_str());
-            result |= ROOT::TMetaUtils::hasOpaqueTypedef(I->getAsType(), normCtxt);
+      for (const clang::TemplateArgument &TA : TST->template_arguments()) {
+         if (TA.getKind() == clang::TemplateArgument::Type) {
+            result |= ROOT::TMetaUtils::hasOpaqueTypedef(TA.getAsType(), normCtxt);
          }
       }
    }
@@ -1998,15 +1989,15 @@ void ROOT::TMetaUtils::WriteClassInit(std::ostream& finalString,
    /////////////////////////////////////////////////////////////////////////////
 
    if (cl.GetRequestedName()[0] && classname != cl.GetRequestedName()) {
-      finalString << "\n" << "      ::ROOT::AddClassAlternate(\""
-                  << classname << "\",\"" << cl.GetRequestedName() << "\");\n";
+      finalString << "\n" << "      instance.AdoptAlternate(::ROOT::AddClassAlternate(\""
+                  << classname << "\",\"" << cl.GetRequestedName() << "\"));\n";
    }
 
    if (!cl.GetDemangledTypeInfo().empty()
          && cl.GetDemangledTypeInfo() != classname
          && cl.GetDemangledTypeInfo() != cl.GetRequestedName()) {
-      finalString << "\n" << "      ::ROOT::AddClassAlternate(\""
-                  << classname << "\",\"" << cl.GetDemangledTypeInfo() << "\");\n";
+      finalString << "\n" << "      instance.AdoptAlternate(::ROOT::AddClassAlternate(\""
+                  << classname << "\",\"" << cl.GetDemangledTypeInfo() << "\"));\n";
 
    }
 
@@ -2401,7 +2392,7 @@ void ROOT::TMetaUtils::WriteAuxFunctions(std::ostream& finalString,
          finalString << args;
          finalString << " : ";
       } else {
-         finalString << "::new((::ROOT::Internal::TOperatorNewHelper*)p) ";
+         finalString << "::new(static_cast<::ROOT::Internal::TOperatorNewHelper*>(p)) ";
          finalString << classname.c_str();
          finalString << args;
          finalString << " : ";
@@ -2421,7 +2412,7 @@ void ROOT::TMetaUtils::WriteAuxFunctions(std::ostream& finalString,
             finalString << classname.c_str();
             finalString << "[nElements] : ";
          } else {
-            finalString << "::new((::ROOT::Internal::TOperatorNewHelper*)p) ";
+            finalString << "::new(static_cast<::ROOT::Internal::TOperatorNewHelper*>(p)) ";
             finalString << classname.c_str();
             finalString << "[nElements] : ";
          }
@@ -2945,12 +2936,12 @@ clang::QualType ROOT::TMetaUtils::AddDefaultParameters(clang::QualType instanceT
       unsigned int dropDefault = normCtxt.GetConfig().DropDefaultArg(*Template);
 
       llvm::SmallVector<clang::TemplateArgument, 4> desArgs;
+      llvm::SmallVector<clang::TemplateArgument, 4> canonArgs;
+      llvm::ArrayRef<clang::TemplateArgument> template_arguments = TST->template_arguments();
       unsigned int Idecl = 0, Edecl = TSTdecl->getTemplateArgs().size();
       unsigned int maxAddArg = TSTdecl->getTemplateArgs().size() - dropDefault;
-      for(clang::TemplateSpecializationType::iterator
-             I = TST->begin(), E = TST->end();
-          Idecl != Edecl;
-          I!=E ? ++I : nullptr, ++Idecl, ++Param) {
+      for (const clang::TemplateArgument *I = template_arguments.begin(), *E = template_arguments.end(); Idecl != Edecl;
+           I != E ? ++I : nullptr, ++Idecl, ++Param) {
 
          if (I != E) {
 
@@ -2972,7 +2963,10 @@ clang::QualType ROOT::TMetaUtils::AddDefaultParameters(clang::QualType instanceT
                         desArgs.push_back(*I);
                         continue;
                      }
-                     clang::TemplateName templateNameWithNSS ( Ctx.getQualifiedTemplateName(nns, false, templateDecl) );
+                     clang::TemplateName UnderlyingTN(templateDecl);
+                     if (clang::UsingShadowDecl *USD = templateName.getAsUsingShadowDecl())
+                        UnderlyingTN = clang::TemplateName(USD);
+                     clang::TemplateName templateNameWithNSS ( Ctx.getQualifiedTemplateName(nns, false, UnderlyingTN) );
                      desArgs.push_back(clang::TemplateArgument(templateNameWithNSS));
                      mightHaveChanged = true;
                      continue;
@@ -3020,7 +3014,6 @@ clang::QualType ROOT::TMetaUtils::AddDefaultParameters(clang::QualType instanceT
             {
                // We may induce template instantiation
                cling::Interpreter::PushTransactionRAII clingRAII(const_cast<cling::Interpreter*>(&interpreter));
-               clang::sema::HackForDefaultTemplateArg raii;
                bool HasDefaultArgs;
                clang::TemplateArgumentLoc ArgType = S.SubstDefaultTemplateArgumentIfAvailable(
                                                                                               Template,
@@ -3028,6 +3021,7 @@ clang::QualType ROOT::TMetaUtils::AddDefaultParameters(clang::QualType instanceT
                                                                                               RAngleLoc,
                                                                                               TTP,
                                                                                               desArgs,
+                                                                                              canonArgs,
                                                                                               HasDefaultArgs);
                // The substition can fail, in which case there would have been compilation
                // error printed on the screen.
@@ -3229,7 +3223,7 @@ llvm::StringRef ROOT::TMetaUtils::DataMemberInfo__ValidArrayIndex(const cling::I
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-/// Return (in the argument 'output') a mangled version of the C++ symbol/type (pass as 'input')
+/// Return (in the argument 'output') a valid name of the C++ symbol/type (pass as 'input')
 /// that can be used in C++ as a variable name.
 
 void ROOT::TMetaUtils::GetCppName(std::string &out, const char *in)
@@ -3257,6 +3251,12 @@ void ROOT::TMetaUtils::GetCppName(std::string &out, const char *in)
          case ')': repl = "cP"; break;
          case '[': repl = "oB"; break;
          case ']': repl = "cB"; break;
+         case '{': repl = "lB"; break;
+         case '}': repl = "rB"; break;
+         case ';': repl = "sC"; break;
+         case '#': repl = "hS"; break;
+         case '?': repl = "qM"; break;
+         case '`': repl = "bT"; break;
          case '!': repl = "nO"; break;
          case ',': repl = "cO"; break;
          case '$': repl = "dA"; break;
@@ -3340,7 +3340,7 @@ std::string ROOT::TMetaUtils::GetFileName(const clang::Decl& decl,
 
    const FileEntry *headerFE = sourceManager.getFileEntryForID(headerFID);
    while (includeLoc.isValid() && sourceManager.isInSystemHeader(includeLoc)) {
-      const DirectoryLookup *foundDir = nullptr;
+      ConstSearchDirIterator *foundDir = nullptr;
       // use HeaderSearch on the basename, to make sure it takes a header from
       // the include path (e.g. not from /usr/include/bits/)
       assert(headerFE && "Couldn't find FileEntry from FID!");
@@ -3389,7 +3389,7 @@ std::string ROOT::TMetaUtils::GetFileName(const clang::Decl& decl,
    // points to the same file as the long version. If such a short version
    // exists it will be returned. If it doesn't the long version is returned.
    bool isAbsolute = llvm::sys::path::is_absolute(headerFileName);
-   llvm::Optional<clang::FileEntryRef> FELong;
+   clang::OptionalFileEntryRef FELong;
    // Find the longest available match.
    for (llvm::sys::path::const_iterator
            IDir = llvm::sys::path::begin(headerFileName),
@@ -3405,7 +3405,7 @@ std::string ROOT::TMetaUtils::GetFileName(const clang::Decl& decl,
       assert(trailingPart.data() + trailingPart.size()
              == headerFileName.data() + headerFileName.size()
              && "Mismatched partitioning of file name!");
-      const DirectoryLookup* FoundDir = nullptr;
+      ConstSearchDirIterator* FoundDir = nullptr;
       FELong = HdrSearch.LookupFile(trailingPart, SourceLocation(),
                                     true /*isAngled*/, nullptr/*FromDir*/, FoundDir,
                                     ArrayRef<std::pair<const FileEntry *, const DirectoryEntry *>>(),
@@ -3429,7 +3429,7 @@ std::string ROOT::TMetaUtils::GetFileName(const clang::Decl& decl,
       assert(trailingPart.data() + trailingPart.size()
              == headerFileName.data() + headerFileName.size()
              && "Mismatched partitioning of file name!");
-      const DirectoryLookup* FoundDir = nullptr;
+      ConstSearchDirIterator* FoundDir = nullptr;
       // Can we find it, and is it the same file as the long version?
       // (or are we back to the previously found spelling, which is fine, too)
       if (HdrSearch.LookupFile(trailingPart, SourceLocation(),
@@ -3624,13 +3624,14 @@ static bool areEqualTypes(const clang::TemplateArgument& tArg,
    {
       clang::Sema& S = interp.getCI()->getSema();
       cling::Interpreter::PushTransactionRAII clingRAII(const_cast<cling::Interpreter*>(&interp));
-      clang::sema::HackForDefaultTemplateArg raii; // Hic sunt leones
+      llvm::SmallVector<clang::TemplateArgument, 4> canonArgs;
       bool HasDefaultArgs;
       TemplateArgumentLoc defTArgLoc = S.SubstDefaultTemplateArgumentIfAvailable(Template,
                                                                                  TemplateLoc,
                                                                                  LAngleLoc,
                                                                                  ttpdPtr,
                                                                                  preceedingTArgs,
+                                                                                 canonArgs,
                                                                                  HasDefaultArgs);
       // The substition can fail, in which case there would have been compilation
       // error printed on the screen.
@@ -3872,7 +3873,8 @@ static void KeepNParams(clang::QualType& normalizedType,
    llvm::SmallVector<TemplateArgument, 4> argsToKeep;
 
    const int nArgs = tArgs.size();
-   const int nNormArgs = normalizedTst->getNumArgs();
+   const auto &normArgs = normalizedTst->template_arguments();
+   const int nNormArgs = normArgs.size();
 
    bool mightHaveChanged = false;
 
@@ -3890,7 +3892,7 @@ static void KeepNParams(clang::QualType& normalizedType,
       if (formal == nNormArgs || inst == nNormArgs) break;
 
       const TemplateArgument& tArg = tArgs.get(formal);
-      TemplateArgument normTArg(normalizedTst->getArgs()[inst]);
+      TemplateArgument normTArg(normArgs[inst]);
 
       bool shouldKeepArg = nArgsToKeep < 0 || inst < nArgsToKeep;
       if (isStdDropDefault) shouldKeepArg = false;
@@ -3908,7 +3910,7 @@ static void KeepNParams(clang::QualType& normalizedType,
             // in the template instance.  So to avoid inadvertenly dropping those
             // arguments we just process all remaining argument and exit the main loop.
             for( ; inst != nNormArgs; ++inst) {
-               normTArg = normalizedTst->getArgs()[inst];
+               normTArg = normArgs[inst];
                mightHaveChanged |= RecurseKeepNParams(normTArg, tArg, interp, normCtxt, astCtxt);
                argsToKeep.push_back(normTArg);
             }
@@ -4495,11 +4497,9 @@ static bool hasSomeTypedefSomewhere(const clang::Type* T) {
       return Visit(STST->getReplacementType().getTypePtr());
     }
     bool VisitTemplateSpecializationType(const TemplateSpecializationType* TST) {
-      for (int I = 0, N = TST->getNumArgs(); I < N; ++I) {
-        const TemplateArgument& TA = TST->getArg(I);
-        if (TA.getKind() == TemplateArgument::Type
-            && Visit(TA.getAsType().getTypePtr()))
-          return true;
+      for (const TemplateArgument &TA : TST->template_arguments()) {
+            if (TA.getKind() == TemplateArgument::Type && Visit(TA.getAsType().getTypePtr()))
+               return true;
       }
       return false;
     }
@@ -4507,7 +4507,7 @@ static bool hasSomeTypedefSomewhere(const clang::Type* T) {
       return false; // shrug...
     }
     bool VisitTypeOfType(const TypeOfType* TOT) {
-      return TOT->getUnderlyingType().getTypePtr();
+      return TOT->getUnmodifiedType().getTypePtr();
     }
     bool VisitElaboratedType(const ElaboratedType* ET) {
       NestedNameSpecifier* NNS = ET->getQualifier();
@@ -4671,7 +4671,7 @@ clang::QualType ROOT::TMetaUtils::ReSubstTemplateArg(clang::QualType input, cons
       // Make sure it got replaced from this template
       const clang::ClassTemplateDecl *replacedCtxt = nullptr;
 
-      const clang::DeclContext *replacedDeclCtxt = substType->getReplacedParameter()->getDecl()->getDeclContext();
+      const clang::DeclContext *replacedDeclCtxt = substType->getReplacedParameter()->getDeclContext();
       const clang::CXXRecordDecl *decl = llvm::dyn_cast<clang::CXXRecordDecl>(replacedDeclCtxt);
       unsigned int index = substType->getReplacedParameter()->getIndex();
       if (decl) {
@@ -4731,17 +4731,18 @@ clang::QualType ROOT::TMetaUtils::ReSubstTemplateArg(clang::QualType input, cons
 
       if ((replacedCtxt && replacedCtxt->getCanonicalDecl() == TSTdecl->getSpecializedTemplate()->getCanonicalDecl())
           || /* the following is likely just redundant */
-          substType->getReplacedParameter()->getDecl()
+          substType->getReplacedParameter()
           == TSTdecl->getSpecializedTemplate ()->getTemplateParameters()->getParam(index))
       {
-         if ( index >= TST->getNumArgs() ) {
+         const auto &TAs = TST->template_arguments();
+         if (index >= TAs.size()) {
             // The argument replaced was a default template argument that is
             // being listed as part of the instance ...
             // so we probably don't really know how to spell it ... we would need to recreate it
             // (See AddDefaultParameters).
             return input;
-         } else if (TST->getArg(index).getKind() == clang::TemplateArgument::Type) {
-            return TST->getArg(index).getAsType();
+         } else if (TAs[index].getKind() == clang::TemplateArgument::Type) {
+            return TAs[index].getAsType();
          } else {
             // The argument is (likely) a value or expression and there is nothing for us
             // to change
@@ -4757,16 +4758,16 @@ clang::QualType ROOT::TMetaUtils::ReSubstTemplateArg(clang::QualType input, cons
    if (inputTST) {
       bool mightHaveChanged = false;
       llvm::SmallVector<clang::TemplateArgument, 4> desArgs;
-      for(clang::TemplateSpecializationType::iterator I = inputTST->begin(), E = inputTST->end();
-          I != E; ++I) {
-         if (I->getKind() != clang::TemplateArgument::Type) {
-            desArgs.push_back(*I);
+      for (const clang::TemplateArgument &TA : inputTST->template_arguments()) {
+         if (TA.getKind() != clang::TemplateArgument::Type) {
+            desArgs.push_back(TA);
             continue;
          }
 
-         clang::QualType SubTy = I->getAsType();
+         clang::QualType SubTy = TA.getAsType();
          // Check if the type needs more desugaring and recurse.
-         if (llvm::isa<clang::SubstTemplateTypeParmType>(SubTy)
+         if (llvm::isa<clang::ElaboratedType>(SubTy)
+             || llvm::isa<clang::SubstTemplateTypeParmType>(SubTy)
              || llvm::isa<clang::TemplateSpecializationType>(SubTy)) {
             clang::QualType newSubTy = ReSubstTemplateArg(SubTy,instance);
             mightHaveChanged = SubTy != newSubTy;
@@ -4774,7 +4775,7 @@ clang::QualType ROOT::TMetaUtils::ReSubstTemplateArg(clang::QualType input, cons
                desArgs.push_back(clang::TemplateArgument(newSubTy));
             }
          } else
-            desArgs.push_back(*I);
+            desArgs.push_back(TA);
       }
 
       // If desugaring happened allocate new type in the AST.

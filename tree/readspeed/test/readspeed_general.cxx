@@ -1,14 +1,9 @@
 #include "gtest/gtest.h"
 
-// Backward compatibility for gtest version < 1.10.0
-#ifndef INSTANTIATE_TEST_SUITE_P
-#define SetUpTestSuite SetUpTestCase
-#define TearDownTestSuite TearDownTestCase
-#endif
-
 #include "ReadSpeed.hxx"
 #include "ReadSpeedCLI.hxx"
 
+#include <ROOT/TestSupport.hxx>
 #ifdef R__USE_IMT
 #include "ROOT/TTreeProcessorMT.hxx" // for TTreeProcessorMT::GetTasksPerWorkerHint
 #endif
@@ -87,6 +82,10 @@ TEST_F(ReadSpeedIntegration, MultiThread)
 
 TEST_F(ReadSpeedIntegration, NonExistentFile)
 {
+   ROOT::TestSupport::CheckDiagsRAII diag;
+   diag.requiredDiag(kError, "TFile::TFile", "test_fake.root does not exist",
+                     /*matchFullMessage=*/false);
+
    EXPECT_THROW(EvalThroughput({{"t"}, {"test_fake.root"}, {"x"}}, 0), std::runtime_error)
       << "Should throw for non-existent file";
 }

@@ -63,11 +63,10 @@ double RooGaussian::evaluate() const
 
 ////////////////////////////////////////////////////////////////////////////////
 /// Compute multiple values of Gaussian distribution.
-void RooGaussian::computeBatch(cudaStream_t* stream, double* output, size_t nEvents, RooFit::Detail::DataMap const& dataMap) const
+void RooGaussian::doEval(RooFit::EvalContext & ctx) const
 {
-  auto dispatch = stream ? RooBatchCompute::dispatchCUDA : RooBatchCompute::dispatchCPU;
-  dispatch->compute(stream, RooBatchCompute::Gaussian, output, nEvents,
-          {dataMap.at(x), dataMap.at(mean), dataMap.at(sigma)});
+  RooBatchCompute::compute(ctx.config(this), RooBatchCompute::Gaussian, ctx.output(),
+          {ctx.at(x), ctx.at(mean), ctx.at(sigma)});
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -107,7 +106,7 @@ void RooGaussian::generateEvent(Int_t code)
   assert(code==1 || code==2) ;
   double xgen ;
   if(code==1){
-    while(1) {
+    while(true) {
       xgen = RooRandom::randomGenerator()->Gaus(mean,sigma);
       if (xgen<x.max() && xgen>x.min()) {
    x = xgen ;
@@ -115,7 +114,7 @@ void RooGaussian::generateEvent(Int_t code)
       }
     }
   } else if(code==2){
-    while(1) {
+    while(true) {
       xgen = RooRandom::randomGenerator()->Gaus(x,sigma);
       if (xgen<mean.max() && xgen>mean.min()) {
    mean = xgen ;

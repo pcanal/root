@@ -20,7 +20,7 @@
 \class RooCmdArg
 \ingroup Roofitcore
 
-RooCmdArg is a named container for two doubles, two integers
+Named container for two doubles, two integers
 two object points and three string pointers that can be passed
 as generic named arguments to a variety of RooFit end user
 methods. To achieved the named syntax, RooCmdArg objects are
@@ -37,10 +37,7 @@ that create and fill these generic containers
 #include <string>
 #include <iostream>
 
-using namespace std;
-
 ClassImp(RooCmdArg);
-  ;
 
 const RooCmdArg RooCmdArg::_none ;
 
@@ -59,11 +56,8 @@ const RooCmdArg& RooCmdArg::none()
 
 RooCmdArg::RooCmdArg() : TNamed("","")
 {
-  _procSubArgs = false ;
-  _prefixSubArgs = true ;
-  _c = 0 ;
-  _o[0] = 0 ;
-  _o[1] = 0 ;
+  _o[0] = nullptr ;
+  _o[1] = nullptr ;
   _i[0] = 0 ;
   _i[1] = 0 ;
   _d[0] = 0 ;
@@ -87,9 +81,9 @@ RooCmdArg::RooCmdArg(const char* name, Int_t i1, Int_t i2, double d1, double d2,
   if (s1) _s[0] = s1 ;
   if (s2) _s[1] = s2 ;
   if (s3) _s[2] = s3 ;
-  _o[0] = (TObject*) o1 ;
-  _o[1] = (TObject*) o2 ;
-  _c = 0 ;
+  _o[0] = const_cast<TObject*>(o1);
+  _o[1] = const_cast<TObject*>(o2);
+  _c = nullptr ;
 
   if (c1||c2) _c = new RooArgSet[2] ;
   if (c1) _c[0].add(*c1) ;
@@ -124,13 +118,13 @@ RooCmdArg::RooCmdArg(const RooCmdArg& other) :
     _c[0].add(other._c[0]) ;
     _c[1].add(other._c[1]) ;
   } else {
-    _c = 0 ;
+    _c = nullptr ;
   }
 
   _procSubArgs = other._procSubArgs ;
   _prefixSubArgs = other._prefixSubArgs ;
   for (Int_t i=0 ; i<other._argList.GetSize() ; i++) {
-    _argList.Add(new RooCmdArg((RooCmdArg&)*other._argList.At(i))) ;
+    _argList.Add(new RooCmdArg(static_cast<RooCmdArg&>(*other._argList.At(i)))) ;
   }
 }
 
@@ -164,7 +158,7 @@ RooCmdArg& RooCmdArg::operator=(const RooCmdArg& other)
   _prefixSubArgs = other._prefixSubArgs ;
 
   for (Int_t i=0 ; i<other._argList.GetSize() ; i++) {
-    _argList.Add(new RooCmdArg((RooCmdArg&)*other._argList.At(i))) ;
+    _argList.Add(new RooCmdArg(static_cast<RooCmdArg&>(*other._argList.At(i)))) ;
   }
 
   return *this ;
@@ -197,7 +191,7 @@ void RooCmdArg::addArg(const RooCmdArg& arg)
 /// Return RooArgSet stored in slot idx
 
 const RooArgSet* RooCmdArg::getSet(Int_t idx) const {
-    return _c ? &_c[idx] : 0 ;
+    return _c ? &_c[idx] : nullptr ;
   }
 
 

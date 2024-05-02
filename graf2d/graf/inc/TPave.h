@@ -40,7 +40,7 @@ public:
    TPave(Double_t x1, Double_t y1,Double_t x2 ,Double_t y2,
          Int_t bordersize=4 ,Option_t *option="br");
    TPave(const TPave &pave);
-   virtual ~TPave();
+   ~TPave() override;
 
    TPave &operator=(const TPave &src);
 
@@ -70,6 +70,10 @@ public:
                                Int_t bordersize=4 ,Option_t *option="br");
    void           Print(Option_t *option="") const override;
    void           SavePrimitive(std::ostream &out, Option_t *option = "") override;
+   /**
+    * \brief Sets the border size of the TPave box and shadow
+    * \param bordersize 0: disable shadow and box, 1: disable only shadow, 2+: tunes the shadow border size
+    */
    virtual void   SetBorderSize(Int_t bordersize=4) {fBorderSize = bordersize;} // *MENU*
    virtual void   SetCornerRadius(Double_t rad = 0.2) {fCornerRadius = rad;} // *MENU*
    virtual void   SetName(const char *name="") {fName = name;} // *MENU*
@@ -79,10 +83,10 @@ public:
    virtual void   SetX2NDC(Double_t x2) {fX2NDC=x2;}
    virtual void   SetY1NDC(Double_t y1) {fY1NDC=y1;}
    virtual void   SetY2NDC(Double_t y2) {fY2NDC=y2;}
-   virtual void   SetX1(Double_t x1) override;
-   virtual void   SetX2(Double_t x2) override;
-   virtual void   SetY1(Double_t y1) override;
-   virtual void   SetY2(Double_t y2) override;
+   void   SetX1(Double_t x1) override;
+   void   SetX2(Double_t x2) override;
+   void   SetY1(Double_t y1) override;
+   void   SetY2(Double_t y2) override;
 
    ClassDefOverride(TPave,3)  //Pave. A box with shadowing
 };
