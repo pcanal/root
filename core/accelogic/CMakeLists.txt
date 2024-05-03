@@ -8,12 +8,14 @@
 # CMakeLists.txt file for building ROOT core/accelogic package
 ############################################################################
 
-ROOT_OBJECT_LIBRARY(Accelogic src/ZipAccelogic.cxx BUILTINS ACCELOGICBLAST)
+target_sources(Core PRIVATE
+    src/ZipAccelogic.cxx)
 
-target_include_directories(Accelogic PRIVATE
-   ${LIBACCELOGICBLAST_INCLUDE_DIR}
-   ${CMAKE_SOURCE_DIR}/core/foundation/inc
-   ${CMAKE_BINARY_DIR}/ginclude
+target_link_libraries(Core PRIVATE ${LIBACCELOGICBLAST_LIBRARIES})
+
+target_include_directories(Core PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
+  $<BUILD_INTERFACE:${LIBACCELOGICBLAST_INCLUDE_DIR}>
 )
 
 ROOT_INSTALL_HEADERS()

@@ -24,7 +24,7 @@ add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/RConfigure.h
 
 add_custom_target(rconfigure ALL DEPENDS ${CMAKE_BINARY_DIR}/include/RConfigure.h)
 
-ROOT_LINKER_LIBRARY(Core BUILTINS LZMA)
+ROOT_LINKER_LIBRARY(Core BUILTINS LZMA ACCELOGICBLAST)
 
 generateHeader(Core
   ${CMAKE_SOURCE_DIR}/core/base/src/root-argparse.py
