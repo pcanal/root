@@ -2862,7 +2862,7 @@ void TBranch::SetCompressionSettings(Int_t settings)
 ////////////////////////////////////////////////////////////////////////////////
 /// Set compression settings based on a ROOT::CompressionConfig
 
-void TBranch::SetCompressionSettings(ROOT::CompressionConfig &config)
+void TBranch::SetCompressionSettings(const ROOT::CompressionConfig &config)
 {
    fNCompConfig = config.GetNConfigArray();
    fCompConfig = new char[fNCompConfig];

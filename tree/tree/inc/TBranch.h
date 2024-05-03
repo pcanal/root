@@ -288,7 +288,7 @@ public:
            void      SetCompressionAlgorithm(Int_t algorithm = ROOT::RCompressionSetting::EAlgorithm::kUseGlobal);
            void      SetCompressionLevel(Int_t level = ROOT::RCompressionSetting::ELevel::kUseMin);
            void      SetCompressionSettings(Int_t settings = ROOT::RCompressionSetting::EDefaults::kUseCompiledDefault);
-           void      SetCompressionSettings(ROOT::CompressionConfig &config);
+           void      SetCompressionSettings(const ROOT::CompressionConfig &config);
    virtual void      SetEntries(Long64_t entries);
    virtual void      SetEntryOffsetLen(Int_t len, bool updateSubBranches = false);
    virtual void      SetFirstEntry(Long64_t entry);

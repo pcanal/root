@@ -161,27 +161,33 @@ public:
       delete [] fConfigArray;
    }
 
-   Int_t GetCompressionSettings() {
+   Int_t GetCompressionSettings() const
+   {
       return CompressionSettings(fAlgorithm, fLevel);
    }
 
-   Int_t GetCompressionLevel() {
+   Int_t GetCompressionLevel() const
+   {
       return fLevel;
    }
 
-   RCompressionSetting::EAlgorithm::EValues GetCompressionAlgorithm() {
+   RCompressionSetting::EAlgorithm::EValues GetCompressionAlgorithm() const
+   {
       return fAlgorithm;
    }
 
-   Int_t GetNConfigArray() {
+   Int_t GetNConfigArray() const
+   {
       return fNConfig;
    }
 
-   Char_t *GetConfigArray() {
+   Char_t *GetConfigArray() const
+   {
       return fConfigArray;
    }
 
-   Int_t GetNPrecisionCascade() {
+   Int_t GetNPrecisionCascade() const
+   {
       return fNPrecisionCascade;
    }
 
