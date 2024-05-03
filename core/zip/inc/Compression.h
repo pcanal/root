@@ -145,7 +145,7 @@ protected:
    CompressionConfig() = default;
 
 public:
-   CompressionConfig(const CompressionConfig &other) : fAlgorithm(other.fAlgorithm), fLevel(other.fLevel), fNConfig(other.fNConfig)
+   CompressionConfig(const CompressionConfig &other) : fAlgorithm(other.fAlgorithm), fLevel(other.fLevel), fNPrecisionCascade(other.fNPrecisionCascade), fNConfig(other.fNConfig)
    {
       fConfigArray = new char[fNConfig];
       std::memcpy(fConfigArray, other.fConfigArray, fNConfig);
