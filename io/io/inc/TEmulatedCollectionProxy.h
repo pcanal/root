@@ -71,16 +71,16 @@ public:
    TClass::ObjectPtr NewObject(void* memory) const override {  return {new(memory) Cont_t, nullptr}; }
 
    // Virtual array constructor
-   void* NewArray(Int_t nElements) const override             {  return new Cont_t[nElements]; }
+   void* NewArray(Long64_t nElements) const override             {  return new Cont_t[nElements]; }
 
    // Virtual in-place constructor
-   void* NewArray(Int_t nElements, void* memory) const override {  return new(memory) Cont_t[nElements]; }
+   void* NewArray(Long64_t nElements, void* memory) const override {  return new(memory) Cont_t[nElements]; }
 
    // Virtual array constructor
-   TClass::ObjectPtr NewObjectArray(Int_t nElements) const override  {  return {new Cont_t[nElements], nullptr}; }
+   TClass::ObjectPtr NewObjectArray(Long64_t nElements) const override  {  return {new Cont_t[nElements], nullptr}; }
 
    // Virtual in-place constructor
-   TClass::ObjectPtr NewObjectArray(Int_t nElements, void* memory) const override {  return {new(memory) Cont_t[nElements], nullptr}; }
+   TClass::ObjectPtr NewObjectArray(Long64_t nElements, void* memory) const override {  return {new(memory) Cont_t[nElements], nullptr}; }
 
    // Virtual destructor
    void  Destructor(void* p, Bool_t dtorOnly = kFALSE) const override;
