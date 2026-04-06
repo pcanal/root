@@ -189,7 +189,7 @@ public:
    void     ReadFastArray(ULong_t   *l, Int_t n) override;
    void     ReadFastArray(Long64_t  *l, Int_t n) override;
    void     ReadFastArray(ULong64_t *l, Int_t n) override;
-   void     ReadFastArray(Float_t   *f, Int_t n) override;
+   void     ReadFastArray(Float_t   *f, Long64_t n) override;
    void     ReadFastArray(Double_t  *d, Int_t n) override;
    void     ReadFastArrayFloat16(Float_t  *f, Int_t n, TStreamerElement *ele = nullptr) override;
    void     ReadFastArrayDouble32(Double_t  *d, Int_t n, TStreamerElement *ele = nullptr) override;
