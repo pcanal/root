@@ -132,6 +132,13 @@ int testDirectNumerical()
          b.ReadFastArray(got.data(), n);
          if (got != orig_large) {
             std::cerr << "testDirectNumerical: large array content mismatch\n";
+            int nprinted = 0;
+            for (Long64_t i = 0; i < n && nprinted < 10; ++i) {
+               if (got[i] != orig_large[i]) {
+                  std::cerr << "  [" << i << "] expected " << orig_large[i] << " got " << got[i] << '\n';
+                  ++nprinted;
+               }
+            }
             ++errors;
          }
       }
