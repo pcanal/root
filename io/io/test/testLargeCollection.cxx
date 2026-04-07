@@ -347,11 +347,11 @@ int testAsPartOfObject()
 
    // --- large object (floats cross 2 GB, written in regular section) ---
    b.SetWriteMode();
-   fixture.fFloats.assign(512 * 1024 * 1024ll, 2.0f); // 2 GB of floats
+   fixture.fFloats.assign(2 * 1024 * 1024 * 1024ll, 2.0f); // 2 GB of floats
    fixture.fPoints.assign(100, {4.f, 5.f, 6.f});
    auto startLarge = b.GetCurrent() - b.Buffer();
    b.WriteObject(&fixture, false /* cacheReuse */);
-   errors += readAndCheckFixture("large object in regular section", b, startLarge, 512 * 1024 * 1024ll, 100);
+   errors += readAndCheckFixture("large object in regular section", b, startLarge, 2 * 1024 * 1024 * 1024ll, 100);
 
    // --- large object written past the 4 GB mark ---
    b.SetWriteMode();
