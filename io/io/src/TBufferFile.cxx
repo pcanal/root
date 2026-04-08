@@ -3774,7 +3774,7 @@ Int_t TBufferFile::ReadClassBuffer(const TClass *cl, void *pointer, Int_t versio
       sinfo = (TStreamerInfo*)cl->GetConversionStreamerInfo( onFileClass, version );
       if( !sinfo ) {
          Error("ReadClassBuffer",
-               "Could not find the right streamer info to convert %s version %d into a %s, object skipped at offset %d",
+               "Could not find the right streamer info to convert %s version %d into a %s, object skipped at offset %lu",
                onFileClass->GetName(), version, cl->GetName(), Length() );
          CheckByteCount(start, count, onFileClass);
          return 0;
@@ -3790,7 +3790,7 @@ Int_t TBufferFile::ReadClassBuffer(const TClass *cl, void *pointer, Int_t versio
       auto infos = cl->GetStreamerInfos();
       auto ninfos = infos->GetSize();
       if (version < -1 || version >= ninfos) {
-         Error("ReadClassBuffer", "class: %s, attempting to access a wrong version: %d, object skipped at offset %d",
+         Error("ReadClassBuffer", "class: %s, attempting to access a wrong version: %d, object skipped at offset %lu",
                cl->GetName(), version, Length() );
          CheckByteCount(start, count, cl);
          return 0;
@@ -3821,7 +3821,7 @@ Int_t TBufferFile::ReadClassBuffer(const TClass *cl, void *pointer, Int_t versio
                CheckByteCount(start, count, cl);
                return 0;
             } else {
-               Error("ReadClassBuffer", "Could not find the StreamerInfo for version %d of the class %s, object skipped at offset %d",
+               Error("ReadClassBuffer", "Could not find the StreamerInfo for version %d of the class %s, object skipped at offset %lu",
                      version, cl->GetName(), Length() );
                CheckByteCount(start, count, cl);
                return 0;
@@ -3884,7 +3884,7 @@ Int_t TBufferFile::ReadClassBuffer(const TClass *cl, void *pointer, const TClass
       sinfo = (TStreamerInfo*)cl->GetConversionStreamerInfo( onFileClass, version );
       if( !sinfo ) {
          Error("ReadClassBuffer",
-               "Could not find the right streamer info to convert %s version %d into a %s, object skipped at offset %d",
+               "Could not find the right streamer info to convert %s version %d into a %s, object skipped at offset %lu",
                onFileClass->GetName(), version, cl->GetName(), Length() );
          --current;
          CheckByteCount(R__s, R__c, onFileClass);
@@ -3909,7 +3909,7 @@ Int_t TBufferFile::ReadClassBuffer(const TClass *cl, void *pointer, const TClass
             Int_t infocapacity = infos->Capacity();
             if (infocapacity) {
                if (version < -1 || version >= infocapacity) {
-                  Error("ReadClassBuffer","class: %s, attempting to access a wrong version: %d, object skipped at offset %d",
+                  Error("ReadClassBuffer","class: %s, attempting to access a wrong version: %d, object skipped at offset %lu",
                         cl->GetName(), version, Length());
                   --current;
                   CheckByteCount(R__s, R__c, cl);
@@ -3974,7 +3974,7 @@ Int_t TBufferFile::ReadClassBuffer(const TClass *cl, void *pointer, const TClass
                CheckByteCount(R__s, R__c, cl);
                return 0;
             } else {
-               Error( "ReadClassBuffer", "Could not find the StreamerInfo for version %d of the class %s, object skipped at offset %d",
+               Error( "ReadClassBuffer", "Could not find the StreamerInfo for version %d of the class %s, object skipped at offset %lu",
                      version, cl->GetName(), Length() );
                --current;
                CheckByteCount(R__s, R__c, cl);
@@ -3989,7 +3989,7 @@ Int_t TBufferFile::ReadClassBuffer(const TClass *cl, void *pointer, const TClass
    if (sinfo->TStreamerInfo::IsRecovered()) R__c=0; // 'TStreamerInfo::' avoids going via a virtual function.
 
    if (current != fByteCountStack.size())
-      Fatal("ReadClassBuffer", "We are out of sync at level %lld vs %zu for %s", current, fByteCountStack.size(), cl->GetName());
+      Fatal("ReadClassBuffer", "We are out of sync at level %zu vs %zu for %s", current, fByteCountStack.size(), cl->GetName());
    --current;
    // Check that the buffer position corresponds to the byte count.
    CheckByteCount(R__s, R__c, cl);
@@ -4063,7 +4063,7 @@ Int_t TBufferFile::ApplySequence(const TStreamerInfoActions::TActionSequence &se
          (*iter).PrintDebug(*this,obj);
          (*iter)(*this,obj);
          if (current != fByteCountStack.size())
-            Fatal("ApplySequence", "We are out of sync starting at level %lld vs %zu", current, fByteCountStack.size());
+            Fatal("ApplySequence", "We are out of sync starting at level %zu vs %zu", current, fByteCountStack.size());
       }
 
    } else {
@@ -4075,7 +4075,7 @@ Int_t TBufferFile::ApplySequence(const TStreamerInfoActions::TActionSequence &se
          auto current = fByteCountStack.size();
          (*iter)(*this,obj);
          if (current != fByteCountStack.size())
-            Fatal("ApplySequence", "We are out of sync starting at level %lld vs %zu", current, fByteCountStack.size());
+            Fatal("ApplySequence", "We are out of sync starting at level %zu vs %zu", current, fByteCountStack.size());
       }
    }
 
