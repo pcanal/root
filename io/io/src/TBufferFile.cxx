@@ -859,7 +859,7 @@ Int_t TBufferFile::ReadArray(Bool_t *&b)
    Int_t n;
    *this >> n;
 
-   if (n <= 0 || n > fBufSize) return 0;
+   if (n <= 0 || static_cast<Size_t>(n) > fBufSize) return 0;
 
    if (!b) b = new Bool_t[n];
 
@@ -888,7 +888,7 @@ Int_t TBufferFile::ReadArray(Char_t *&c)
    *this >> n;
    Int_t l = sizeof(Char_t)*n;
 
-   if (l <= 0 || l > fBufSize) return 0;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return 0;
 
    if (!c) c = new Char_t[n];
 
@@ -911,7 +911,7 @@ Int_t TBufferFile::ReadArray(Short_t *&h)
    *this >> n;
    Int_t l = sizeof(Short_t)*n;
 
-   if (l <= 0 || l > fBufSize) return 0;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return 0;
 
    if (!h) h = new Short_t[n];
 
@@ -944,7 +944,7 @@ Int_t TBufferFile::ReadArray(Int_t *&ii)
    *this >> n;
    Int_t l = sizeof(Int_t)*n;
 
-   if (l <= 0 || l > fBufSize) return 0;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return 0;
 
    if (!ii) ii = new Int_t[n];
 
@@ -977,7 +977,7 @@ Int_t TBufferFile::ReadArray(Long_t *&ll)
    *this >> n;
    Int_t l = sizeof(Long_t)*n;
 
-   if (l <= 0 || l > fBufSize) return 0;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return 0;
 
    if (!ll) ll = new Long_t[n];
 
@@ -1003,7 +1003,7 @@ Int_t TBufferFile::ReadArray(Long64_t *&ll)
    *this >> n;
    Int_t l = sizeof(Long64_t)*n;
 
-   if (l <= 0 || l > fBufSize) return 0;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return 0;
 
    if (!ll) ll = new Long64_t[n];
 
@@ -1031,7 +1031,7 @@ Int_t TBufferFile::ReadArray(Float_t *&f)
    *this >> n;
    Int_t l = sizeof(Float_t)*n;
 
-   if (l <= 0 || l > fBufSize) return 0;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return 0;
 
    if (!f) f = new Float_t[n];
 
@@ -1064,7 +1064,7 @@ Int_t TBufferFile::ReadArray(Double_t *&d)
    *this >> n;
    Int_t l = sizeof(Double_t)*n;
 
-   if (l <= 0 || l > fBufSize) return 0;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return 0;
 
    if (!d) d = new Double_t[n];
 
@@ -1092,7 +1092,7 @@ Int_t TBufferFile::ReadArrayFloat16(Float_t *&f, TStreamerElement *ele)
    Int_t n;
    *this >> n;
 
-   if (n <= 0 || 3*n > fBufSize) return 0;
+   if (n <= 0 || static_cast<Size_t>(3*n) > fBufSize) return 0;
 
    if (!f) f = new Float_t[n];
 
@@ -1114,7 +1114,7 @@ Int_t TBufferFile::ReadArrayDouble32(Double_t *&d, TStreamerElement *ele)
    Int_t n;
    *this >> n;
 
-   if (n <= 0 || 3*n > fBufSize) return 0;
+   if (n <= 0 || static_cast<Size_t>(3*n) > fBufSize) return 0;
 
    if (!d) d = new Double_t[n];
 
@@ -1134,7 +1134,7 @@ Int_t TBufferFile::ReadStaticArray(Bool_t *b)
    Int_t n;
    *this >> n;
 
-   if (n <= 0 || n > fBufSize) return 0;
+   if (n <= 0 || static_cast<Size_t>(n) > fBufSize) return 0;
 
    if (!b) return 0;
 
@@ -1162,7 +1162,7 @@ Int_t TBufferFile::ReadStaticArray(Char_t *c)
    *this >> n;
    Int_t l = sizeof(Char_t)*n;
 
-   if (l <= 0 || l > fBufSize) return 0;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return 0;
 
    if (!c) return 0;
 
@@ -1184,7 +1184,7 @@ Int_t TBufferFile::ReadStaticArray(Short_t *h)
    *this >> n;
    Int_t l = sizeof(Short_t)*n;
 
-   if (l <= 0 || l > fBufSize) return 0;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return 0;
 
    if (!h) return 0;
 
@@ -1216,7 +1216,7 @@ Int_t TBufferFile::ReadStaticArray(Int_t *ii)
    *this >> n;
    Int_t l = sizeof(Int_t)*n;
 
-   if (l <= 0 || l > fBufSize) return 0;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return 0;
 
    if (!ii) return 0;
 
@@ -1248,7 +1248,7 @@ Int_t TBufferFile::ReadStaticArray(Long_t *ll)
    *this >> n;
    Int_t l = sizeof(Long_t)*n;
 
-   if (l <= 0 || l > fBufSize) return 0;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return 0;
 
    if (!ll) return 0;
 
@@ -1273,7 +1273,7 @@ Int_t TBufferFile::ReadStaticArray(Long64_t *ll)
    *this >> n;
    Int_t l = sizeof(Long64_t)*n;
 
-   if (l <= 0 || l > fBufSize) return 0;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return 0;
 
    if (!ll) return 0;
 
@@ -1300,7 +1300,7 @@ Int_t TBufferFile::ReadStaticArray(Float_t *f)
    *this >> n;
    Int_t l = sizeof(Float_t)*n;
 
-   if (n <= 0 || l > fBufSize) return 0;
+   if (n <= 0 || static_cast<Size_t>(l) > fBufSize) return 0;
 
    if (!f) return 0;
 
@@ -1332,7 +1332,7 @@ Int_t TBufferFile::ReadStaticArray(Double_t *d)
    *this >> n;
    Int_t l = sizeof(Double_t)*n;
 
-   if (n <= 0 || l > fBufSize) return 0;
+   if (n <= 0 || static_cast<Size_t>(l) > fBufSize) return 0;
 
    if (!d) return 0;
 
@@ -1359,7 +1359,7 @@ Int_t TBufferFile::ReadStaticArrayFloat16(Float_t *f, TStreamerElement *ele)
    Int_t n;
    *this >> n;
 
-   if (n <= 0 || 3*n > fBufSize) return 0;
+   if (n <= 0 || static_cast<Size_t>(3*n) > fBufSize) return 0;
 
    if (!f) return 0;
 
@@ -1380,7 +1380,7 @@ Int_t TBufferFile::ReadStaticArrayDouble32(Double_t *d, TStreamerElement *ele)
    Int_t n;
    *this >> n;
 
-   if (n <= 0 || 3*n > fBufSize) return 0;
+   if (n <= 0 || static_cast<Size_t>(3*n) > fBufSize) return 0;
 
    if (!d) return 0;
 
@@ -1394,7 +1394,7 @@ Int_t TBufferFile::ReadStaticArrayDouble32(Double_t *d, TStreamerElement *ele)
 
 void TBufferFile::ReadFastArray(Bool_t *b, Int_t n)
 {
-   if (n <= 0 || n > fBufSize) return;
+   if (n <= 0 || static_cast<Size_t>(n) > fBufSize) return;
 
    if (sizeof(Bool_t) > 1) {
       for (int i = 0; i < n; i++)
@@ -1411,7 +1411,7 @@ void TBufferFile::ReadFastArray(Bool_t *b, Int_t n)
 
 void TBufferFile::ReadFastArray(Char_t *c, Int_t n)
 {
-   if (n <= 0 || n > fBufSize) return;
+   if (n <= 0 || static_cast<Size_t>(n) > fBufSize) return;
 
    Int_t l = sizeof(Char_t)*n;
    memcpy(c, fBufCur, l);
@@ -1432,7 +1432,7 @@ void TBufferFile::ReadFastArrayString(Char_t *c, Int_t n)
       *this >> len;
    }
    if (len) {
-      if (len <= 0 || len > fBufSize) return;
+      if (len <= 0 || static_cast<Size_t>(len) > fBufSize) return;
       Int_t blen = len;
       if (len >= n) len = n-1;
 
@@ -1452,7 +1452,7 @@ void TBufferFile::ReadFastArrayString(Char_t *c, Int_t n)
 void TBufferFile::ReadFastArray(Short_t *h, Int_t n)
 {
    Int_t l = sizeof(Short_t)*n;
-   if (n <= 0 || l > fBufSize) return;
+   if (n <= 0 || static_cast<Size_t>(l) > fBufSize) return;
 
 #ifdef R__BYTESWAP
 # ifdef USE_BSWAPCPY
@@ -1474,7 +1474,7 @@ void TBufferFile::ReadFastArray(Short_t *h, Int_t n)
 void TBufferFile::ReadFastArray(Int_t *ii, Int_t n)
 {
    Int_t l = sizeof(Int_t)*n;
-   if (l <= 0 || l > fBufSize) return;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return;
 
 #ifdef R__BYTESWAP
 # ifdef USE_BSWAPCPY
@@ -1496,7 +1496,7 @@ void TBufferFile::ReadFastArray(Int_t *ii, Int_t n)
 void TBufferFile::ReadFastArray(Long_t *ll, Int_t n)
 {
    Int_t l = sizeof(Long_t)*n;
-   if (l <= 0 || l > fBufSize) return;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return;
 
    TFile *file = (TFile*)fParent;
    if (file && file->GetVersion() < 30006) {
@@ -1512,7 +1512,7 @@ void TBufferFile::ReadFastArray(Long_t *ll, Int_t n)
 void TBufferFile::ReadFastArray(Long64_t *ll, Int_t n)
 {
    Int_t l = sizeof(Long64_t)*n;
-   if (l <= 0 || l > fBufSize) return;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return;
 
 #ifdef R__BYTESWAP
    for (int i = 0; i < n; i++)
@@ -1529,7 +1529,7 @@ void TBufferFile::ReadFastArray(Long64_t *ll, Int_t n)
 void TBufferFile::ReadFastArray(Float_t *f, Long64_t n)
 {
    auto l = sizeof(Float_t)*n;
-   if (l <= 0 || l > fBufSize) return;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return;
 
 #ifdef R__BYTESWAP
 # ifdef USE_BSWAPCPY
@@ -1551,7 +1551,7 @@ void TBufferFile::ReadFastArray(Float_t *f, Long64_t n)
 void TBufferFile::ReadFastArray(Double_t *d, Int_t n)
 {
    Int_t l = sizeof(Double_t)*n;
-   if (l <= 0 || l > fBufSize) return;
+   if (l <= 0 || static_cast<Size_t>(l) > fBufSize) return;
 
 #ifdef R__BYTESWAP
    for (int i = 0; i < n; i++)
@@ -1568,7 +1568,7 @@ void TBufferFile::ReadFastArray(Double_t *d, Int_t n)
 
 void TBufferFile::ReadFastArrayFloat16(Float_t *f, Int_t n, TStreamerElement *elem)
 {
-   if (n <= 0 || 3*n > fBufSize) return;
+   if (n <= 0 || static_cast<Size_t>(3*n) > fBufSize) return;
 
    // The parameter should be const, however we have not yet decided how to
    // transition the signature since the function is virtual.  This ensures
@@ -1614,7 +1614,7 @@ void TBufferFile::ReadFastArrayFloat16(Float_t *f, Int_t n, TStreamerElement *el
 
 void TBufferFile::ReadFastArrayWithFactor(Float_t *ptr, Int_t n, Double_t factor, Double_t minvalue)
 {
-   if (n <= 0 || 3*n > fBufSize) return;
+   if (n <= 0 || static_cast<Size_t>(3*n) > fBufSize) return;
 
    //a range was specified. We read an integer and convert it back to a float
    for (int j=0;j < n; j++) {
@@ -1628,7 +1628,7 @@ void TBufferFile::ReadFastArrayWithFactor(Float_t *ptr, Int_t n, Double_t factor
 
 void TBufferFile::ReadFastArrayWithNbits(Float_t *ptr, Int_t n, Int_t nbits)
 {
-   if (n <= 0 || 3*n > fBufSize) return;
+   if (n <= 0 || static_cast<Size_t>(3*n) > fBufSize) return;
 
    if (!nbits) nbits = 12;
    //we read the exponent and the truncated mantissa of the float
@@ -1661,7 +1661,7 @@ void TBufferFile::ReadFastArrayDouble32(Double_t *d, Int_t n, TStreamerElement *
    // that the function does not inadvertently use non-const parts of
    // TStreamerElement.
    const TStreamerElement *ele = elem;
-   if (n <= 0 || 3*n > fBufSize) return;
+   if (n <= 0 || static_cast<Size_t>(3*n) > fBufSize) return;
 
    if (ele && ele->GetFactor() != 0) {
       //a range was specified. We read an integer and convert it back to a double.
@@ -1709,7 +1709,7 @@ void TBufferFile::ReadFastArrayDouble32(Double_t *d, Int_t n, TStreamerElement *
 
 void TBufferFile::ReadFastArrayWithFactor(Double_t *d, Int_t n, Double_t factor, Double_t minvalue)
 {
-   if (n <= 0 || 3*n > fBufSize) return;
+   if (n <= 0 || static_cast<Size_t>(3*n) > fBufSize) return;
 
    //a range was specified. We read an integer and convert it back to a double.
    for (int j=0;j < n; j++) {
@@ -1723,7 +1723,7 @@ void TBufferFile::ReadFastArrayWithFactor(Double_t *d, Int_t n, Double_t factor,
 
 void TBufferFile::ReadFastArrayWithNbits(Double_t *d, Int_t n, Int_t nbits)
 {
-   if (n <= 0 || 3*n > fBufSize) return;
+   if (n <= 0 || static_cast<Size_t>(3*n) > fBufSize) return;
 
    if (!nbits) {
       //we read a float and convert it to double
